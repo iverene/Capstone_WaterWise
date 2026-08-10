@@ -10,12 +10,23 @@ import {
   Mail,
   MapPin,
   Phone,
+  LoaderCircle,
+  Smartphone,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
 import { isCanceledRequest } from "../services/apiClient";
 import { fetchConsumerProfile } from "../services/consumerPortal.service";
+import {
+  disableCurrentPushNotifications,
+  enablePushNotifications,
+  fetchPushSubscriptions,
+  getCurrentPushSubscription,
+  pushSupported,
+  removePushSubscription,
+} from "../services/pushNotifications";
 
 const hasValue = (value) => value !== null && value !== undefined && value !== "";
 
@@ -46,6 +57,83 @@ function DetailSection({ description, eyebrow, items, title }) {
       <dl className="mt-5 grid gap-3 sm:grid-cols-2">
         {items.map((item) => <DetailItem {...item} key={item.label} />)}
       </dl>
+    </section>
+  );
+}
+
+function NotificationDevices() {
+  const [devices, setDevices] = useState([]);
+  const [currentSubscription, setCurrentSubscription] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const supported = pushSupported();
+
+  const loadDevices = useCallback(async () => {
+    if (!supported) return;
+    const [records, current] = await Promise.all([
+      fetchPushSubscriptions(),
+      getCurrentPushSubscription(),
+    ]);
+    setDevices(records);
+    setCurrentSubscription(current);
+  }, [supported]);
+
+  useEffect(() => {
+    queueMicrotask(() => loadDevices().catch((error) => setMessage(error.message)));
+  }, [loadDevices]);
+
+  const run = async (action, successMessage) => {
+    setBusy(true);
+    setMessage("");
+    try {
+      await action();
+      await loadDevices();
+      setMessage(successMessage);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-6" aria-labelledby="notification-devices-heading">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Notifications</p>
+          <h2 className="mt-1 text-xl font-extrabold tracking-tight text-navy-900" id="notification-devices-heading">Push notification devices</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Receive billing, payment, service, and account alerts even when WaterWise is closed.</p>
+        </div>
+        {supported && (
+          currentSubscription ? (
+            <button className="min-h-11 rounded-xl border border-red-200 px-4 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60" disabled={busy} onClick={() => run(disableCurrentPushNotifications, "Push notifications disabled on this device.")} type="button">Disable this device</button>
+          ) : (
+            <button className="ww-primary-button min-h-11 px-4 text-sm" disabled={busy} onClick={() => run(enablePushNotifications, "Push notifications enabled on this device.")} type="button">
+              {busy ? "Enabling…" : "Enable on this device"}
+            </button>
+          )
+        )}
+      </div>
+
+      {!supported && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">This browser does not support Web Push notifications.</p>}
+      {message && <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-800" role="status">{message}</p>}
+
+      {supported && (
+        <div className="mt-5 space-y-3">
+          {busy && devices.length === 0 && <div className="flex items-center gap-2 text-sm text-slate-500"><LoaderCircle className="h-4 w-4 animate-spin" /> Loading notification devices…</div>}
+          {!busy && devices.length === 0 && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No browser is currently registered for push notifications.</p>}
+          {devices.map((device) => (
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4" key={device.id}>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Smartphone className="h-5 w-5" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-navy-900">Registered browser</p>
+                <p className="mt-1 truncate text-xs text-slate-500" title={device.user_agent}>{device.user_agent || "Browser details unavailable"}</p>
+              </div>
+              <button aria-label="Remove notification device" className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:opacity-60" disabled={busy} onClick={() => run(() => removePushSubscription(device.id), "Notification device removed.")} type="button"><Trash2 className="h-4 w-4" /></button>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -191,6 +279,8 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
           </button>
         </div>
       </section>
+
+      <NotificationDevices />
 
       <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:p-5" aria-labelledby="profile-correction-heading">
         <div className="flex gap-3">

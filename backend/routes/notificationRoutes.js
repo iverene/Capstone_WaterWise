@@ -5,6 +5,11 @@ import {
   markNotificationRead,
   runNotificationReminders,
   showNotification,
+  showPushConfiguration,
+  registerPushSubscription,
+  getPushSubscriptions,
+  unregisterCurrentPushSubscription,
+  unregisterPushSubscriptionById,
 } from "../controllers/notificationControllers.js";
 import {
   authenticate,
@@ -15,6 +20,11 @@ import {
 const router = express.Router();
 
 router.use(authenticate);
+router.get("/push/config", authorizeRoles("consumer"), showPushConfiguration);
+router.get("/push/subscriptions", authorizeRoles("consumer"), getPushSubscriptions);
+router.post("/push/subscriptions", authorizeRoles("consumer"), registerPushSubscription);
+router.delete("/push/subscriptions/current", authorizeRoles("consumer"), unregisterCurrentPushSubscription);
+router.delete("/push/subscriptions/:subscriptionId", authorizeRoles("consumer"), unregisterPushSubscriptionById);
 router.get("/", authorizeConsumerQueryOrRoles("admin"), listNotifications);
 router.post(
   "/process-reminders",

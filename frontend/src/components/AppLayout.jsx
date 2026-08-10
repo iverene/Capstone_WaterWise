@@ -267,6 +267,18 @@ export default function AppLayout({ children }) {
     setSelectedNotification(notification);
   };
 
+  useEffect(() => {
+    if (activeRole !== "consumer") return;
+    const notificationId = Number(new URLSearchParams(location.search).get("notificationId"));
+    if (!Number.isInteger(notificationId) || notificationId < 1) return;
+    queueMicrotask(() => handleMarkNotificationAsRead(notificationId));
+    const parameters = new URLSearchParams(location.search);
+    parameters.delete("notificationId");
+    navigate({ pathname: location.pathname, search: parameters.toString() ? `?${parameters}` : "" }, { replace: true });
+  // This runs only when a push-notification click adds a notificationId.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRole, location.pathname, location.search, navigate]);
+
   const selectedNotificationPresentation = getNotificationPresentation(
     selectedNotification ?? {},
   );
