@@ -49,6 +49,112 @@ CREATE TABLE IF NOT EXISTS meter_readers (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Account identities must remain unambiguous across every login role.
+CREATE UNIQUE INDEX IF NOT EXISTS admins_username_ci_unique ON admins (lower(btrim(username)));
+CREATE UNIQUE INDEX IF NOT EXISTS admins_email_ci_unique ON admins (lower(btrim(email)));
+CREATE UNIQUE INDEX IF NOT EXISTS consumers_username_ci_unique ON consumers (lower(btrim(username)));
+CREATE UNIQUE INDEX IF NOT EXISTS consumers_email_ci_unique ON consumers (lower(btrim(email)));
+CREATE UNIQUE INDEX IF NOT EXISTS consumers_full_name_ci_unique
+ON consumers (lower(regexp_replace(btrim(full_name), '\s+', ' ', 'g')));
+CREATE UNIQUE INDEX IF NOT EXISTS meter_readers_username_ci_unique ON meter_readers (lower(btrim(username)));
+CREATE UNIQUE INDEX IF NOT EXISTS meter_readers_email_ci_unique ON meter_readers (lower(btrim(email)));
+
+DO $$
+DECLARE
+    duplicate_username TEXT;
+    duplicate_email TEXT;
+BEGIN
+    SELECT identity INTO duplicate_username
+    FROM (
+        SELECT lower(btrim(username)) AS identity FROM admins
+        UNION ALL SELECT lower(btrim(username)) FROM consumers
+        UNION ALL SELECT lower(btrim(username)) FROM meter_readers
+    ) identities
+    GROUP BY identity HAVING count(*) > 1 LIMIT 1;
+
+    SELECT identity INTO duplicate_email
+    FROM (
+        SELECT lower(btrim(email)) AS identity FROM admins
+        UNION ALL SELECT lower(btrim(email)) FROM consumers
+        UNION ALL SELECT lower(btrim(email)) FROM meter_readers
+    ) identities
+    GROUP BY identity HAVING count(*) > 1 LIMIT 1;
+
+    IF duplicate_username IS NOT NULL THEN
+        RAISE EXCEPTION 'Resolve the existing duplicate username "%" before applying account uniqueness.', duplicate_username;
+    END IF;
+    IF duplicate_email IS NOT NULL THEN
+        RAISE EXCEPTION 'Resolve the existing duplicate email "%" before applying account uniqueness.', duplicate_email;
+    END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION enforce_global_account_identity()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+    normalized_username TEXT := lower(btrim(NEW.username));
+    normalized_email TEXT := lower(btrim(NEW.email));
+    normalized_full_name TEXT;
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('account-username:' || normalized_username));
+    PERFORM pg_advisory_xact_lock(hashtext('account-email:' || normalized_email));
+
+    IF EXISTS (
+        SELECT 1 FROM admins account WHERE lower(btrim(account.username)) = normalized_username AND (TG_TABLE_NAME <> 'admins' OR account.id <> NEW.id)
+        UNION ALL
+        SELECT 1 FROM consumers account WHERE lower(btrim(account.username)) = normalized_username AND (TG_TABLE_NAME <> 'consumers' OR account.id <> NEW.id)
+        UNION ALL
+        SELECT 1 FROM meter_readers account WHERE lower(btrim(account.username)) = normalized_username AND (TG_TABLE_NAME <> 'meter_readers' OR account.id <> NEW.id)
+    ) THEN
+        RAISE EXCEPTION 'The username % is already in use.', NEW.username USING ERRCODE = '23505';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM admins account WHERE lower(btrim(account.email)) = normalized_email AND (TG_TABLE_NAME <> 'admins' OR account.id <> NEW.id)
+        UNION ALL
+        SELECT 1 FROM consumers account WHERE lower(btrim(account.email)) = normalized_email AND (TG_TABLE_NAME <> 'consumers' OR account.id <> NEW.id)
+        UNION ALL
+        SELECT 1 FROM meter_readers account WHERE lower(btrim(account.email)) = normalized_email AND (TG_TABLE_NAME <> 'meter_readers' OR account.id <> NEW.id)
+    ) THEN
+        RAISE EXCEPTION 'The email address % is already in use.', NEW.email USING ERRCODE = '23505';
+    END IF;
+
+    IF TG_TABLE_NAME = 'consumers' THEN
+        normalized_full_name := lower(regexp_replace(btrim(NEW.full_name), '\s+', ' ', 'g'));
+        PERFORM pg_advisory_xact_lock(hashtext('consumer-name:' || normalized_full_name));
+        IF EXISTS (
+            SELECT 1 FROM consumers account
+            WHERE lower(regexp_replace(btrim(account.full_name), '\s+', ' ', 'g')) = normalized_full_name
+              AND account.id <> NEW.id
+        ) THEN
+            RAISE EXCEPTION 'The resident full name % is already in use.', NEW.full_name USING ERRCODE = '23505';
+        END IF;
+    END IF;
+
+    NEW.username := normalized_username;
+    NEW.email := normalized_email;
+    IF TG_TABLE_NAME = 'consumers' THEN
+        NEW.full_name := regexp_replace(btrim(NEW.full_name), '\s+', ' ', 'g');
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION enforce_global_account_identity() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_admin_account_identity ON admins;
+CREATE TRIGGER trg_admin_account_identity BEFORE INSERT OR UPDATE OF username, email ON admins
+FOR EACH ROW EXECUTE FUNCTION enforce_global_account_identity();
+DROP TRIGGER IF EXISTS trg_consumer_account_identity ON consumers;
+CREATE TRIGGER trg_consumer_account_identity BEFORE INSERT OR UPDATE OF username, email, full_name ON consumers
+FOR EACH ROW EXECUTE FUNCTION enforce_global_account_identity();
+DROP TRIGGER IF EXISTS trg_meter_reader_account_identity ON meter_readers;
+CREATE TRIGGER trg_meter_reader_account_identity BEFORE INSERT OR UPDATE OF username, email ON meter_readers
+FOR EACH ROW EXECUTE FUNCTION enforce_global_account_identity();
+
 -- Temporary login lockout shared by admins, consumers, and meter readers.
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;

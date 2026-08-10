@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
+import { ensureAccountIdentityIsUnique } from "./accountIdentityModels.js";
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -35,36 +36,13 @@ const validateMeterReader = (username, password, email) => {
   }
 };
 
-const ensureMeterReaderIsUnique = async (username, email) => {
-  const [usernameResult, emailResult] = await Promise.all([
-    supabase.from("meter_readers").select("id").eq("username", username).limit(1),
-    supabase.from("meter_readers").select("id").eq("email", email).limit(1),
-  ]);
-
-  if (usernameResult.error || emailResult.error) {
-    const databaseError = usernameResult.error ?? emailResult.error;
-    throw createError(
-      `Failed to check meter reader account: ${databaseError.message}`,
-      500
-    );
-  }
-
-  if (usernameResult.data.length > 0) {
-    throw createError(`The username ${username} is already in use.`);
-  }
-
-  if (emailResult.data.length > 0) {
-    throw createError(`The email ${email} is already in use.`);
-  }
-};
-
 export const createMeterReader = async (username, password, email) => {
   validateMeterReader(username, password, email);
 
   const normalizedUsername = username.trim().toLowerCase();
   const normalizedEmail = validator.normalizeEmail(email.trim()) ?? email.trim().toLowerCase();
 
-  await ensureMeterReaderIsUnique(normalizedUsername, normalizedEmail);
+  await ensureAccountIdentityIsUnique({ username: normalizedUsername, email: normalizedEmail });
 
   const hashedPassword = await bcrypt.hash(password, 10);
   const { data, error } = await supabase
