@@ -55,6 +55,60 @@ WaterWise is a full-stack water consumption, billing, payment, and account-manag
 | Email | SendGrid |
 | AI | Google Gemini |
 
+## Portal Data Caching and Realtime Refresh
+
+WaterWise caches authenticated GET responses for the Admin/Super Admin, Meter Reader, and Consumer portals. The cache prevents page navigation and existing refresh intervals from repeatedly querying the API and database when the underlying data has not changed.
+
+### Cache behavior
+
+1. The first GET request loads data from the Express API and stores the successful response in browser `sessionStorage`.
+2. Later requests for the same endpoint in the same browser-tab session are served from the cache.
+3. Identical GET requests made at the same time are deduplicated into one network request.
+4. A successful `POST`, `PUT`, `PATCH`, or `DELETE` request publishes an authenticated server-sent event through `GET /api/changes/stream`.
+5. Connected portals receive the event, clear their API cache, and reload the currently displayed portal data.
+6. The stream includes a change version. After a temporary disconnection, the frontend compares versions and refreshes if an event was missed.
+7. Logging out or switching accounts removes cached API responses.
+
+Scheduled billing reminders also publish a change event when they create notifications. Downloads and blob responses are intentionally excluded from API caching. The Meter Reader's existing IndexedDB context cache, offline reading outbox, and synchronization workflow remain separate and continue to support offline field work.
+
+### Scope and isolation
+
+Every cache entry includes the authenticated role and account ID:
+
+```text
+waterwise-api-cache:admin:1:/consumption/history/monthly?
+waterwise-api-cache:consumer:25:/billing/consumer/25?
+waterwise-api-cache:meter-reader:4:/consumption/readings/contexts?
+```
+
+The cache is **per browser-tab session**, not a device-wide or system-wide shared cache:
+
+- Navigation and page refreshes in the same tab reuse cached data.
+- A different tab, browser, private window, laptop, or phone maintains a separate cache and performs its own initial request.
+- Closing the browser-tab session normally removes its `sessionStorage` cache.
+- Browser caches are never used as an authorization mechanism; every uncached API request still requires the JWT and backend role/ownership checks.
+
+For a cache shared across devices or backend instances, add a server-side store such as Redis. The current server-sent-event subscriber list and change version are held in one backend process, so a horizontally scaled deployment must use shared pub/sub to distribute invalidation events across all instances.
+
+### Verify caching in development
+
+1. Sign in and open DevTools **Network > Fetch/XHR**.
+2. Open a portal page and confirm its initial `/api/...` GET requests.
+3. Clear the Network list, navigate away, and return to the same page.
+4. Confirm the data renders without repeating the cached GET requests. `/api/changes/stream` remaining pending is expected because it is the live event connection.
+5. Open DevTools **Application > Session Storage** and confirm keys beginning with `waterwise-api-cache:`.
+6. Create or update data from another authenticated portal. Confirm the first portal receives the event and performs fresh GET requests.
+7. Log out and confirm all `waterwise-api-cache:` entries are removed.
+
+Relevant implementation files:
+
+- `frontend/src/services/apiClient.js`
+- `frontend/src/services/apiCache.js`
+- `frontend/src/services/dataChangeStream.js`
+- `frontend/src/services/authToken.js`
+- `backend/routes/changeEventRoutes.js`
+- `backend/services/changeEventService.js`
+
 ## Project Structure
 
 ```text

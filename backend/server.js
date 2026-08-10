@@ -14,6 +14,8 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import anomaly from "./routes/anomalyRoutes.js";
 import recomendationRoutes from "./routes/recommendationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import changeEventRoutes from "./routes/changeEventRoutes.js";
+import { publishDataChange } from "./services/changeEventService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
 import { startPushNotificationWorker } from "./services/pushNotificationService.js";
 
@@ -84,6 +86,27 @@ app.use(
 );
 app.use(express.json({ limit: "1mb" }));
 
+const dataMutationMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const ignoredChangePaths = [
+  "/api/auth/login",
+  "/api/auth/forgot-password",
+  "/api/auth/verify-reset-otp",
+  "/api/auth/admin/verify-login-otp",
+];
+
+app.use((req, res, next) => {
+  if (!dataMutationMethods.has(req.method) || ignoredChangePaths.includes(req.path)) {
+    return next();
+  }
+
+  res.on("finish", () => {
+    if (res.statusCode >= 200 && res.statusCode < 300 && req.user) {
+      publishDataChange({ actor: req.user, method: req.method, path: req.path });
+    }
+  });
+  return next();
+});
+
 app.get("/", (req, res) => {
   res.json({
     success: true,
@@ -109,6 +132,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/anomaly", anomaly);
 app.use("/api/recommendation", recomendationRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/changes", changeEventRoutes);
 
 app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && "body" in error) {

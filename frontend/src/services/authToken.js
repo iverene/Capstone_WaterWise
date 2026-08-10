@@ -44,6 +44,10 @@ export function getAccessTokenExpiresAt(token = getAccessToken()) {
 }
 
 export function storeSession({ token, user }) {
+  const previousUser = getStoredAccount();
+  if (previousUser && (previousUser.id !== user?.id || previousUser.role !== user?.role)) {
+    clearStoredApiCache();
+  }
   window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
   window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
   if (user?.role === "meter-reader") {
@@ -56,6 +60,7 @@ export function storeSession({ token, user }) {
   } else {
     window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
   }
+  window.dispatchEvent(new Event("waterwise-session-changed"));
 }
 
 export function enableConsumerPushSessionPersistence() {
@@ -73,10 +78,29 @@ export function disableConsumerPushSessionPersistence() {
 }
 
 export function clearSession() {
+  const hadSession = Boolean(
+    window.sessionStorage.getItem(TOKEN_STORAGE_KEY) ||
+    window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY) ||
+    window.localStorage.getItem(PERSISTENT_METER_READER_KEY) ||
+    window.localStorage.getItem(PERSISTENT_CONSUMER_KEY),
+  );
+  clearStoredApiCache();
   window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
   window.sessionStorage.removeItem(ACCOUNT_STORAGE_KEY);
   window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
   disableConsumerPushSessionPersistence();
+  if (hadSession) {
+    window.queueMicrotask(() => {
+      window.dispatchEvent(new Event("waterwise-session-changed"));
+    });
+  }
+}
+
+function clearStoredApiCache() {
+  for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.sessionStorage.key(index);
+    if (key?.startsWith("waterwise-api-cache:")) window.sessionStorage.removeItem(key);
+  }
 }
 
 export function getStoredAccount() {
