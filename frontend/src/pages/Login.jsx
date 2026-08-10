@@ -11,6 +11,7 @@ import {
 import { Link, useNavigate } from "react-router";
 import { login, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
+import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
 
 const accountDestinations = {
   admin: "/admin/dashboard",
@@ -35,6 +36,13 @@ export default function Login() {
   const [passwordError, setPasswordError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lockSeconds, setLockSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!hasAuthenticatedSession()) return;
+    const account = getStoredAccount();
+    const destination = accountDestinations[account?.role];
+    if (destination) navigate(destination, { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     if (lockSeconds <= 0) return undefined;

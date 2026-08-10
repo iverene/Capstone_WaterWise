@@ -9,9 +9,12 @@ const SummaryItem = ({ label, value }) => (
 );
 
 const acceptsDecimal = (value) => /^\d*(\.\d{0,2})?$/.test(value);
+const createIdempotencyKey = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  `meter-reading-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, saving = false }) {
-  const [requestKey] = useState(() => globalThis.crypto.randomUUID());
+  const [requestKey] = useState(createIdempotencyKey);
   const [initialPreviousReading, setInitialPreviousReading] = useState("");
   const [currentReading, setCurrentReading] = useState("");
   const [error, setError] = useState("");
