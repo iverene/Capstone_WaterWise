@@ -58,12 +58,15 @@ export async function disableCurrentPushNotifications() {
     disableConsumerPushSessionPersistence();
     return;
   }
-  await apiRequest("/notifications/push/subscriptions/current", {
-    method: "DELETE",
-    body: { endpoint: subscription.endpoint },
-  });
-  await subscription.unsubscribe();
-  disableConsumerPushSessionPersistence();
+  try {
+    await apiRequest("/notifications/push/subscriptions/current", {
+      method: "DELETE",
+      body: { endpoint: subscription.endpoint },
+    });
+  } finally {
+    await subscription.unsubscribe();
+    disableConsumerPushSessionPersistence();
+  }
 }
 
 export async function fetchPushSubscriptions(options) {
