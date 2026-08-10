@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FiBarChart2,
+  FiBell,
   FiAlertTriangle,
   FiBookOpen,
   FiCalendar,
@@ -30,6 +31,14 @@ import NotificationBadgeTrigger from "./NotificationBadgeTrigger";
 import Modal from "./Modal";
 import Sidebar from "./Sidebar";
 import { useToast } from "./Toast";
+import {
+  enablePushNotifications,
+  getCurrentPushSubscription,
+  getPushConfiguration,
+  pushSupported,
+} from "../services/pushNotifications";
+
+const PUSH_PROMPT_SESSION_PREFIX = "waterwise:push-prompt-dismissed:";
 
 const ROLE_CONFIG = {
   admin: {
@@ -116,6 +125,8 @@ export default function AppLayout({ children }) {
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [accountName, setAccountName] = useState("");
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
   const activeRole = account?.role ?? pathRole ?? "consumer";
   const activeRoleConfig = ROLE_CONFIG[activeRole] ?? ROLE_CONFIG.consumer;
 
@@ -191,6 +202,30 @@ export default function AppLayout({ children }) {
   }, [activeRole, navigate]);
 
   useEffect(() => {
+    if (
+      activeRole !== "consumer" ||
+      !account?.id ||
+      !pushSupported() ||
+      Notification.permission === "denied" ||
+      window.sessionStorage.getItem(`${PUSH_PROMPT_SESSION_PREFIX}${account.id}`)
+    ) return undefined;
+
+    const controller = new AbortController();
+    Promise.all([
+      getCurrentPushSubscription(),
+      getPushConfiguration({ signal: controller.signal }),
+    ]).then(([subscription, configuration]) => {
+      if (!controller.signal.aborted && !subscription && configuration.enabled) {
+        setIsPushPromptOpen(true);
+      }
+    }).catch((error) => {
+      if (!isCanceledRequest(error)) console.error("Push prompt check failed:", error.message);
+    });
+
+    return () => controller.abort();
+  }, [account?.id, activeRole]);
+
+  useEffect(() => {
     if (!isNotificationOpen) return undefined;
 
     const closeOnOutsideClick = (event) => {
@@ -241,6 +276,27 @@ export default function AppLayout({ children }) {
       setIsLogoutConfirmOpen(false);
       setIsSigningOut(false);
       navigate("/login");
+    }
+  };
+
+  const dismissPushPrompt = () => {
+    if (account?.id) {
+      window.sessionStorage.setItem(`${PUSH_PROMPT_SESSION_PREFIX}${account.id}`, "true");
+    }
+    setIsPushPromptOpen(false);
+  };
+
+  const handleEnablePush = async () => {
+    setIsEnablingPush(true);
+    try {
+      await enablePushNotifications();
+      dismissPushPrompt();
+      toast.success("Notifications enabled", "This device will receive WaterWise alerts even when the app is closed.");
+    } catch (error) {
+      if (Notification.permission === "denied") dismissPushPrompt();
+      toast.error("Notifications not enabled", error.message);
+    } finally {
+      setIsEnablingPush(false);
     }
   };
 
@@ -390,6 +446,31 @@ export default function AppLayout({ children }) {
           }}
         />
       )}
+
+      <Modal
+        description="Receive important household water-service updates on this device."
+        eyebrow="Stay informed"
+        isOpen={isPushPromptOpen}
+        onClose={dismissPushPrompt}
+        size="sm"
+        title="Enable push notifications"
+      >
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-water-100 text-water-700">
+              <FiBell aria-hidden="true" className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-sm leading-6 text-slate-700">Get alerts for new bills, due dates, payments, service interruptions, and account updates—even when WaterWise is closed.</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">You can turn this off anytime from your Household Profile.</p>
+            </div>
+          </div>
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60" disabled={isEnablingPush} onClick={dismissPushPrompt} type="button">Not now</button>
+            <button className="ww-primary-button min-h-11 px-5 text-sm disabled:opacity-60" disabled={isEnablingPush} onClick={handleEnablePush} type="button">{isEnablingPush ? "Enabling…" : "Enable notifications"}</button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         description={selectedNotificationPresentation.label}

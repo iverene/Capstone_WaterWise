@@ -16,9 +16,13 @@ export async function getCurrentPushSubscription() {
   return registration.pushManager.getSubscription();
 }
 
+export async function getPushConfiguration(options) {
+  return apiRequest("/notifications/push/config", options);
+}
+
 export async function enablePushNotifications() {
   if (!pushSupported()) throw new Error("Push notifications are not supported by this browser.");
-  const config = await apiRequest("/notifications/push/config");
+  const config = await getPushConfiguration();
   if (!config.enabled || !config.publicKey) throw new Error("Push notifications are not configured on the server.");
 
   const permission = await Notification.requestPermission();
