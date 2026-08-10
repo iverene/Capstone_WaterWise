@@ -5,6 +5,7 @@ import {
   getStoredAccount,
   storeSession,
 } from "./authToken";
+import { disableCurrentPushNotifications } from "./pushNotifications";
 
 export { ACCOUNT_STORAGE_KEY };
 
@@ -227,7 +228,13 @@ export async function getCurrentAccount(options) {
   return { user };
 }
 
-export function logout() {
-  clearSession();
-  return Promise.resolve();
+export async function logout() {
+  const account = getStoredAccount();
+  try {
+    if (account?.role === "consumer") {
+      await disableCurrentPushNotifications();
+    }
+  } finally {
+    clearSession();
+  }
 }
