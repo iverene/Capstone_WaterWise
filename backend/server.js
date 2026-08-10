@@ -15,6 +15,7 @@ import anomaly from "./routes/anomalyRoutes.js";
 import recomendationRoutes from "./routes/recommendationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
+import { startPushNotificationWorker } from "./services/pushNotificationService.js";
 
 const app = express();
 
@@ -139,6 +140,7 @@ const PORT = Number(process.env.PORT) || 5000;
 app.listen(PORT, () => {
   console.log(`WaterWise Backend running on http://localhost:${PORT}`);
   startNotificationReminderScheduler();
+  startPushNotificationWorker();
 });
 
 export default app;

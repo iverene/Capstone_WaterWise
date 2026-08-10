@@ -612,6 +612,62 @@ ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS notification_reads_consumer_id_idx 
 ON notification_reads (consumer_id);
 
+-- Browser/device subscriptions used only for Web Push delivery. These records
+-- never authenticate a consumer and are intentionally separate from
+-- admin_trusted_devices.
+CREATE TABLE IF NOT EXISTS consumer_push_subscriptions (
+    id BIGSERIAL PRIMARY KEY,
+    consumer_id INTEGER NOT NULL REFERENCES consumers(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL,
+    endpoint_hash CHAR(64) NOT NULL UNIQUE,
+    p256dh TEXT NOT NULL,
+    auth_key TEXT NOT NULL,
+    user_agent VARCHAR(500),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_used_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_consumer_push_subscriptions_consumer
+ON consumer_push_subscriptions (consumer_id, enabled)
+WHERE revoked_at IS NULL;
+
+-- Every notification source (Express and PostgreSQL triggers alike) enters the
+-- same delivery queue. The backend worker removes successful jobs and retries
+-- transient push-service failures.
+CREATE TABLE IF NOT EXISTS notification_push_jobs (
+    notification_id INTEGER PRIMARY KEY REFERENCES notifications(id) ON DELETE CASCADE,
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+    available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_push_jobs_available
+ON notification_push_jobs (available_at, created_at);
+
+CREATE OR REPLACE FUNCTION enqueue_notification_push()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO notification_push_jobs (notification_id)
+    VALUES (NEW.id)
+    ON CONFLICT (notification_id) DO UPDATE SET
+        attempts = 0,
+        available_at = now(),
+        last_error = NULL;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+REVOKE ALL ON FUNCTION enqueue_notification_push() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_enqueue_notification_push ON notifications;
+CREATE TRIGGER trg_enqueue_notification_push
+AFTER INSERT OR UPDATE OF title, message, priority, action_path ON notifications
+FOR EACH ROW
+EXECUTE FUNCTION enqueue_notification_push();
+
 -- Generate the notice from the completed billing row so its amount, due date,
 -- and related IDs always match the consumer's actual bill.
 CREATE OR REPLACE FUNCTION generate_billing_notification()
@@ -1054,6 +1110,8 @@ ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.generated_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_reads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.consumer_push_subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notification_push_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_consumption_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.admin_trusted_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.password_reset_request_limits ENABLE ROW LEVEL SECURITY;
@@ -1067,6 +1125,8 @@ REVOKE ALL ON TABLE public.payments FROM anon, authenticated;
 REVOKE ALL ON TABLE public.generated_reports FROM anon, authenticated;
 REVOKE ALL ON TABLE public.notifications FROM anon, authenticated;
 REVOKE ALL ON TABLE public.notification_reads FROM anon, authenticated;
+REVOKE ALL ON TABLE public.consumer_push_subscriptions FROM anon, authenticated;
+REVOKE ALL ON TABLE public.notification_push_jobs FROM anon, authenticated;
 REVOKE ALL ON TABLE public.ai_consumption_cache FROM anon, authenticated;
 REVOKE ALL ON TABLE public.admin_trusted_devices FROM anon, authenticated;
 REVOKE ALL ON TABLE public.password_reset_request_limits FROM anon, authenticated;

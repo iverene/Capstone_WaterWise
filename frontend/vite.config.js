@@ -10,6 +10,9 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       injectRegister: false,
       registerType: 'autoUpdate',
       // Keep the application shell available while testing offline on `npm run dev`.
@@ -47,13 +50,8 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg}'],
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
       },
     }),
   ],

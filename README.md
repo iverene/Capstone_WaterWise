@@ -110,11 +110,15 @@ Core tables include:
 - `generated_reports`
 - `ai_consumption_cache`
 - `admin_trusted_devices`
+- `consumer_push_subscriptions`
+- `notification_push_jobs`
 - `password_reset_request_limits`
 
 The migration adds `admins.role` with `admin` and `super-admin` values. When upgrading an existing database with no Super Admin, the oldest existing administrator is promoted automatically. That account must sign out and sign in again after the migration so its new role is included in the JWT.
 
 The `admin_trusted_devices` table stores only SHA-256 hashes of random browser tokens. It records the owning administrator, role, user agent, creation time, last use, expiration, and revocation time. Run the latest migration before enabling trusted-device login; the backend does not create this table automatically.
+
+Web Push uses `consumer_push_subscriptions` for browser delivery endpoints and `notification_push_jobs` as a queue populated by a database trigger whenever a notification is inserted or materially updated. Generate a VAPID key pair once with `npm run generate-vapid-keys` inside `backend`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and a `VAPID_SUBJECT` such as `mailto:admin@example.com` in the backend environment. Never expose the private key to the frontend.
 
 The `events` table stores the event title, resident information, date, time, location, categories, status, creator, and audit timestamps. Row Level Security is enabled, direct `anon` and `authenticated` table access is revoked, and the Express backend accesses it with the server-only Supabase service-role key.
 
