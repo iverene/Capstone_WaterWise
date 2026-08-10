@@ -263,7 +263,7 @@ export default function PaymentProcessingPage() {
   });
 
   return (
-    <main className="space-y-6">
+    <main className="min-w-0 space-y-6">
       <PageHeader description="Select a resident with an outstanding balance, then securely record their payment." eyebrow="Payment administration" title="Payment processing" />
 
       <section aria-label="Payment summary" className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
@@ -342,8 +342,8 @@ export default function PaymentProcessingPage() {
               unpaidBillings.length ? "No matching residents" : "No residents need payment"
             }
             getRowKey={(resident) => resident.id}
-            rowClassName="transition-colors hover:bg-slate-50"
-            tableClassName="w-full min-w-[900px] text-left text-sm"
+            rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+            tableClassName="block w-full text-left text-sm md:table"
             renderRow={(resident) => (
               <>
                 <td className="px-4 py-4">
@@ -370,7 +370,7 @@ export default function PaymentProcessingPage() {
                     {resident.outstandingBillCount} outstanding
                   </span>
                 </td>
-                <td className="px-4 py-4 text-right">
+                <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
                   <button
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700"
                     onClick={() => openPaymentModal(resident.oldestBilling)}

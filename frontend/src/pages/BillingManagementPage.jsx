@@ -124,7 +124,7 @@ export default function BillingManagementPage() {
   }, [query, residentRows, status]);
 
   return (
-    <main className="space-y-5 sm:space-y-6">
+    <main className="min-w-0 space-y-5 sm:space-y-6">
       <PageHeader
         description="Review billing periods, water usage, account balances, and collection status."
         eyebrow="Billing administration"
@@ -190,8 +190,8 @@ export default function BillingManagementPage() {
           }
           emptyTitle={residentRows.length ? "No matching residents" : "No billing records"}
           getRowKey={(resident) => resident.id}
-          rowClassName="transition-colors hover:bg-slate-50"
-          tableClassName="w-full min-w-[720px] text-left text-sm"
+          rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+          tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
               <td className="px-4 py-4 font-extrabold text-navy-900">
@@ -206,9 +206,9 @@ export default function BillingManagementPage() {
                   {currency(resident.overallBillTotal)} total billed
                 </p>
               </td>
-              <td className="px-4 py-4 text-right">
+              <td className="flex flex-col items-stretch justify-end md:table-cell md:px-4 md:py-4 md:text-right">
                 <button
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-50 px-4 font-bold text-water-700 hover:bg-water-100"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100 md:w-auto md:px-4"
                   onClick={() => setSelectedResident(resident)}
                   type="button"
                 >
@@ -243,8 +243,8 @@ export default function BillingManagementPage() {
             ]}
             data={selectedResident?.billings ?? []}
             getRowKey={(billing) => billing.id}
-            rowClassName="transition-colors hover:bg-slate-50"
-            tableClassName="w-full min-w-[820px] text-left text-sm"
+            rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+            tableClassName="block w-full text-left text-sm md:table"
             renderRow={(billing) => (
               <>
                 <td className="px-4 py-4 font-extrabold text-navy-900">

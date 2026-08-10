@@ -1,7 +1,24 @@
-import { useState } from "react";
+import { Children, cloneElement, isValidElement, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const DEFAULT_PAGE_SIZE = 10;
+
+function withMobileColumnLabels(renderedRow, columns) {
+  const cells = renderedRow?.props?.children ?? renderedRow;
+
+  return Children.map(cells, (cell, index) => {
+    if (!isValidElement(cell)) return cell;
+
+    return cloneElement(
+      cell,
+      {},
+      <span className="mb-1 block font-sans text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400 md:hidden" aria-hidden="true">
+        {columns[index]?.label}
+      </span>,
+      cell.props.children,
+    );
+  });
+}
 
 export default function Table({
   ariaLabel,
@@ -27,7 +44,7 @@ export default function Table({
   const endIndex = Math.min(startIndex + pageRows.length, data.length);
 
   return (
-    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card ${className}`}>
+    <section className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card ${className}`}>
       {header}
 
       {data.length === 0 ? (
@@ -37,7 +54,7 @@ export default function Table({
         </div>
       ) : (
         <>
-          <div className="overflow-x-auto">
+          <div className="min-w-0 overflow-x-auto">
             <table aria-label={ariaLabel} className={tableClassName} data-testid={testId}>
               <thead className="hidden bg-slate-50 text-xs font-bold uppercase tracking-[0.08em] text-slate-500 md:table-header-group">
                 <tr>
@@ -51,7 +68,7 @@ export default function Table({
               <tbody className="block divide-y divide-slate-100 md:table-row-group">
                 {pageRows.map((row, index) => (
                   <tr className={typeof rowClassName === "function" ? rowClassName(row) : rowClassName} key={getRowKey(row, startIndex + index)}>
-                    {renderRow(row, startIndex + index)}
+                    {withMobileColumnLabels(renderRow(row, startIndex + index), columns)}
                   </tr>
                 ))}
               </tbody>

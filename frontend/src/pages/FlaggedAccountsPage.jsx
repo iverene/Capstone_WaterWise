@@ -170,7 +170,7 @@ export default function FlaggedAccountsPage() {
   };
 
   return (
-    <main className="space-y-6">
+    <main className="min-w-0 space-y-6">
       <PageHeader
         description="Review residents with three or more outstanding monthly bills for disconnection action."
         eyebrow="Account monitoring"
@@ -229,8 +229,8 @@ export default function FlaggedAccountsPage() {
           }
           emptyTitle={flaggedAccounts.length ? "No matching accounts" : "No accounts flagged"}
           getRowKey={(account) => account.id}
-          rowClassName="transition-colors hover:bg-slate-50"
-          tableClassName="w-full min-w-[900px] text-left text-sm"
+          rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+          tableClassName="block w-full text-left text-sm md:table"
           renderRow={(account) => (
             <>
               <td className="px-4 py-4">
@@ -259,8 +259,8 @@ export default function FlaggedAccountsPage() {
                   {account.accountStatus === "inactive" ? "Disconnected" : "For disconnection"}
                 </span>
               </td>
-              <td className="px-4 py-4 text-right">
-                <div className="flex justify-end gap-2">
+              <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
+                <div className="grid gap-2 sm:grid-cols-2 md:flex md:justify-end">
                   <button
                     className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100"
                     onClick={() => navigate(`/admin/payments?billingId=${account.oldestBill.id}`)}

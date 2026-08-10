@@ -89,7 +89,7 @@ export default function AdminReadingsPage() {
   const highest = visibleReadings.reduce((maximum, reading) => Math.max(maximum, Number(reading.consumption || 0)), 0);
 
   return (
-    <main className="space-y-6">
+    <main className="min-w-0 space-y-6">
       <PageHeader description="Review meter movements and recorded water use across every purok." eyebrow="Read-only records" title="Consumer consumption readings" />
 
       <section aria-label="Reading summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
@@ -124,8 +124,8 @@ export default function AdminReadingsPage() {
           emptyDescription="Residents will appear here when meter readings are recorded."
           emptyTitle="No resident readings found"
           getRowKey={(resident) => resident.id}
-          rowClassName="transition-colors hover:bg-slate-50"
-          tableClassName="w-full min-w-[720px] text-left text-sm"
+          rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+          tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
               <td className="px-4 py-4 font-mono text-navy-900">{resident.consumerNo}</td>
@@ -133,9 +133,9 @@ export default function AdminReadingsPage() {
                 {resident.consumerName}
               </td>
               <td className="px-4 py-4 text-slate-600">{resident.purok}</td>
-              <td className="px-4 py-4 text-right">
+              <td className="flex flex-col items-stretch justify-end md:table-cell md:px-4 md:py-4 md:text-right">
                 <button
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-50 px-4 font-bold text-water-700 hover:bg-water-100"
+                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100 md:w-auto md:px-4"
                   onClick={() => setSelectedResident(resident)}
                   type="button"
                 >
