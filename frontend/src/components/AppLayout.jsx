@@ -15,7 +15,7 @@ import {
 } from "react-icons/fi";
 import { useLocation, useNavigate } from "react-router";
 import { ACCOUNT_STORAGE_KEY, getCurrentAccount, logout } from "../services/auth.service";
-import { getStoredAccount } from "../services/authToken";
+import { enableConsumerPushSessionPersistence, getStoredAccount } from "../services/authToken";
 import { isCanceledRequest } from "../services/apiClient";
 import { getNotificationPresentation } from "../utils/notificationPresentation";
 import {
@@ -215,7 +215,10 @@ export default function AppLayout({ children }) {
       getCurrentPushSubscription(),
       getPushConfiguration({ signal: controller.signal }),
     ]).then(([subscription, configuration]) => {
-      if (!controller.signal.aborted && !subscription && configuration.enabled) {
+      if (controller.signal.aborted) return;
+      if (subscription) {
+        enableConsumerPushSessionPersistence();
+      } else if (configuration.enabled) {
         setIsPushPromptOpen(true);
       }
     }).catch((error) => {

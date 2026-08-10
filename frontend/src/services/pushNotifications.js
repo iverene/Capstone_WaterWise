@@ -1,4 +1,8 @@
 import { apiRequest } from "./apiClient";
+import {
+  disableConsumerPushSessionPersistence,
+  enableConsumerPushSessionPersistence,
+} from "./authToken";
 
 export const pushSupported = () =>
   "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -44,17 +48,22 @@ export async function enablePushNotifications() {
     method: "POST",
     body: { subscription: subscription.toJSON() },
   });
+  enableConsumerPushSessionPersistence();
   return subscription;
 }
 
 export async function disableCurrentPushNotifications() {
   const subscription = await getCurrentPushSubscription();
-  if (!subscription) return;
+  if (!subscription) {
+    disableConsumerPushSessionPersistence();
+    return;
+  }
   await apiRequest("/notifications/push/subscriptions/current", {
     method: "DELETE",
     body: { endpoint: subscription.endpoint },
   });
   await subscription.unsubscribe();
+  disableConsumerPushSessionPersistence();
 }
 
 export async function fetchPushSubscriptions(options) {
