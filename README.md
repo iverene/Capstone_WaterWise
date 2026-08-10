@@ -120,6 +120,8 @@ The `admin_trusted_devices` table stores only SHA-256 hashes of random browser t
 
 Web Push uses `consumer_push_subscriptions` for browser delivery endpoints and `notification_push_jobs` as a queue populated by a database trigger whenever a notification is inserted or materially updated. Generate a VAPID key pair once with `npm run generate-vapid-keys` inside `backend`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and a `VAPID_SUBJECT` such as `mailto:admin@example.com` in the backend environment. Never expose the private key to the frontend.
 
+The frontend includes `frontend/vercel.json`, which rewrites direct application paths such as `/consumer/home` to `index.html`. Keep the Vercel project Root Directory set to `frontend` so notification clicks and browser refreshes resolve through React Router.
+
 The `events` table stores the event title, resident information, date, time, location, categories, status, creator, and audit timestamps. Row Level Security is enabled, direct `anon` and `authenticated` table access is revoked, and the Express backend accesses it with the server-only Supabase service-role key.
 
 The `sync_event_notification` database trigger maintains one system-wide notification per event using the stable `community-event:<event-id>` key. Existing events are backfilled when the migration is run. Updating or cancelling an event updates its notification and clears prior read records so consumers see the change as unread. Deleting an event also removes its related notification.
