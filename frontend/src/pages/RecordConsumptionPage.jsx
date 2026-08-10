@@ -9,6 +9,7 @@ import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { createMeterReading, fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
+import { cacheRecordingContexts, getCachedRecordingContexts, getPendingMeterReadings, queueMeterReading, syncPendingMeterReadings } from "../services/offlineMeterReadings";
 
 const requestMessage = (error, fallback) => error?.response?.data?.message ?? error.message ?? fallback;
 
@@ -63,31 +64,71 @@ export default function RecordConsumptionPage() {
   const [receiptData, setReceiptData] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptResidentName, setReceiptResidentName] = useState("");
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  const applyPendingState = useCallback(async (contexts) => {
+    const pending = await getPendingMeterReadings();
+    setPendingCount(pending.length);
+    const pendingIds = new Set(pending.map((reading) => reading.consumerId));
+    return contexts.map((consumer) => pendingIds.has(consumer.id) ? {
+      ...consumer,
+      canRecord: false,
+      hasPendingReading: true,
+      recordingBlockReason: "Reading saved on this device and waiting to sync.",
+    } : consumer);
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError("");
-      setConsumers(await fetchRecordingContexts());
+      const contexts = await fetchRecordingContexts();
+      await cacheRecordingContexts(contexts);
+      setConsumers(await applyPendingState(contexts));
     } catch (requestError) {
       setLoadError(requestMessage(requestError, "Unable to load residents and reading status."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyPendingState]);
 
   useEffect(() => {
     const controller = new AbortController();
     fetchRecordingContexts({ signal: controller.signal })
-      .then(setConsumers)
-      .catch((requestError) => {
+      .then(async (contexts) => { await cacheRecordingContexts(contexts); setConsumers(await applyPendingState(contexts)); })
+      .catch(async (requestError) => {
         if (requestError.name !== "CanceledError") {
-          setLoadError(requestMessage(requestError, "Unable to load residents and reading status."));
+          const cached = await getCachedRecordingContexts();
+          if (cached?.contexts?.length) {
+            setConsumers(await applyPendingState(cached.contexts));
+            setLoadError("");
+          } else setLoadError(requestMessage(requestError, "Connect once to download the resident route for offline use."));
         }
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, []);
+  }, [applyPendingState]);
+
+  useEffect(() => {
+    const synchronize = async () => {
+      setIsOnline(navigator.onLine);
+      if (!navigator.onLine) return;
+      setSyncing(true);
+      const result = await syncPendingMeterReadings();
+      setPendingCount(result.remaining);
+      if (result.synced) {
+        toast.success("Offline readings synced", `${result.synced} saved reading${result.synced === 1 ? "" : "s"} uploaded successfully.`);
+        await loadData();
+      }
+      setSyncing(false);
+    };
+    window.addEventListener("online", synchronize);
+    window.addEventListener("offline", synchronize);
+    synchronize();
+    return () => { window.removeEventListener("online", synchronize); window.removeEventListener("offline", synchronize); };
+  }, [loadData, toast]);
 
   const visibleConsumers = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -107,6 +148,10 @@ export default function RecordConsumptionPage() {
   ], [consumers]);
 
   const selectConsumer = async (consumer) => {
+    if (!navigator.onLine) {
+      if (consumer.canRecord) setSelectedConsumer(consumer);
+      return;
+    }
     const expectsReceipt = consumer.hasReadingInSelectedMonth;
     try {
       setSelectingId(consumer.id);
@@ -149,6 +194,14 @@ export default function RecordConsumptionPage() {
     try {
       setSaving(true);
       setSaveError("");
+      if (!navigator.onLine) {
+        await queueMeterReading(payload);
+        setPendingCount((count) => count + 1);
+        setConsumers((current) => current.map((consumer) => consumer.id === payload.consumerId ? { ...consumer, canRecord: false, hasPendingReading: true, recordingBlockReason: "Reading saved on this device and waiting to sync." } : consumer));
+        setSelectedConsumer(null);
+        toast.success("Reading saved offline", `${payload.consumerName}'s reading will upload automatically when the device reconnects.`);
+        return { queued: true };
+      }
       const result = await createMeterReading(payload);
       setConsumers((current) => current.map((consumer) => consumer.id === payload.consumerId ? {
         ...consumer,
@@ -198,6 +251,9 @@ export default function RecordConsumptionPage() {
   return (
     <main className="space-y-6">
       <PageHeader description="Select a resident and type the cumulative meter value." eyebrow="Field workspace" title="Record a meter reading" />
+      <div className={`rounded-xl border p-4 text-sm font-semibold ${isOnline ? "border-water-200 bg-water-50 text-water-800" : "border-amber-200 bg-amber-50 text-amber-800"}`} role="status">
+        {isOnline ? (syncing ? "Online · Syncing saved readings…" : `Online${pendingCount ? ` · ${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync` : " · All readings synced"}`) : `Offline mode · ${pendingCount} reading${pendingCount === 1 ? "" : "s"} safely stored on this device`}
+      </div>
       {loadError && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{loadError}</span><button className="font-bold underline" onClick={loadData} type="button">Try again</button></div>}
       <div aria-label="Resident directory controls" className="flex flex-col gap-3 sm:flex-row sm:items-center" role="search">
         <Search ariaLabel="Search residents by name or account number" className="flex-1" onValueChange={setQuery} placeholder="Search name or account number" value={query} />

@@ -12,6 +12,10 @@ export default defineConfig({
     VitePWA({
       injectRegister: false,
       registerType: 'autoUpdate',
+      // Keep the application shell available while testing offline on `npm run dev`.
+      devOptions: {
+        enabled: true,
+      },
       includeManifestIcons: false,
       manifest: {
         name: 'WaterWise',

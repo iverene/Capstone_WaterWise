@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock3, LoaderCircle, UserRound } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, LoaderCircle, UserRound, CloudOff } from "lucide-react";
 
 export default function ConsumerSelectionList({ consumers = [], emptyDescription, emptyTitle, onSelect, selectedId, selectingId }) {
   return (
@@ -26,7 +26,9 @@ export default function ConsumerSelectionList({ consumers = [], emptyDescription
                 <span className="block truncate font-extrabold text-slate-900">{consumer.consumerName}</span>
                 <span className="mt-0.5 block text-xs font-semibold text-slate-500">{consumer.consumerNo} · {consumer.purok}</span>
                 <span className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
-                  {consumer.hasReadingInSelectedMonth ? (
+                  {consumer.hasPendingReading ? (
+                    <span className="inline-flex items-center gap-1 text-amber-700"><CloudOff aria-hidden="true" className="h-3.5 w-3.5" /> Saved offline · Waiting to sync</span>
+                  ) : consumer.hasReadingInSelectedMonth ? (
                     <span className="inline-flex items-center gap-1 text-water-700"><CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> Recorded this month · View receipt</span>
                   ) : selectingId === consumer.id ? (
                     <span className="inline-flex items-center gap-1 text-water-700"><LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" /> Checking latest reading</span>
