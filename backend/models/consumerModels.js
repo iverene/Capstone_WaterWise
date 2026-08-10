@@ -1,7 +1,10 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
-import { ensureAccountIdentityIsUnique } from "./accountIdentityModels.js";
+import {
+  duplicateAccountIdentityMessage,
+  ensureAccountIdentityIsUnique,
+} from "./accountIdentityModels.js";
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -104,7 +107,7 @@ export const createConsumer = async (
 
   if (error) {
     if (error.code === "23505") {
-      throw createError("The username, full name, or email is already in use.");
+      throw createError(duplicateAccountIdentityMessage(error, { includeFullName: true }));
     }
     throw createError(`Failed to create consumer account: ${error.message}`, 500);
   }

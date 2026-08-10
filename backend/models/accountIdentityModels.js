@@ -36,3 +36,23 @@ export async function ensureAccountIdentityIsUnique({ username, email, fullName 
     throw createError(`The ${duplicate.label} ${duplicate.value} is already in use.`);
   }
 }
+
+export function duplicateAccountIdentityMessage(error, { includeFullName = false } = {}) {
+  const databaseMessage = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (includeFullName && (databaseMessage.includes("full_name") || databaseMessage.includes("full name"))) {
+    return "This resident full name is already in use.";
+  }
+  if (databaseMessage.includes("email")) {
+    return "This email address is already in use.";
+  }
+  if (databaseMessage.includes("username")) {
+    return "This username is already in use.";
+  }
+  return includeFullName
+    ? "This username, resident full name, or email address is already in use."
+    : "This username or email address is already in use.";
+}

@@ -1,7 +1,10 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
-import { ensureAccountIdentityIsUnique } from "./accountIdentityModels.js";
+import {
+  duplicateAccountIdentityMessage,
+  ensureAccountIdentityIsUnique,
+} from "./accountIdentityModels.js";
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -57,7 +60,7 @@ export const createMeterReader = async (username, password, email) => {
 
   if (error) {
     if (error.code === "23505") {
-      throw createError("The username or email is already in use.");
+      throw createError(duplicateAccountIdentityMessage(error));
     }
     throw createError(`Failed to create meter reader account: ${error.message}`, 500);
   }
