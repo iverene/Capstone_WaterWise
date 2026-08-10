@@ -263,6 +263,22 @@ export default function AppLayout({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return undefined;
+    const handleServiceWorkerMessage = (event) => {
+      if (event.data?.type !== "WATERWISE_PUSH_CLICK" || activeRole !== "consumer") return;
+      try {
+        const target = new URL(event.data.url, window.location.origin);
+        if (target.origin !== window.location.origin || !target.pathname.startsWith("/consumer")) return;
+        navigate(`${target.pathname}${target.search}${target.hash}`);
+      } catch {
+        navigate("/consumer/home");
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", handleServiceWorkerMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", handleServiceWorkerMessage);
+  }, [activeRole, navigate]);
+
   const handleLogout = async () => {
     setIsSigningOut(true);
     try {
