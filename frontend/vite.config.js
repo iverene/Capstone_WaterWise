@@ -18,6 +18,7 @@ export default defineConfig({
       // Keep the application shell available while testing offline on `npm run dev`.
       devOptions: {
         enabled: true,
+        type: 'module',
       },
       includeManifestIcons: false,
       manifest: {

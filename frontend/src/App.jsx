@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
@@ -29,6 +29,8 @@ import FlaggedAccountsPage from "./pages/FlaggedAccountsPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminProfile from "./pages/AdminProfile";
 import RecordConsumptionPage from "./pages/RecordConsumptionPage";
+import { clearApiCache } from "./services/apiCache";
+import { subscribeToDataChanges } from "./services/dataChangeStream";
 
 const portalRoutes = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -423,10 +425,24 @@ export function AppRoutes() {
 }
 
 export default function App() {
+  const [dataRevision, setDataRevision] = useState(0);
+  const [sessionRevision, setSessionRevision] = useState(0);
+
+  useEffect(() => subscribeToDataChanges(() => {
+    clearApiCache();
+    setDataRevision((revision) => revision + 1);
+  }), [sessionRevision]);
+
+  useEffect(() => {
+    const sessionChanged = () => setSessionRevision((revision) => revision + 1);
+    window.addEventListener("waterwise-session-changed", sessionChanged);
+    return () => window.removeEventListener("waterwise-session-changed", sessionChanged);
+  }, []);
+
   return (
     <BrowserRouter>
       <SessionExpiryGuard />
-      <AppRoutes />
+      <AppRoutes key={dataRevision} />
       <PWAInstallPrompt />
     </BrowserRouter>
   );

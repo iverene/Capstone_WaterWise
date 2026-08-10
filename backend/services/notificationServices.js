@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { publishDataChange } from "./changeEventService.js";
 
 const DEFAULT_REMINDER_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const UPCOMING_DUE_WINDOW_DAYS = 3;
@@ -171,6 +172,9 @@ export function startNotificationReminderScheduler() {
     isRunning = true;
     try {
       const result = await processBillingReminders();
+      if (result.created > 0) {
+        publishDataChange({ actor: null, method: "SYSTEM", path: "/api/notifications" });
+      }
       console.log(
         `Notification reminders checked ${result.checked} bill(s); created ${result.created}.`,
       );

@@ -1,5 +1,6 @@
 import axios from "axios";
-import { clearSession, getAccessToken } from "./authToken";
+import { clearSession, getAccessToken, getStoredAccount } from "./authToken";
+import { clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
 
 const configuredBaseUrl =
   import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL;
@@ -15,7 +16,7 @@ function resolveApiBaseUrl(value) {
   return `${baseUrl}/api`;
 }
 
-const API_BASE_URL = resolveApiBaseUrl(configuredBaseUrl);
+export const API_BASE_URL = resolveApiBaseUrl(configuredBaseUrl);
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -23,6 +24,41 @@ const apiClient = axios.create({
   // Admin trusted-device verification uses a secure cross-origin cookie.
   withCredentials: true,
 });
+
+const networkAdapter = axios.getAdapter(apiClient.defaults.adapter);
+const pendingGets = new Map();
+
+function getRequestKey(config) {
+  const url = new URL(config.url ?? "", "http://waterwise.local");
+  const params = new URLSearchParams(config.params ?? {});
+  for (const [key, value] of url.searchParams) params.append(key, value);
+  const sortedParams = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
+  return `${url.pathname}?${new URLSearchParams(sortedParams)}`;
+}
+
+apiClient.defaults.adapter = async (config) => {
+  if (config.method?.toLowerCase() !== "get" || config.responseType === "blob") {
+    return networkAdapter(config);
+  }
+
+  const requestKey = getRequestKey(config);
+  const account = getStoredAccount();
+  const pendingKey = `${account?.role ?? "anonymous"}:${account?.id ?? "anonymous"}:${requestKey}`;
+  const cached = readCachedResponse(requestKey);
+  if (cached) return { ...cached, config, request: null };
+
+  if (pendingGets.has(pendingKey)) {
+    const response = await pendingGets.get(pendingKey);
+    return { ...response, config };
+  }
+
+  const request = networkAdapter(config).then((response) => {
+    writeCachedResponse(requestKey, response);
+    return response;
+  }).finally(() => pendingGets.delete(pendingKey));
+  pendingGets.set(pendingKey, request);
+  return request;
+};
 
 apiClient.interceptors.request.use((config) => {
   const token = getAccessToken();
@@ -33,7 +69,10 @@ apiClient.interceptors.request.use((config) => {
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (!["get", "head"].includes(response.config.method?.toLowerCase())) clearApiCache();
+    return response;
+  },
   (error) => {
     if ([401, 403].includes(error.response?.status)) {
       clearSession();
