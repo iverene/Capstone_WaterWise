@@ -7,28 +7,42 @@ import {
   verifyPasswordResetOtp,
 } from "../services/auth.service";
 import Modal from "./Modal";
+import OtpInput from "./OtpInput";
 
 const formatCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
+const PASSWORD_OTP_SESSION_KEY = "waterwise:password-otp-challenge";
+
+function getSavedPasswordOtpChallenge() {
+  try {
+    const savedChallenge = JSON.parse(window.sessionStorage.getItem(PASSWORD_OTP_SESSION_KEY) ?? "null");
+    if (savedChallenge?.challengeToken && Number(savedChallenge.expiresAt) > Date.now()) return savedChallenge;
+    window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY);
+  } catch {
+    window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY);
+  }
+  return null;
+}
 
 function isStrongPassword(password) {
   return password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
 }
 
 export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose, onSuccess }) {
-  const [method, setMethod] = useState(emailOnly ? "email" : "current");
+  const [savedChallenge] = useState(getSavedPasswordOtpChallenge);
+  const [method, setMethod] = useState(emailOnly || savedChallenge ? "email" : "current");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [showPasswords, setShowPasswords] = useState(false);
-  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeToken, setChallengeToken] = useState(savedChallenge?.challengeToken ?? "");
   const [resetToken, setResetToken] = useState("");
   const [otp, setOtp] = useState("");
-  const [maskedEmail, setMaskedEmail] = useState("");
-  const [message, setMessage] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState(savedChallenge?.maskedEmail ?? "");
+  const [message, setMessage] = useState(savedChallenge ? "Enter the verification code sent to your registered email." : "");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [cooldownUntil, setCooldownUntil] = useState(0);
-  const [clock, setClock] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState(Number(savedChallenge?.expiresAt ?? 0));
+  const [clock, setClock] = useState(Date.now);
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - clock) / 1000));
 
   useEffect(() => {
@@ -77,7 +91,13 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
       setMessage(result.message);
       setOtp("");
       setClock(Date.now());
-      setCooldownUntil(Date.now() + 2 * 60 * 1000);
+      const expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
+      setCooldownUntil(expiresAt);
+      window.sessionStorage.setItem(PASSWORD_OTP_SESSION_KEY, JSON.stringify({
+        challengeToken: result.challengeToken,
+        maskedEmail: result.maskedEmail,
+        expiresAt,
+      }));
     } catch (requestError) {
       setError(requestError.message);
       if (requestError.retryAfterSeconds) {
@@ -97,6 +117,7 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
     try {
       const result = await verifyPasswordResetOtp(challengeToken, otp);
       setResetToken(result.resetToken);
+      window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY);
       setMessage("Email verified. You can now create your new password.");
     } catch (requestError) {
       setError(requestError.message);
@@ -105,7 +126,7 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
     }
   };
 
-  const fieldClass = "ww-field mt-2 py-3 pl-4 pr-12";
+  const fieldClass = "ww-field mt-1.5 py-2.5 pl-4 pr-11 text-sm sm:mt-2 sm:py-3 sm:pr-12 sm:text-base";
   const passwordField = (id, label, value, setter, autoComplete) => (
     <div>
       <label className="text-sm font-semibold text-slate-900" htmlFor={id}>{label}</label>
@@ -117,15 +138,15 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
   );
 
   return (
-    <Modal description="Choose how you want to verify your identity." eyebrow="Account security" isOpen={isOpen} onClose={onClose} size="sm" title="Change password">
-      <div className="p-5 sm:p-6">
+    <Modal closeButtonProps={{ className: "!h-9 !w-9 sm:!h-11 sm:!w-11" }} description="Choose how you want to verify your identity." eyebrow="Account security" headerClassName="!px-4 !py-3 sm:!px-6 sm:!py-4 [&_h2]:!text-xl sm:[&_h2]:!text-2xl [&_p]:!text-xs sm:[&_p]:!text-sm" isOpen={isOpen} onClose={onClose} size="sm" title="Change password">
+      <div className="p-4 sm:p-6">
         {!emailOnly && <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-          <button className={`min-h-11 rounded-lg px-3 text-sm font-bold ${method === "current" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { setMethod("current"); setError(""); setMessage(""); }} type="button"><KeyRound className="mr-2 inline h-4 w-4" />Current password</button>
-          <button className={`min-h-11 rounded-lg px-3 text-sm font-bold ${method === "email" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { setMethod("email"); setError(""); setMessage(""); }} type="button"><Mail className="mr-2 inline h-4 w-4" />Email OTP</button>
+          <button className={`min-h-10 rounded-lg px-2 text-xs font-bold sm:min-h-11 sm:px-3 sm:text-sm ${method === "current" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { setMethod("current"); setError(""); setMessage(""); }} type="button"><KeyRound className="mr-1.5 inline h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />Current password</button>
+          <button className={`min-h-10 rounded-lg px-2 text-xs font-bold sm:min-h-11 sm:px-3 sm:text-sm ${method === "email" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { setMethod("email"); setError(""); setMessage(""); }} type="button"><Mail className="mr-1.5 inline h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />Email OTP</button>
         </div>}
 
         {method === "current" && (
-          <form className="mt-5 space-y-4" onSubmit={handlePasswordSubmit}>
+          <form className="mt-4 space-y-3 sm:mt-5 sm:space-y-4" onSubmit={handlePasswordSubmit}>
             {passwordField("current-account-password", "Current password", currentPassword, setCurrentPassword, "current-password")}
             {passwordField("changed-account-password", "New password", newPassword, setNewPassword, "new-password")}
             {passwordField("confirm-account-password", "Confirm new password", confirmation, setConfirmation, "new-password")}
@@ -147,11 +168,12 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
         {method === "email" && challengeToken && !resetToken && (
           <form className="mt-5 space-y-4" onSubmit={verifyOtp}>
             <p className="text-sm text-slate-600">Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</p>
-            <div><label className="text-sm font-semibold" htmlFor="account-password-otp">Verification code</label><input autoComplete="one-time-code" className="ww-field mt-2 py-3 text-center font-mono text-xl tracking-[0.35em]" id="account-password-otp" inputMode="numeric" maxLength={6} onChange={(event) => { setOtp(event.target.value.replace(/\D/g, "")); setError(""); }} value={otp} /></div>
+            <div><label className="text-sm font-semibold" htmlFor="account-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isSubmitting || cooldownSeconds === 0} id="account-password-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); }} value={otp} /></div></div>
+            <p aria-live="polite" className={`text-sm font-semibold ${cooldownSeconds > 0 ? "text-slate-500" : "text-red-600"}`}>{cooldownSeconds > 0 ? `Time remaining: ${formatCountdown(cooldownSeconds)}` : "This verification code has expired. Request a new code below."}</p>
             {message && !error && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{message}</p>}
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
-            <button className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Verifying…" : "Verify code"}</button>
-            <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isSubmitting || cooldownSeconds > 0} onClick={sendOtp} type="button">{cooldownSeconds > 0 ? `Resend code in ${formatCountdown(cooldownSeconds)}` : "Resend code"}</button>
+            <button className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting || cooldownSeconds === 0} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Verifying…" : "Verify code"}</button>
+            {cooldownSeconds === 0 && <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isSubmitting} onClick={sendOtp} type="button">Resend code</button>}
           </form>
         )}
 

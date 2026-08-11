@@ -45,6 +45,7 @@ const staffActionAttempts = new Map();
 const staffActionAuthorizations = new Map();
 const consumerPasswordOtpAttempts = new Map();
 const consumerPasswordAuthorizations = new Map();
+const OTP_RESEND_COOLDOWN_SECONDS = 300;
 const ACCESS_TOKEN_DURATION_BY_ROLE = {
   consumer: "4h",
   "meter-reader": "2h",
@@ -52,6 +53,7 @@ const ACCESS_TOKEN_DURATION_BY_ROLE = {
   "super-admin": "30m",
 };
 const STAFF_ACTIONS = {
+  "manage-staff": "open Super Admin staff management",
   "create-admin": "create an Admin account",
   "create-meter-reader": "create a Meter Reader account",
   "update-admin": "change an Admin account",
@@ -105,10 +107,15 @@ export async function requestStaffActionOtp(req, res) {
     if (action.startsWith("update-") && (!Number.isInteger(parsedTargetId) || parsedTargetId < 1)) return res.status(400).json({ success: false, message: "A valid staff account is required." });
     const account = await getPasswordResetAccountById(req.user.id, "super-admin");
     if (!account || account.status !== "active") return res.status(403).json({ success: false, message: "The Super Admin account is not active." });
+    const requestLimit = await reservePasswordResetOtpRequest(passwordResetRequestKey(account.email, `staff-action:${action}:${parsedTargetId ?? "new"}`));
+    if (!requestLimit.allowed) {
+      res.set("Retry-After", String(requestLimit.retryAfterSeconds));
+      return res.status(429).json({ success: false, message: requestLimit.reason === "hourly_lock" ? "Too many verification codes were requested. Try again in 1 hour." : "Please wait 5 minutes before requesting another verification code.", retryAfterSeconds: requestLimit.retryAfterSeconds });
+    }
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const challengeToken = jwt.sign({ role: "super-admin", action, targetId: parsedTargetId, otpHash: otpFingerprint(otp), passwordFingerprint: passwordFingerprint(account.password), emailFingerprint: passwordFingerprint(account.email.toLowerCase()) }, getJwtSecret(), { subject: String(account.id), issuer: JWT_ISSUER, audience: STAFF_ACTION_OTP_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`staff:${account.id}:${Date.now()}:${otp}`).digest("hex") });
     await sendStaffActionOtp({ email: account.email, otp, username: account.username, actionLabel: STAFF_ACTIONS[action] });
-    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to the Super Admin email." });
+    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to the Super Admin email.", cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the staff authorization code." });
   }
@@ -129,8 +136,9 @@ export async function verifyStaffActionOtp(req, res) {
       return res.status(state.attempts >= 5 ? 429 : 400).json({ success: false, message: state.attempts >= 5 ? "Too many incorrect codes. Request a new code." : `Incorrect verification code. ${5 - state.attempts} attempts remaining.` });
     }
     staffActionAttempts.set(challenge.jti, { ...state, used: true });
-    const authorizationToken = jwt.sign({ role: "super-admin", action: challenge.action, targetId: challenge.targetId ?? null, passwordFingerprint: challenge.passwordFingerprint, emailFingerprint: challenge.emailFingerprint }, getJwtSecret(), { subject: String(account.id), issuer: JWT_ISSUER, audience: STAFF_ACTION_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`authorized:${challenge.jti}`).digest("hex") });
-    return res.status(200).json({ success: true, authorizationToken });
+    const isManagementPermission = challenge.action === "manage-staff";
+    const authorizationToken = jwt.sign({ role: "super-admin", action: challenge.action, targetId: challenge.targetId ?? null, passwordFingerprint: challenge.passwordFingerprint, emailFingerprint: challenge.emailFingerprint }, getJwtSecret(), { subject: String(account.id), issuer: JWT_ISSUER, audience: STAFF_ACTION_AUDIENCE, expiresIn: isManagementPermission ? "15m" : "5m", jwtid: createHash("sha256").update(`authorized:${challenge.jti}`).digest("hex") });
+    return res.status(200).json({ success: true, authorizationToken, authorizationExpiresAt: Date.now() + (isManagementPermission ? 15 : 5) * 60 * 1000 });
   } catch (error) {
     const isTokenError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
     return res.status(error.statusCode ?? (isTokenError ? 400 : 500)).json({ success: false, message: isTokenError ? "This staff verification session is invalid or expired." : error.message || "Unable to verify the code." });
@@ -141,14 +149,15 @@ export const authorizeStaffAction = (expectedAction) => async (req, res, next) =
   try {
     const token = req.get("x-staff-authorization") ?? "";
     const payload = jwt.verify(token, getJwtSecret(), { issuer: JWT_ISSUER, audience: STAFF_ACTION_AUDIENCE });
-    if (req.user.role !== "super-admin" || payload.sub !== String(req.user.id) || payload.action !== expectedAction || !payload.jti) throw new jwt.JsonWebTokenError("Invalid staff authorization.");
-    if (expectedAction.startsWith("update-") && Number(payload.targetId) !== Number(req.params.id)) throw new jwt.JsonWebTokenError("Authorization does not match this staff account.");
+    const isManagementPermission = payload.action === "manage-staff";
+    if (req.user.role !== "super-admin" || payload.sub !== String(req.user.id) || (!isManagementPermission && payload.action !== expectedAction) || !payload.jti) throw new jwt.JsonWebTokenError("Invalid staff authorization.");
+    if (!isManagementPermission && expectedAction.startsWith("update-") && Number(payload.targetId) !== Number(req.params.id)) throw new jwt.JsonWebTokenError("Authorization does not match this staff account.");
     const state = staffActionAuthorizations.get(payload.jti);
-    if (state?.used) return res.status(403).json({ success: false, message: "This staff authorization has already been used." });
+    if (!isManagementPermission && state?.used) return res.status(403).json({ success: false, message: "This staff authorization has already been used." });
     const account = await getPasswordResetAccountById(req.user.id, "super-admin");
     const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), payload.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), payload.emailFingerprint ?? "");
     if (!validAccount) return res.status(403).json({ success: false, message: "The Super Admin credentials changed. Request a new verification code." });
-    staffActionAuthorizations.set(payload.jti, { used: true, expiresAt: payload.exp * 1000 });
+    if (!isManagementPermission) staffActionAuthorizations.set(payload.jti, { used: true, expiresAt: payload.exp * 1000 });
     return next();
   } catch (error) {
     return res.status(403).json({ success: false, message: "Verify the Super Admin email OTP before continuing." });
@@ -165,6 +174,11 @@ export async function requestConsumerPasswordChangeOtp(req, res) {
       getConsumerById(consumerId),
     ]);
     if (!account || account.status !== "active") return res.status(403).json({ success: false, message: "Your administrator account is not active." });
+    const requestLimit = await reservePasswordResetOtpRequest(passwordResetRequestKey(account.email, `consumer-password:${consumerId}`));
+    if (!requestLimit.allowed) {
+      res.set("Retry-After", String(requestLimit.retryAfterSeconds));
+      return res.status(429).json({ success: false, message: requestLimit.reason === "hourly_lock" ? "Too many verification codes were requested. Try again in 1 hour." : "Please wait 5 minutes before requesting another verification code.", retryAfterSeconds: requestLimit.retryAfterSeconds });
+    }
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const challengeToken = jwt.sign(
       { role: req.user.role, consumerId, otpHash: otpFingerprint(otp), passwordFingerprint: passwordFingerprint(account.password), emailFingerprint: passwordFingerprint(account.email.toLowerCase()) },
@@ -172,7 +186,7 @@ export async function requestConsumerPasswordChangeOtp(req, res) {
       { subject: String(account.id), issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_OTP_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`consumer-password:${account.id}:${consumerId}:${Date.now()}:${otp}`).digest("hex") },
     );
     await sendConsumerPasswordChangeOtp({ email: account.email, otp, username: account.username, consumerName: consumer.full_name ?? consumer.username });
-    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to your administrator email." });
+    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to your administrator email.", cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the password-change code." });
   }
@@ -272,6 +286,7 @@ export async function login(req, res) {
         challengeToken,
         maskedEmail: user.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
         message: "A verification code was sent to your registered admin email.",
+        cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
       });
     }
 
@@ -414,6 +429,82 @@ export async function verifyAdminLoginOtp(req, res) {
   }
 }
 
+export async function resendAdminLoginOtp(req, res) {
+  try {
+    const { challengeToken } = req.body ?? {};
+    if (!challengeToken) {
+      return res.status(400).json({ success: false, message: "A verification session is required. Sign in again." });
+    }
+
+    const challenge = jwt.verify(challengeToken, getJwtSecret(), {
+      issuer: JWT_ISSUER,
+      audience: ADMIN_LOGIN_OTP_AUDIENCE,
+      ignoreExpiration: true,
+    });
+    const issuedAt = Number(challenge.iat ?? 0) * 1000;
+    if (!challenge.jti || !["admin", "super-admin"].includes(challenge.role) || !issuedAt || Date.now() - issuedAt > 15 * 60 * 1000) {
+      return res.status(400).json({ success: false, message: "This verification session has expired. Sign in again." });
+    }
+    const secondsSinceIssue = Math.floor((Date.now() - issuedAt) / 1000);
+    if (secondsSinceIssue < OTP_RESEND_COOLDOWN_SECONDS) {
+      const retryAfterSeconds = OTP_RESEND_COOLDOWN_SECONDS - secondsSinceIssue;
+      res.set("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({ success: false, message: "Please wait until the current code expires before requesting another verification code.", retryAfterSeconds });
+    }
+
+    const account = await getPasswordResetAccountById(challenge.sub, challenge.role);
+    const accountMatches = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), challenge.passwordFingerprint ?? "");
+    if (!accountMatches) {
+      return res.status(403).json({ success: false, message: "Your administrator credentials changed. Sign in again." });
+    }
+
+    const requestLimit = await reservePasswordResetOtpRequest(passwordResetRequestKey(account.email, "admin-login"));
+    if (!requestLimit.allowed) {
+      res.set("Retry-After", String(requestLimit.retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        message: requestLimit.reason === "hourly_lock"
+          ? "Too many verification codes were requested. Try again in 1 hour."
+          : "Please wait 5 minutes before requesting another verification code.",
+        retryAfterSeconds: requestLimit.retryAfterSeconds,
+      });
+    }
+
+    const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const nextChallengeToken = jwt.sign(
+      {
+        role: account.role,
+        otpHash: otpFingerprint(otp),
+        passwordFingerprint: passwordFingerprint(account.password),
+      },
+      getJwtSecret(),
+      {
+        subject: String(account.id),
+        issuer: JWT_ISSUER,
+        audience: ADMIN_LOGIN_OTP_AUDIENCE,
+        expiresIn: "5m",
+        jwtid: createHash("sha256").update(`${account.id}:${Date.now()}:${otp}`).digest("hex"),
+      },
+    );
+
+    adminOtpAttempts.set(challenge.jti, { used: true, expiresAt: Math.max(Date.now() + 60_000, Number(challenge.exp ?? 0) * 1000) });
+    await sendAdminLoginOtp({ email: account.email, otp, username: account.username });
+    return res.status(200).json({
+      success: true,
+      challengeToken: nextChallengeToken,
+      maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
+      message: "A new verification code was sent to your registered admin email.",
+      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+    });
+  } catch (error) {
+    const isTokenError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
+    return res.status(error.statusCode ?? (isTokenError ? 400 : 500)).json({
+      success: false,
+      message: isTokenError ? "This verification session is invalid. Sign in again." : error.message || "Unable to resend the code.",
+    });
+  }
+}
+
 export async function requestConsumerEmailChangeOtp(req, res) {
   try {
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
@@ -427,7 +518,7 @@ export async function requestConsumerEmailChangeOtp(req, res) {
         success: false,
         message: requestLimit.reason === "hourly_lock"
           ? "Too many verification codes were requested. Try again in 1 hour."
-          : "Please wait 2 minutes before requesting another verification code.",
+          : "Please wait 5 minutes before requesting another verification code.",
       });
     }
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -450,6 +541,7 @@ export async function requestConsumerEmailChangeOtp(req, res) {
       challengeToken,
       maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
       message: "A verification code was sent to your current email address.",
+      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
     });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the verification code." });
@@ -534,7 +626,7 @@ export async function forgotPassword(req, res) {
         success: false,
         message: requestLimit.reason === "hourly_lock"
           ? "Too many password reset codes were requested. Try again in 1 hour."
-          : "Please wait 2 minutes before requesting another verification code.",
+          : "Please wait 5 minutes before requesting another verification code.",
       });
     }
 
@@ -558,6 +650,7 @@ export async function forgotPassword(req, res) {
       success: true,
       message: "A verification code has been sent to your registered email address.",
       challengeToken,
+      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
     });
   } catch (error) {
     console.error("Forgot password request failed:", error);
@@ -601,7 +694,7 @@ export async function requestAuthenticatedPasswordOtp(req, res) {
         success: false,
         message: requestLimit.reason === "hourly_lock"
           ? "Too many verification codes were requested. Try again in 1 hour."
-          : "Please wait 2 minutes before requesting another verification code.",
+          : "Please wait 5 minutes before requesting another verification code.",
       });
     }
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -612,6 +705,7 @@ export async function requestAuthenticatedPasswordOtp(req, res) {
       message: "A verification code was sent to your registered email address.",
       challengeToken,
       maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
+      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
     });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({

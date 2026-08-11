@@ -3,13 +3,12 @@ import {
   FiDroplet,
   FiEye,
   FiEyeOff,
-  FiHash,
   FiLoader,
   FiLock,
   FiMail,
 } from "react-icons/fi";
 import { Link, useNavigate } from "react-router";
-import { login, verifyAdminLoginOtp } from "../services/auth.service";
+import { login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
 
@@ -25,6 +24,7 @@ export default function Login() {
   const toast = useToast();
   const identifierRef = useRef(null);
   const passwordRef = useRef(null);
+  const otpInputRefs = useRef([]);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -35,7 +35,10 @@ export default function Login() {
   const [identifierError, setIdentifierError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [lockSeconds, setLockSeconds] = useState(0);
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
 
   useEffect(() => {
     if (!hasAuthenticatedSession()) return;
@@ -51,6 +54,18 @@ export default function Login() {
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [lockSeconds]);
+
+  useEffect(() => {
+    if (!adminChallengeToken || !otpExpiresAt) return undefined;
+
+    const updateCountdown = () => {
+      setOtpSecondsLeft(Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000)));
+    };
+
+    updateCountdown();
+    const timer = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(timer);
+  }, [adminChallengeToken, otpExpiresAt]);
 
   const lockMessage = lockSeconds > 0
     ? `Too many incorrect attempts. Try again in ${Math.floor(lockSeconds / 60)}:${String(lockSeconds % 60).padStart(2, "0")}.`
@@ -115,8 +130,12 @@ export default function Login() {
       if (result.requiresOtp) {
         setAdminChallengeToken(result.challengeToken);
         setMaskedEmail(result.maskedEmail);
+        setOtp("");
+        setOtpSecondsLeft(300);
+        setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
         setPassword("");
         setMessage(result.message);
+        requestAnimationFrame(() => otpInputRefs.current[0]?.focus());
         return;
       }
       const authenticatedRole = result.user?.role === "tenant"
@@ -183,6 +202,67 @@ export default function Login() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const updateOtpDigit = (index, value) => {
+    const digits = value.replace(/\D/g, "");
+    if (!digits) {
+      setOtp((current) => `${current.slice(0, index)} ${current.slice(index + 1)}`.trimEnd());
+      setMessage("");
+      return;
+    }
+
+    const nextOtp = otp.padEnd(6, " ").split("");
+    digits.slice(0, 6 - index).split("").forEach((digit, offset) => {
+      nextOtp[index + offset] = digit;
+    });
+    setOtp(nextOtp.join("").trimEnd());
+    setMessage("");
+    otpInputRefs.current[Math.min(index + digits.length, 5)]?.focus();
+  };
+
+  const handleOtpKeyDown = (index, event) => {
+    if (event.key === "Backspace" && !otp[index] && index > 0) {
+      event.preventDefault();
+      const nextOtp = otp.padEnd(6, " ").split("");
+      nextOtp[index - 1] = " ";
+      setOtp(nextOtp.join("").trimEnd());
+      setMessage("");
+      otpInputRefs.current[index - 1]?.focus();
+    } else if (event.key === "ArrowLeft" && index > 0) {
+      event.preventDefault();
+      otpInputRefs.current[index - 1]?.focus();
+    } else if (event.key === "ArrowRight" && index < 5) {
+      event.preventDefault();
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const otpCountdown = `${Math.floor(otpSecondsLeft / 60)}:${String(otpSecondsLeft % 60).padStart(2, "0")}`;
+
+  const handleResendOtp = async () => {
+    if (isResending || otpSecondsLeft > 0) return;
+    setIsResending(true);
+    setMessage("");
+    try {
+      const result = await resendAdminLoginOtp(adminChallengeToken);
+      setAdminChallengeToken(result.challengeToken);
+      setMaskedEmail(result.maskedEmail);
+      setOtp("");
+      setOtpSecondsLeft(300);
+      setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
+      setMessage(result.message);
+      requestAnimationFrame(() => otpInputRefs.current[0]?.focus());
+    } catch (error) {
+      const retryAfterSeconds = Number(error.cause?.response?.data?.retryAfterSeconds ?? 0);
+      if (retryAfterSeconds > 0) {
+        setOtpSecondsLeft(retryAfterSeconds);
+        setOtpExpiresAt(Date.now() + retryAfterSeconds * 1000);
+      }
+      setMessage(error.message);
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -304,17 +384,45 @@ export default function Login() {
 
                 {adminChallengeToken && (
                   <div>
-                    <label className="text-sm font-semibold text-slate-900" htmlFor="admin-login-otp">Verification code</label>
-                    <div className="relative mt-2">
-                      <FiHash aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-                      <input autoComplete="one-time-code" className="ww-field py-3 pl-12 pr-4 font-mono text-lg tracking-[0.3em]" disabled={isSubmitting} id="admin-login-otp" inputMode="numeric" maxLength={6} onChange={(event) => { setOtp(event.target.value.replace(/\D/g, "")); setMessage(""); }} placeholder="000000" type="text" value={otp} />
+                    <label className="text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
+                    <div aria-labelledby="admin-login-otp-label" className="mt-3 grid grid-cols-6 gap-2 sm:gap-3" role="group">
+                      {Array.from({ length: 6 }, (_, index) => (
+                        <input
+                          aria-label={`Verification code digit ${index + 1} of 6`}
+                          autoComplete={index === 0 ? "one-time-code" : "off"}
+                          className="h-14 min-w-0 rounded-xl border border-slate-300 bg-white text-center font-mono text-2xl font-bold text-slate-900 outline-none transition focus:border-water-600 focus:ring-4 focus:ring-water-100 disabled:bg-slate-100 disabled:text-slate-400 sm:h-16"
+                          disabled={isSubmitting || otpSecondsLeft === 0}
+                          inputMode="numeric"
+                          key={index}
+                          maxLength={index === 0 ? 6 : 1}
+                          onChange={(event) => updateOtpDigit(index, event.target.value)}
+                          onFocus={(event) => event.target.select()}
+                          onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                          ref={(element) => { otpInputRefs.current[index] = element; }}
+                          type="text"
+                          value={otp[index] ?? ""}
+                        />
+                      ))}
                     </div>
+                    <p aria-live="polite" className={`mt-3 text-sm font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
+                      {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
+                    </p>
+                    {otpSecondsLeft === 0 && (
+                      <button
+                        className="mt-3 text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
+                        disabled={isSubmitting || isResending}
+                        onClick={handleResendOtp}
+                        type="button"
+                      >
+                        {isResending ? "Sending new code…" : "Resend code"}
+                      </button>
+                    )}
                   </div>
                 )}
 
                 <button
                   className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
-                  disabled={isSubmitting || lockSeconds > 0}
+                  disabled={isSubmitting || lockSeconds > 0 || (Boolean(adminChallengeToken) && otpSecondsLeft === 0)}
                   style={{ cursor: isSubmitting ? "default" : undefined }}
                   type="submit"
                 >
@@ -341,7 +449,7 @@ export default function Login() {
                   </p>
                 )}
                 {adminChallengeToken && (
-                  <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setMessage(""); }} type="button">Back to sign in</button>
+                  <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
                 )}
               </form>
             </div>

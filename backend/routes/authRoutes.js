@@ -1,11 +1,12 @@
 import express from "express";
-import { changeAuthenticatedPassword, completeConsumerEmailChange, currentAccount, forgotPassword, getAdminTrustedDevices, login, removeAdminTrustedDevice, removeOtherAdminTrustedDevices, requestAuthenticatedPasswordOtp, requestConsumerEmailChangeOtp, requestConsumerPasswordChangeOtp, requestStaffActionOtp, resetPassword, verifyAdminLoginOtp, verifyConsumerEmailChangeOtp, verifyConsumerPasswordChangeOtp, verifyPasswordResetOtp, verifyStaffActionOtp } from "../controllers/authControllers.js";
+import { changeAuthenticatedPassword, completeConsumerEmailChange, currentAccount, forgotPassword, getAdminTrustedDevices, login, removeAdminTrustedDevice, removeOtherAdminTrustedDevices, requestAuthenticatedPasswordOtp, requestConsumerEmailChangeOtp, requestConsumerPasswordChangeOtp, requestStaffActionOtp, resendAdminLoginOtp, resetPassword, verifyAdminLoginOtp, verifyConsumerEmailChangeOtp, verifyConsumerPasswordChangeOtp, verifyPasswordResetOtp, verifyStaffActionOtp } from "../controllers/authControllers.js";
 import { authenticate } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 router.post("/login", login);
 router.post("/admin/verify-login-otp", verifyAdminLoginOtp);
+router.post("/admin/resend-login-otp", resendAdminLoginOtp);
 router.get("/admin/trusted-devices", authenticate, getAdminTrustedDevices);
 router.delete("/admin/trusted-devices/others", authenticate, removeOtherAdminTrustedDevices);
 router.delete("/admin/trusted-devices/:deviceId", authenticate, removeAdminTrustedDevice);

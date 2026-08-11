@@ -11,6 +11,7 @@ import {
 } from "./services/authToken";
 import BillingLedger from "./pages/BillingLedger";
 import ConsumerProfile from "./pages/ConsumerProfile";
+import ConsumerAccountInformation from "./pages/ConsumerAccountInformation";
 import ConsumerHome from "./pages/ConsumerHome";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
 import Login from "./pages/Login";
@@ -28,6 +29,7 @@ import PaymentProcessingPage from "./pages/PaymentProcessingPage";
 import FlaggedAccountsPage from "./pages/FlaggedAccountsPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminProfile from "./pages/AdminProfile";
+import AdminAccountInformation from "./pages/AdminAccountInformation";
 import RecordConsumptionPage from "./pages/RecordConsumptionPage";
 import { clearApiCache } from "./services/apiCache";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
@@ -35,6 +37,8 @@ import { subscribeToDataChanges } from "./services/dataChangeStream";
 const portalRoutes = [
   { label: "Dashboard", path: "/admin/dashboard" },
   { label: "Profile", path: "/admin/profile" },
+  { label: "Account information", path: "/admin/account-information" },
+  { label: "Staff management", path: "/admin/staff-management" },
   { label: "Residents", path: "/admin/consumers" },
   { label: "Readings", path: "/admin/readings" },
   { label: "Billing", path: "/admin/billings" },
@@ -44,6 +48,7 @@ const portalRoutes = [
   { label: "Announcements", path: "/admin/announcements" },
   { label: "Record Consumption Entry", path: "/meter-reader/readings-entry" },
   { label: "Profile", path: "/consumer/profile-details" },
+  { label: "Account information", path: "/consumer/account-information" },
   { label: "Bills", path: "/consumer/billing-ledger" },
   { label: "Home", path: "/consumer/home" },
   { label: "Announcements", path: "/consumer/announcements" },
@@ -60,6 +65,7 @@ const roleAccess = {
       "/admin",
       "/admin/dashboard",
       "/admin/profile",
+      "/admin/account-information",
       "/admin/consumers",
       "/admin/readings",
       "/admin/billings",
@@ -87,6 +93,7 @@ const roleAccess = {
       "/consumer/home",
       "/consumer/announcements",
       "/consumer/profile-details",
+      "/consumer/account-information",
       "/consumer/billing-ledger",
       "/consumer/analytics",
       "/consumer/usage-metrics",
@@ -97,7 +104,7 @@ const roleAccess = {
 roleAccess["super-admin"] = {
   ...roleAccess.admin,
   label: "Super Admin",
-  paths: [...roleAccess.admin.paths],
+  paths: [...roleAccess.admin.paths, "/admin/staff-management"],
 };
 
 function findRouteLabel(pathname) {
@@ -382,6 +389,32 @@ export function AppRoutes() {
           </RoleRouteGuard>
         }
         path="/consumer/profile-details"
+      />
+      <Route
+        path="/admin/account-information"
+        element={
+          <RoleRouteGuard requiredRole="admin">
+            <AppLayout><AdminAccountInformation /></AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        path="/admin/staff-management"
+        element={
+          <RoleRouteGuard requiredRole="super-admin">
+            <AppLayout><AdminProfile /></AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        element={
+          <RoleRouteGuard requiredRole="consumer">
+            <AppLayout>
+              <ConsumerAccountInformation />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+        path="/consumer/account-information"
       />
       <Route
         element={

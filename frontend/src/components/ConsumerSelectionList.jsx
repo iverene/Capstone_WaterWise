@@ -3,27 +3,27 @@ import { AlertTriangle, CheckCircle2, Clock3, LoaderCircle, UserRound, CloudOff 
 export default function ConsumerSelectionList({ consumers = [], emptyDescription, emptyTitle, onSelect, selectedId, selectingId }) {
   return (
     <section className="ww-glass-strong overflow-hidden rounded-2xl">
-      <div className="border-b border-slate-200 p-5 sm:p-6">
+      <div className="border-b border-slate-200 p-4 sm:p-6">
         <p className="ww-eyebrow !text-water-700">Step 1 of 3</p>
-        <h2 className="mt-1 text-2xl font-extrabold text-slate-900">Select a resident</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600">Choose an available resident to record a reading, or open the receipt for one already recorded this month.</p>
+        <h2 className="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl">Select a resident</h2>
+        <p className="mt-1 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">Choose an available resident to record a reading, or open the receipt for one already recorded this month.</p>
       </div>
-      <div className="max-h-[46rem] space-y-3 overflow-y-auto p-4 sm:p-6">
+      <div className="max-h-[46rem] space-y-2 overflow-y-auto p-3 sm:space-y-3 sm:p-6">
         {consumers.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><p className="font-bold text-slate-700">{emptyTitle ?? "No residents found"}</p><p className="mt-1 text-sm text-slate-500">{emptyDescription ?? "Check the spelling or try a different account number or purok."}</p></div>
         ) : consumers.map((consumer) => {
           const disabled = (!consumer.hasReadingInSelectedMonth && !consumer.canRecord) || selectingId != null;
           return (
             <button
-              className={`flex min-h-24 w-full items-center gap-4 rounded-2xl border p-4 text-left transition sm:p-5 ${selectedId === consumer.id ? "border-water-500 bg-water-50 ring-4 ring-water-100" : consumer.hasReadingInSelectedMonth ? "border-water-200 bg-water-50/60 hover:border-water-400 hover:bg-water-50" : "border-slate-200 bg-white hover:border-water-300 hover:bg-water-50"} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70`}
+              className={`flex min-h-20 w-full items-center gap-3 rounded-xl border p-3 text-left transition sm:min-h-24 sm:gap-4 sm:rounded-2xl sm:p-5 ${selectedId === consumer.id ? "border-water-500 bg-water-50 ring-4 ring-water-100" : consumer.hasReadingInSelectedMonth ? "border-water-200 bg-water-50/60 hover:border-water-400 hover:bg-water-50" : "border-slate-200 bg-white hover:border-water-300 hover:bg-water-50"} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70`}
               disabled={disabled}
               key={consumer.id}
               onClick={() => onSelect(consumer)}
               type="button"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound aria-hidden="true" className="h-5 w-5" /></span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-water-100 text-water-700 sm:h-11 sm:w-11 sm:rounded-xl"><UserRound aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" /></span>
               <span className="min-w-0">
-                <span className="block truncate font-extrabold text-slate-900">{consumer.consumerName}</span>
+                <span className="block truncate text-[15px] font-extrabold text-slate-900 sm:text-base">{consumer.consumerName}</span>
                 <span className="mt-0.5 block text-xs font-semibold text-slate-500">{consumer.consumerNo} · {consumer.purok}</span>
                 <span className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold">
                   {consumer.hasPendingReading ? (

@@ -988,10 +988,10 @@ BEGIN
 
     IF cardinality(recent_requests) > 0 THEN
         last_request := recent_requests[cardinality(recent_requests)];
-        IF last_request > v_now - INTERVAL '2 minutes' THEN
+        IF last_request > v_now - INTERVAL '5 minutes' THEN
             retry_seconds := GREATEST(
                 1,
-                CEIL(EXTRACT(EPOCH FROM (last_request + INTERVAL '2 minutes') - v_now))::INTEGER
+                CEIL(EXTRACT(EPOCH FROM (last_request + INTERVAL '5 minutes') - v_now))::INTEGER
             );
             UPDATE password_reset_request_limits
             SET request_timestamps = recent_requests, locked_until = NULL, updated_at = v_now
