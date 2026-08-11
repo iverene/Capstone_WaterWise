@@ -5,6 +5,7 @@ import ConsumerListTable from "../components/ConsumerListTable";
 import Filter from "../components/Filter";
 import KPI from "../components/KPI";
 import Modal from "../components/Modal";
+import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
@@ -232,7 +233,7 @@ function ConsumerManagementPage() {
 
       {passwordChallenge && <Modal description={`Enter the code sent to ${passwordChallenge.maskedEmail}. It expires in 5 minutes.`} eyebrow="Password security" isOpen onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); } }} size="sm" title="Verify resident password change">
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={confirmPasswordChange}>
-          <div><label className="text-sm font-semibold text-slate-900" htmlFor="resident-password-otp">Verification code</label><input autoComplete="one-time-code" className="ww-field mt-2 px-4 py-3 text-center font-mono text-xl" disabled={isPasswordVerifying} id="resident-password-otp" inputMode="numeric" maxLength={6} onChange={(event) => { setPasswordOtp(event.target.value.replace(/\D/g, "")); setPasswordOtpError(""); }} placeholder="000000" value={passwordOtp} /></div>
+          <div><label className="text-sm font-semibold text-slate-900" htmlFor="resident-password-otp">Verification code</label><div className="mt-3"><OtpInput disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); }} value={passwordOtp} /></div></div>
           {passwordOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{passwordOtpError}</p>}
           <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isPasswordVerifying} type="submit">{isPasswordVerifying && <FiLoader className="h-5 w-5 animate-spin" />}{isPasswordVerifying ? "Verifying..." : "Verify and update password"}</button>
         </form>

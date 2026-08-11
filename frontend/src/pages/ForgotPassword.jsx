@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { FiArrowLeft, FiDroplet, FiHash, FiLoader, FiMail } from "react-icons/fi";
+import { FiArrowLeft, FiDroplet, FiLoader, FiMail } from "react-icons/fi";
 import { Link, useNavigate } from "react-router";
 import { requestPasswordReset, verifyPasswordResetOtp } from "../services/auth.service";
+import OtpInput from "../components/OtpInput";
 
 const formatCountdown = (totalSeconds) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -47,7 +48,7 @@ export default function ForgotPassword() {
       setMessage(result.message);
       setCooldownEmail(normalizedEmail);
       setClock(Date.now());
-      setCooldownUntil(Date.now() + 2 * 60 * 1000);
+      setCooldownUntil(Date.now() + Number(result.cooldownSeconds ?? 300) * 1000);
     } catch (requestError) {
       setError(requestError.message);
       if (requestError.retryAfterSeconds) {
@@ -104,10 +105,7 @@ export default function ForgotPassword() {
             </div>
           </div> : <div>
             <label className="text-sm font-semibold" htmlFor="recovery-otp">Verification code</label>
-            <div className="relative mt-2">
-              <FiHash className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-              <input aria-invalid={Boolean(error)} autoComplete="one-time-code" className="ww-field py-3 pl-12 pr-4 font-mono text-lg tracking-[0.3em]" disabled={isSubmitting} id="recovery-otp" inputMode="numeric" maxLength={6} onChange={(event) => { setOtp(event.target.value.replace(/\D/g, "")); setError(""); }} placeholder="000000" type="text" value={otp} />
-            </div>
+            <div className="mt-3"><OtpInput disabled={isSubmitting} id="recovery-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); }} value={otp} /></div>
           </div>}
           {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{isCurrentEmailCoolingDown ? `Please wait ${countdownLabel} before requesting another verification code.` : error}</p>}
           {!challengeToken && isCurrentEmailCoolingDown && !error && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800" role="status">You can request another code in {countdownLabel}.</p>}

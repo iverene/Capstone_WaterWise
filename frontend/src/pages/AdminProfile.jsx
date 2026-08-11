@@ -1,12 +1,35 @@
 import { useEffect, useState } from "react";
-import { AtSign, ChevronLeft, ChevronRight, Eye, EyeOff, KeyRound, LoaderCircle, Mail, Monitor, Settings, ShieldCheck, Smartphone, Trash2, UserPlus, UserRound } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, KeyRound, LoaderCircle, Mail, Monitor, Settings, ShieldCheck, Smartphone, Trash2, UserPlus, UserRound } from "lucide-react";
+import { useLocation, useNavigate } from "react-router";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
+import OtpInput from "../components/OtpInput";
 import { useToast } from "../components/Toast";
 import { createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp } from "../services/auth.service";
 import { getStoredAccount } from "../services/authToken";
 
 const STAFF_PAGE_SIZE = 2;
+const STAFF_PERMISSION_KEY = "waterwise:super-admin-staff-permission";
+const STAFF_OTP_CHALLENGE_KEY = "waterwise:super-admin-staff-otp";
+const formatOtpCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+
+function getStoredStaffPermission() {
+  try {
+    const permission = JSON.parse(window.sessionStorage.getItem(STAFF_PERMISSION_KEY) ?? "null");
+    if (permission?.token && Number(permission.expiresAt) > Date.now()) return permission;
+    window.sessionStorage.removeItem(STAFF_PERMISSION_KEY);
+  } catch { window.sessionStorage.removeItem(STAFF_PERMISSION_KEY); }
+  return null;
+}
+
+function getStoredStaffOtpChallenge() {
+  try {
+    const challenge = JSON.parse(window.sessionStorage.getItem(STAFF_OTP_CHALLENGE_KEY) ?? "null");
+    if (challenge?.action === "manage-staff" && challenge?.challengeToken && Number(challenge.expiresAt) > Date.now()) return challenge;
+    window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
+  } catch { window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY); }
+  return null;
+}
 
 function describeDevice(userAgent = "") {
   const mobile = /Android|iPhone|iPad/i.test(userAgent);
@@ -41,6 +64,9 @@ const formatDeviceDate = (value) => new Intl.DateTimeFormat("en-PH", {
 }).format(new Date(value));
 
 export default function AdminProfile() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isStaffManagementPage = location.pathname === "/admin/staff-management";
   const toast = useToast();
   const [account, setAccount] = useState(getStoredAccount);
   const [staffType, setStaffType] = useState("");
@@ -71,11 +97,33 @@ export default function AdminProfile() {
   const [staffOtp, setStaffOtp] = useState("");
   const [staffOtpError, setStaffOtpError] = useState("");
   const [isAuthorizingStaff, setIsAuthorizingStaff] = useState(false);
+  const [staffOtpResendSeconds, setStaffOtpResendSeconds] = useState(0);
   const [isTrustedDevicesOpen, setIsTrustedDevicesOpen] = useState(false);
   const [trustedDevices, setTrustedDevices] = useState([]);
   const [trustedDevicesError, setTrustedDevicesError] = useState("");
   const [isTrustedDevicesLoading, setIsTrustedDevicesLoading] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState(null);
+  const [staffManagementPermission, setStaffManagementPermission] = useState(getStoredStaffPermission);
+
+  useEffect(() => {
+    if (!staffManagementPermission?.expiresAt) return undefined;
+    const remaining = Number(staffManagementPermission.expiresAt) - Date.now();
+    if (remaining <= 0) {
+      window.sessionStorage.removeItem(STAFF_PERMISSION_KEY);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      window.sessionStorage.removeItem(STAFF_PERMISSION_KEY);
+      setStaffManagementPermission(null);
+    }, remaining);
+    return () => window.clearTimeout(timer);
+  }, [staffManagementPermission]);
+
+  useEffect(() => {
+    if (staffOtpResendSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setStaffOtpResendSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [staffOtpResendSeconds]);
 
   useEffect(() => {
     const handleEmailChange = (event) => setAccount((current) => ({ ...current, email: event.detail?.email ?? current.email }));
@@ -84,7 +132,9 @@ export default function AdminProfile() {
   }, []);
 
   useEffect(() => {
-    if (account?.role !== "super-admin") return;
+    if (account?.role !== "super-admin" || !isStaffManagementPage || !staffManagementPermission?.token) return;
+    setIsDirectoryLoading(true);
+    setDirectoryError("");
     fetchStaffAccounts(directoryType, directoryPage, STAFF_PAGE_SIZE)
       .then((result) => {
         setStaffDirectory((current) => ({ ...current, [directoryType]: result.items ?? [] }));
@@ -92,7 +142,7 @@ export default function AdminProfile() {
       })
       .catch((error) => setDirectoryError(error.message))
       .finally(() => setIsDirectoryLoading(false));
-  }, [account?.role, directoryPage, directoryType]);
+  }, [account?.role, directoryPage, directoryType, isStaffManagementPage, staffManagementPermission?.token]);
 
   const loadTrustedDevices = async () => {
     setIsTrustedDevicesLoading(true); setTrustedDevicesError("");
@@ -132,12 +182,29 @@ export default function AdminProfile() {
   };
 
   const beginStaffAuthorization = async (pendingAction) => {
+    if (pendingAction.action === "manage-staff") {
+      const existingChallenge = getStoredStaffOtpChallenge();
+      if (existingChallenge) {
+        setStaffAuthorization(existingChallenge);
+        setStaffOtp("");
+        setStaffOtpError("");
+        setStaffOtpResendSeconds(Math.max(0, Math.ceil((Number(existingChallenge.expiresAt) - Date.now()) / 1000)));
+        return;
+      }
+    }
     setIsAuthorizingStaff(true); setStaffOtpError("");
     try {
       const result = await requestStaffActionOtp(pendingAction.action, pendingAction.targetId);
-      setStaffAuthorization({ ...pendingAction, challengeToken: result.challengeToken, maskedEmail: result.maskedEmail });
+      const authorization = { ...pendingAction, challengeToken: result.challengeToken, maskedEmail: result.maskedEmail };
+      if (pendingAction.action === "manage-staff") {
+        authorization.expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
+        window.sessionStorage.setItem(STAFF_OTP_CHALLENGE_KEY, JSON.stringify(authorization));
+      }
+      setStaffAuthorization(authorization);
       setStaffOtp("");
+      setStaffOtpResendSeconds(Number(result.cooldownSeconds ?? 300));
     } catch (error) {
+      if (error.retryAfterSeconds) setStaffOtpResendSeconds(error.retryAfterSeconds);
       if (pendingAction.action.startsWith("create-")) setStaffError(error.message);
       else if (pendingAction.action === "update-admin") setAdminError(error.message);
       else setMeterReaderError(error.message);
@@ -153,11 +220,13 @@ export default function AdminProfile() {
     if (!(staffForm.password.length >= 8 && /[a-z]/.test(staffForm.password) && /[A-Z]/.test(staffForm.password) && /\d/.test(staffForm.password) && /[^A-Za-z0-9]/.test(staffForm.password))) return setStaffError("Temporary password must contain uppercase, lowercase, a number, and a symbol.");
     if (staffForm.password !== staffForm.confirmPassword) return setStaffError("Temporary passwords do not match.");
     setStaffError("");
-    await beginStaffAuthorization({ action: staffType === "admin" ? "create-admin" : "create-meter-reader", accountType: staffType, payload: { username, email, password: staffForm.password } });
+    const pendingAction = { action: staffType === "admin" ? "create-admin" : "create-meter-reader", accountType: staffType, payload: { username, email, password: staffForm.password } };
+    if (staffManagementPermission?.token) await completeAuthorizedAction(staffManagementPermission.token, pendingAction);
+    else await beginStaffAuthorization(pendingAction);
   };
 
-  const completeAuthorizedAction = async (authorizationToken) => {
-    const pending = staffAuthorization;
+  const completeAuthorizedAction = async (authorizationToken, pendingAction = staffAuthorization) => {
+    const pending = pendingAction;
     if (pending.action.startsWith("create-")) {
       setIsCreatingStaff(true);
       try {
@@ -213,7 +282,9 @@ export default function AdminProfile() {
     }
     if (!Object.keys(updates).length) return setMeterReaderError("Change the email or enter a new temporary password.");
     setMeterReaderError("");
-    await beginStaffAuthorization({ action: "update-meter-reader", targetId: selectedMeterReader.id, payload: updates });
+    const pendingAction = { action: "update-meter-reader", targetId: selectedMeterReader.id, payload: updates };
+    if (staffManagementPermission?.token) await completeAuthorizedAction(staffManagementPermission.token, pendingAction);
+    else await beginStaffAuthorization(pendingAction);
   };
 
   const updateRegularAdmin = async (event) => {
@@ -231,7 +302,9 @@ export default function AdminProfile() {
     }
     if (!Object.keys(updates).length) return setAdminError("Change the email or enter a new temporary password.");
     setAdminError("");
-    await beginStaffAuthorization({ action: "update-admin", targetId: selectedAdmin.id, payload: updates });
+    const pendingAction = { action: "update-admin", targetId: selectedAdmin.id, payload: updates };
+    if (staffManagementPermission?.token) await completeAuthorizedAction(staffManagementPermission.token, pendingAction);
+    else await beginStaffAuthorization(pendingAction);
   };
 
   const verifyStaffAuthorization = async (event) => {
@@ -240,28 +313,51 @@ export default function AdminProfile() {
     setIsAuthorizingStaff(true); setStaffOtpError("");
     try {
       const result = await verifyStaffActionOtp(staffAuthorization.challengeToken, staffOtp);
+      const pendingAction = staffAuthorization;
       setStaffAuthorization(null); setStaffOtp("");
-      await completeAuthorizedAction(result.authorizationToken);
+      if (pendingAction.action === "manage-staff") {
+        window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
+        const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) };
+        window.sessionStorage.setItem(STAFF_PERMISSION_KEY, JSON.stringify(permission));
+        setStaffManagementPermission(permission);
+        navigate("/admin/staff-management");
+        return;
+      }
+      await completeAuthorizedAction(result.authorizationToken, pendingAction);
     } catch (error) { setStaffOtpError(error.message); }
     finally { setIsAuthorizingStaff(false); }
   };
 
   return (
     <div className="min-w-0 space-y-5 sm:space-y-6">
-      <PageHeader description="Review your administrator identity and manage secure account credentials." eyebrow="Administrator account" title="Profile management" />
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <div className="flex items-center gap-4"><span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-water-50 text-water-700"><UserRound className="h-8 w-8" /></span><div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">{account?.role === "super-admin" ? "Super Administrator" : "Administrator"}</p><h2 className="mt-1 break-words text-2xl font-extrabold text-navy-900">{account?.username ?? account?.name ?? "Administrator"}</h2><p className="mt-1 flex items-start gap-1.5 text-sm font-semibold text-emerald-700"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><span>Active {account?.role === "super-admin" ? "super administrator" : "administrator"} account</span></p></div></div>
+      {!isStaffManagementPage ? <>
+      <PageHeader compact description="Review your administrator identity and manage secure account credentials." eyebrow="Administrator profile" title="Administrator account" />
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><UserRound className="h-6 w-6" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-water-700">{account?.role === "super-admin" ? "Super Administrator" : "Administrator"}</p><h2 className="mt-1 break-words text-lg font-extrabold text-navy-900 sm:text-xl">{account?.username ?? account?.name ?? "Administrator"}</h2></div></div><span className="inline-flex min-h-7 w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />Active account</span></div>
       </section>
-      {account?.role === "super-admin" && <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.7fr)] lg:items-stretch lg:gap-6">
-      <section className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6 lg:h-full">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Super Admin only</p><h2 className="mt-1 text-xl font-extrabold text-navy-900">Create staff account</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create a regular Admin or Meter Reader account with a temporary password. This section is hidden from normal administrators.</p>
-        <div className="mt-5 grid gap-3 lg:flex-1 lg:grid-rows-2">
-          <button className="group flex min-h-24 min-w-0 items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setStaffType("admin")} type="button"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserPlus className="h-6 w-6" /></span><span className="min-w-0"><span className="block font-bold text-navy-900">Create Admin</span><span className="mt-1 block text-xs leading-5 text-slate-500">Add a regular administrator account.</span></span></button>
-          <button className="group flex min-h-24 min-w-0 items-center gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setStaffType("meter-reader")} type="button"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound className="h-6 w-6" /></span><span className="min-w-0"><span className="block font-bold text-navy-900">Create Meter Reader</span><span className="mt-1 block text-xs leading-5 text-slate-500">Add field personnel for meter readings.</span></span></button>
+      <section aria-labelledby="admin-account-center-heading">
+        <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="admin-account-center-heading">Account center</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-600">Review the information registered to your administrator account.</p>
+        <button className="mt-5 flex min-h-16 w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/admin/account-information")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound className="h-5 w-5" /></span><span><span className="block text-sm font-extrabold text-navy-900">Administrator account information</span><span className="mt-1 block text-xs leading-5 text-slate-500">View your username, email address, and administrator role.</span></span></button>
+      </section>
+      <section aria-labelledby="admin-account-settings-heading">
+        <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="admin-account-settings-heading">Account settings</h2><p className="mt-1 text-sm leading-6 text-slate-600">Manage your password, email address, and trusted devices.</p>
+        <div className="mt-5 grid gap-3"><button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left hover:bg-water-50" onClick={() => window.dispatchEvent(new CustomEvent("waterwise:open-change-password", { detail: { emailOnly: true } }))} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><KeyRound className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Change password</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify using email OTP.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left hover:bg-water-50" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Mail className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify your current registered email first.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left hover:bg-water-50" onClick={openTrustedDevices} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><ShieldCheck className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Trusted devices</span><span className="mt-1 block text-xs leading-5 text-slate-500">Review browsers that can skip email OTP.</span></span></button></div>
+      </section>
+      {account?.role === "super-admin" && <section className="min-w-0" aria-labelledby="super-admin-permissions-heading"><p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-permissions-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts. These controls are hidden from regular administrators.</p><button className="mt-5 flex min-h-16 w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left hover:border-water-300 hover:bg-water-50" onClick={() => beginStaffAuthorization({ action: "manage-staff" })} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><ShieldCheck className="h-5 w-5" /></span><span><span className="block text-sm font-bold text-navy-900">Super Admin permissions</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify by email OTP to open staff management.</span></span></button></section>}
+      </> : <>
+      <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile")} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
+      <PageHeader compact description="Create and manage regular administrator and meter-reader accounts during this verified session." eyebrow="Restricted management" title="Super Admin staff management" />
+      {!staffManagementPermission?.token && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Your staff-management permission has expired.</p><button className="mt-3 text-sm font-bold text-water-700" onClick={() => navigate("/admin/profile")} type="button">Return and verify again</button></section>}
+      </>}
+      {account?.role === "super-admin" && isStaffManagementPage && staffManagementPermission?.token && <section className="min-w-0" aria-labelledby="super-admin-tools-heading">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-tools-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts. These controls are hidden from regular administrators.</p>
+        <div className="mt-5 grid gap-3">
+          <button className="group flex min-h-16 min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setStaffType("admin")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserPlus className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-sm font-bold text-navy-900">Create Admin</span><span className="mt-1 block text-xs leading-5 text-slate-500">Add a regular administrator account.</span></span></button>
+          <button className="group flex min-h-16 min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setStaffType("meter-reader")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-sm font-bold text-navy-900">Create Meter Reader</span><span className="mt-1 block text-xs leading-5 text-slate-500">Add field personnel for meter readings.</span></span></button>
         </div>
-      </section>
-      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Super Admin only</p><h2 className="mt-1 text-xl font-extrabold text-navy-900">Staff directory</h2><p className="mt-1 text-sm leading-6 text-slate-600">Review staff accounts and update regular Admin or Meter Reader credentials. Super Admin accounts are protected.</p>
+      <div className="mt-8 border-t border-slate-200 pt-6">
+        <h2 className="text-xl font-extrabold text-navy-900">Staff directory</h2><p className="mt-1 text-sm leading-6 text-slate-600">Review staff accounts and update regular Admin or Meter Reader credentials. Super Admin accounts are protected.</p>
           <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1"><button className={`min-h-11 rounded-lg text-sm font-bold ${directoryType === "admins" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { if (directoryType === "admins") return; setIsDirectoryLoading(true); setDirectoryError(""); setDirectoryType("admins"); setDirectoryPage(1); }} type="button">Admins</button><button className={`min-h-11 rounded-lg text-sm font-bold ${directoryType === "meterReaders" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { if (directoryType === "meterReaders") return; setIsDirectoryLoading(true); setDirectoryError(""); setDirectoryType("meterReaders"); setDirectoryPage(1); }} type="button">Meter Readers</button></div>
         {isDirectoryLoading && <div className="flex min-h-28 items-center justify-center gap-2 text-sm font-semibold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" />Loading staff accounts…</div>}
         {directoryError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{directoryError}</p>}
@@ -270,12 +366,8 @@ export default function AdminProfile() {
             {(directoryType === "admins" ? staffDirectory.admins : staffDirectory.meterReaders).length === 0 && <p className="py-8 text-center text-sm text-slate-500">No {directoryType === "admins" ? "administrator" : "meter reader"} accounts found.</p>}
             {directoryMeta.total > 0 && <div className="mt-1 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm font-semibold text-slate-600">Showing <span className="font-extrabold text-navy-900">{(directoryPage - 1) * STAFF_PAGE_SIZE + 1}–{Math.min(directoryPage * STAFF_PAGE_SIZE, directoryMeta.total)}</span> of <span className="font-extrabold text-navy-900">{directoryMeta.total}</span></p><div className="flex items-center justify-between gap-3 sm:justify-end"><button aria-label="Previous page" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" disabled={directoryPage <= 1} onClick={() => { setIsDirectoryLoading(true); setDirectoryError(""); setDirectoryPage((page) => Math.max(1, page - 1)); }} type="button"><ChevronLeft className="h-5 w-5" /></button><span className="min-w-20 text-center text-sm font-bold text-navy-900">Page {directoryPage} of {directoryMeta.totalPages}</span><button aria-label="Next page" className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40" disabled={directoryPage >= directoryMeta.totalPages} onClick={() => { setIsDirectoryLoading(true); setDirectoryError(""); setDirectoryPage((page) => Math.min(directoryMeta.totalPages, page + 1)); }} type="button"><ChevronRight className="h-5 w-5" /></button></div></div>}
           </div>}
-      </section>
-      </div>}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Account</p><h2 className="mt-1 text-xl font-extrabold text-navy-900">Account information</h2>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"><AtSign className="h-5 w-5 text-water-700" /><div><p className="text-xs text-slate-500">Username</p><p className="mt-1 font-bold text-navy-900">{account?.username ?? account?.name}</p></div></div><div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4"><Mail className="h-5 w-5 text-water-700" /><div className="min-w-0"><p className="text-xs text-slate-500">Email address</p><p className="mt-1 break-all font-bold text-navy-900">{account?.email}</p></div></div></div>
-      </section>
+      </div>
+      </section>}
       {isTrustedDevicesOpen && <Modal description="Review browsers that can skip email OTP. Removing a device makes it verify again on its next sign-in." eyebrow="Account security" isOpen onClose={() => setIsTrustedDevicesOpen(false)} size="md" title="Trusted devices">
         <div className="p-5 sm:p-6">
           {isTrustedDevicesLoading && <div className="flex min-h-40 items-center justify-center gap-2 text-sm font-semibold text-slate-500"><LoaderCircle className="h-5 w-5 animate-spin" />Loading trusted devices...</div>}
@@ -322,19 +414,15 @@ export default function AdminProfile() {
           <button className="ww-primary-button min-h-12" disabled={isUpdatingMeterReader || isAuthorizingStaff} type="submit">{isAuthorizingStaff ? "Sending OTP…" : isUpdatingMeterReader ? "Saving changes…" : "Save changes"}</button>
         </form>
       </Modal>}
-      {staffAuthorization && <Modal description={`Enter the 6-digit code sent to ${staffAuthorization.maskedEmail}. This approval can be used only for the current staff action.`} eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); }} size="sm" title="Confirm staff action">
+      {staffAuthorization && <Modal description={`Enter the 6-digit code sent to ${staffAuthorization.maskedEmail}. It expires in 5 minutes and can be used only for this staff action.`} eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); setStaffOtpResendSeconds(0); }} size="sm" title="Confirm staff action">
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={verifyStaffAuthorization}>
           <div className="rounded-xl border border-water-200 bg-water-50 p-4 text-sm leading-6 text-water-900"><ShieldCheck className="mr-2 inline h-5 w-5" />For extra security, this action requires approval through the Super Admin’s registered email.</div>
-          <div><label className="text-sm font-semibold" htmlFor="staff-action-otp">Verification code</label><input autoComplete="one-time-code" className="ww-field mt-2 px-4 py-3 text-center font-mono text-xl tracking-[0.35em]" id="staff-action-otp" inputMode="numeric" maxLength={6} onChange={(event) => { setStaffOtp(event.target.value.replace(/\D/g, "")); setStaffOtpError(""); }} placeholder="000000" value={staffOtp} /></div>
+          <div><label className="text-sm font-semibold" htmlFor="staff-action-otp">Verification code</label><div className="mt-3"><OtpInput disabled={isAuthorizingStaff} id="staff-action-otp" invalid={Boolean(staffOtpError)} onChange={(nextOtp) => { setStaffOtp(nextOtp); setStaffOtpError(""); }} value={staffOtp} /></div></div>
           {staffOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{staffOtpError}</p>}
           <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isAuthorizingStaff} type="submit">{isAuthorizingStaff && <LoaderCircle className="h-5 w-5 animate-spin" />}{isAuthorizingStaff ? "Verifying…" : "Verify and continue"}</button>
-          <button className="w-full text-sm font-bold text-water-700" disabled={isAuthorizingStaff} onClick={() => beginStaffAuthorization(staffAuthorization)} type="button">Resend code</button>
+          <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isAuthorizingStaff || staffOtpResendSeconds > 0} onClick={() => beginStaffAuthorization(staffAuthorization)} type="button">{staffOtpResendSeconds > 0 ? `Resend code in ${formatOtpCountdown(staffOtpResendSeconds)}` : "Resend code"}</button>
         </form>
       </Modal>}
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Security</p><h2 className="mt-1 text-xl font-extrabold text-navy-900">Profile security</h2><p className="mt-1 text-sm text-slate-600">Security changes are verified through your registered administrator email.</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><button className="flex min-h-20 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-water-50" onClick={openTrustedDevices} type="button"><ShieldCheck className="h-5 w-5 shrink-0 text-water-700" /><span className="min-w-0 flex-1"><span className="block text-sm font-bold">Trusted devices</span><span className="mt-1 block text-xs leading-5 text-slate-500">Review browsers that can skip email OTP.</span></span><ChevronRight className="h-4 w-4 shrink-0 text-slate-400" /></button><button className="flex min-h-20 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-water-50" onClick={() => window.dispatchEvent(new CustomEvent("waterwise:open-change-password", { detail: { emailOnly: true } }))} type="button"><KeyRound className="h-5 w-5 shrink-0 text-water-700" /><span><span className="block text-sm font-bold">Change password</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify using email OTP only.</span></span></button><button className="flex min-h-20 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left hover:bg-water-50" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button"><Mail className="h-5 w-5 shrink-0 text-water-700" /><span><span className="block text-sm font-bold">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify your current email first.</span></span></button></div>
-      </section>
     </div>
   );
 }

@@ -79,13 +79,13 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, savi
   ];
 
   return (
-    <section className="p-5 sm:p-6">
+    <section className="p-4 sm:p-6">
       <div className="flex items-start gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Gauge aria-hidden="true" className="h-5 w-5" /></span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-water-100 text-water-700 sm:h-11 sm:w-11 sm:rounded-xl"><Gauge aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" /></span>
         <div>
           <p className="ww-eyebrow !text-water-700">{isReviewing ? "Step 3 of 3" : "Step 2 of 3"}</p>
           <h3 className="mt-1 text-xl font-extrabold text-navy-900">{isReviewing ? "Review before recording" : "Enter the cumulative reading"}</h3>
-          <p className="mt-1 text-sm leading-6 text-slate-600">{isReviewing ? "Confirm the meter values below." : "Type the exact value displayed on the resident’s meter."}</p>
+          <p className="mt-1 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">{isReviewing ? "Confirm the meter values below." : "Type the exact value displayed on the resident’s meter."}</p>
         </div>
       </div>
 

@@ -40,6 +40,17 @@ export async function verifyAdminLoginOtp(challengeToken, otp) {
   }
 }
 
+export async function resendAdminLoginOtp(challengeToken) {
+  try {
+    return await apiRequest("/auth/admin/resend-login-otp", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken }),
+    });
+  } catch (error) {
+    throw new Error(error.response?.data?.message ?? "Unable to resend the admin sign-in code.", { cause: error });
+  }
+}
+
 export async function requestPasswordReset(email) {
   try {
     return await apiRequest("/auth/forgot-password", {
@@ -126,7 +137,10 @@ export async function requestStaffActionOtp(action, targetId) {
   try {
     return await apiRequest("/auth/admin/staff-action/otp", { method: "POST", body: JSON.stringify({ action, targetId }) });
   } catch (error) {
-    throw new Error(error.response?.data?.message ?? "Unable to send the Super Admin verification code.", { cause: error });
+    const requestError = new Error(error.response?.data?.message ?? "Unable to send the Super Admin verification code.", { cause: error });
+    const retryAfter = Number(error.response?.headers?.["retry-after"] ?? error.response?.data?.retryAfterSeconds);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) requestError.retryAfterSeconds = Math.ceil(retryAfter);
+    throw requestError;
   }
 }
 

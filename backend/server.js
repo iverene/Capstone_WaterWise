@@ -92,6 +92,16 @@ const ignoredChangePaths = [
   "/api/auth/forgot-password",
   "/api/auth/verify-reset-otp",
   "/api/auth/admin/verify-login-otp",
+  "/api/auth/admin/resend-login-otp",
+  "/api/auth/change-password/email-otp",
+  "/api/auth/admin/staff-action/otp",
+  "/api/auth/admin/staff-action/verify",
+  "/api/auth/admin/consumer-password/otp",
+  "/api/auth/admin/consumer-password/verify",
+  "/api/auth/consumer/change-email/otp",
+  "/api/auth/consumer/change-email/verify",
+  "/api/auth/admin/change-email/otp",
+  "/api/auth/admin/change-email/verify",
 ];
 
 app.use((req, res, next) => {
