@@ -145,6 +145,7 @@ export default function PaymentForm({
   );
   const selectedBillIsCurrentMonth =
     String(selectedBilling?.raw?.billing_date ?? "").slice(0, 7) === today().slice(0, 7);
+  const selectedBillHasPartialPayment = selectedBilling?.status === "Partially Paid";
   const allBillsBalance = residentBills.reduce(
     (total, billing) => total + Number(billing.outstandingBalance || 0),
     0,
@@ -205,18 +206,6 @@ export default function PaymentForm({
     setErrors((previous) => ({ ...previous, billingId: "", resident: "" }));
   };
 
-  const changeResident = () => {
-    setResidentQuery("");
-    setForm((previous) => ({
-      ...previous,
-      billingId: "",
-      consumerName: "",
-      currentBalance: "",
-      paymentScope: "oldest",
-      residentKey: "",
-    }));
-  };
-
   const handleChange = ({ target }) => {
     const { name, value } = target;
     if (name === "amountReceived" && !/^\d*\.?\d{0,2}$/.test(value)) return;
@@ -241,6 +230,13 @@ export default function PaymentForm({
     } else if (form.paymentScope === "all" && Number(form.amountReceived) < balance) {
       nextErrors.amountReceived =
         "The amount is not enough to pay all bills. Proceed with the oldest bill only for a per-month payment.";
+    } else if (
+      form.paymentScope === "oldest" &&
+      selectedBillHasPartialPayment &&
+      amountApplied < balance
+    ) {
+      nextErrors.amountReceived =
+        "This bill already has a partial payment. The next payment must settle the full remaining balance.";
     } else if (
       form.paymentScope === "oldest" &&
       !selectedBillIsCurrentMonth &&
@@ -388,18 +384,11 @@ export default function PaymentForm({
                 </div>
               </div>
             ) : (
-              <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl border border-water-200 bg-water-50 p-4">
+              <div className="mt-4 rounded-2xl border border-water-200 bg-water-50 p-4">
                 <div className="min-w-0">
                   <p className="truncate font-bold text-navy-900">{selectedResident.name}</p>
                   <p className="mt-1 text-sm text-slate-600">{selectedResident.purok}</p>
                 </div>
-                <button
-                  className="min-h-11 shrink-0 rounded-xl px-3 text-sm font-bold text-water-700 hover:bg-water-100"
-                  onClick={changeResident}
-                  type="button"
-                >
-                  Change
-                </button>
               </div>
             )}
 
@@ -421,8 +410,10 @@ export default function PaymentForm({
                       <p className={`mt-2 text-xs font-bold ${
                         selectedBillIsCurrentMonth ? "text-water-700" : "text-amber-700"
                       }`}>
-                        {selectedBillIsCurrentMonth
-                          ? "Partial payment allowed for the current month"
+                        {selectedBillHasPartialPayment
+                          ? "A partial payment was already made; full remaining balance is required"
+                          : selectedBillIsCurrentMonth
+                          ? "One partial payment is allowed for the current month"
                           : "Full payment required for a previous month"}
                       </p>
                     </div>
@@ -640,8 +631,8 @@ export default function PaymentForm({
               </div>
             )}
             <div className="sm:text-right">
-              <p className="mb-2 text-xs font-semibold text-slate-500">Resulting bill status</p>
-              <PaymentStatus status={paymentStatus} />
+              <p className="mb-2 text-xs font-semibold text-slate-500">Current status</p>
+              <PaymentStatus status={selectedBilling?.status ?? "Unpaid"} />
             </div>
           </div>
 
