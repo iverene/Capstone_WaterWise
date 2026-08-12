@@ -171,7 +171,7 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
       <section aria-labelledby="account-center-heading">
         <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="account-center-heading">Account center</h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">Review the information registered to your household account.</p>
-        <button className="mt-5 flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/consumer/account-information")} type="button">
+        <button className="mt-5 flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-1   text-left transition hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/consumer/account-information")} type="button">
           <span className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound aria-hidden="true" className="h-5 w-5" /></span>
             <span><span className="block text-sm font-extrabold text-navy-900">Account information</span><span className="mt-1 block text-xs leading-5 text-slate-500">View your registered account service details.</span></span>
@@ -183,11 +183,11 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
         <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="account-settings-heading">Account settings</h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">Manage your password, email address, and notifications.</p>
         <div className="mt-5 grid gap-3">
-          <button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-password"))} type="button">
+          <button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-1 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-password"))} type="button">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><KeyRound aria-hidden="true" className="h-5 w-5" /></span>
             <span><span className="block text-sm font-bold text-navy-900">Change password</span><span className="mt-1 block text-xs leading-5 text-slate-500">Use your current password or email OTP.</span></span>
           </button>
-          <button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button">
+          <button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-1 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Mail aria-hidden="true" className="h-5 w-5" /></span>
             <span><span className="block text-sm font-bold text-navy-900">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify through your current registered email.</span></span>
           </button>

@@ -526,6 +526,21 @@ export const getConsumptionByConsumer = async (consumerId) => {
   return data ?? [];
 };
 
+export const getConsumerPurok = async (consumerId) => {
+  const { data, error } = await supabase
+    .from("consumers")
+    .select("purok_no")
+    .eq("id", Number(consumerId))
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Failed to identify the consumer purok for cache invalidation:", error.message);
+    return null;
+  }
+
+  return data?.purok_no == null ? null : formatPurok(data.purok_no);
+};
+
 export const createConsumptionReading = async ({
   consumerId,
   idempotencyKey,

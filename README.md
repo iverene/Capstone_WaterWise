@@ -52,7 +52,8 @@ WaterWise is a full-stack water consumption, billing, payment, and account-manag
 | Backend | Node.js, Express 5 |
 | Database | PostgreSQL through Supabase |
 | Authentication | bcrypt password hashing, backend-issued JWTs, email OTP, hashed trusted-device tokens |
-| Email | SendGrid |
+| Email | Brevo Transactional Email API |
+| Shared server cache | Upstash Redis |
 | AI | Google Gemini |
 
 ## Portal Data Caching and Realtime Refresh
@@ -88,7 +89,21 @@ The cache is **per browser-tab session**, not a device-wide or system-wide share
 - Closing the browser-tab session normally removes its `sessionStorage` cache.
 - Browser caches are never used as an authorization mechanism; every uncached API request still requires the JWT and backend role/ownership checks.
 
-For a cache shared across devices or backend instances, add a server-side store such as Redis. The current server-sent-event subscriber list and change version are held in one backend process, so a horizontally scaled deployment must use shared pub/sub to distribute invalidation events across all instances.
+### Shared admin consumption cache
+
+The Express backend also uses Upstash Redis as a shared cache for admin consumption data. Unlike browser `sessionStorage`, this cache is reused across browsers, devices, and backend instances. It covers the admin readings table, rankings, overall monthly and yearly history, all-purok comparisons, and per-purok graphs.
+
+Admin consumption entries use an eight-hour fallback TTL. After a meter reading is successfully written through WaterWise, the backend immediately deletes the affected shared admin keys. The next admin request queries Supabase once, stores the fresh result in Redis, and later requests reuse it. Invalidation is targeted: shared aggregates and the affected purok are refreshed without removing unrelated data.
+
+Consumer-specific consumption history and meter-reader recording contexts are intentionally not stored in Redis; those requests query Supabase directly. If Redis is unavailable, admin endpoints also fall back to Supabase instead of failing. Direct database changes made outside the WaterWise backend do not trigger immediate invalidation and become visible after the fallback TTL unless a separate database webhook is configured.
+
+Relevant backend files:
+
+- `backend/config/redis.js`
+- `backend/services/consumptionCache.js`
+- `backend/controllers/consumptionControllers.js`
+
+The server-sent-event subscriber list and change version remain held in one backend process, so a horizontally scaled deployment must use shared pub/sub to distribute browser invalidation events across all instances.
 
 ### Verify caching in development
 
@@ -140,7 +155,8 @@ Capstone_WaterWise/
 - Node.js 20 or later
 - npm
 - A Supabase project
-- A verified SendGrid sender and API key
+- A Brevo account, API key, and verified transactional sender
+- An Upstash Redis database with REST credentials
 - A Google Gemini API key for AI features
 
 ## Database Setup
@@ -191,13 +207,18 @@ SUPABASE_KEY=your-supabase-key
 SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
 JWT_SECRET=use-a-long-random-secret-with-at-least-32-characters
 GEMINI_API_KEY=your-gemini-api-key
-SENDGRID_API_KEY=your-sendgrid-api-key
-SENDGRID_FROM_EMAIL=your-verified-sender@example.com
+BREVO_API_KEY=xkeysib-your-brevo-api-key
+BREVO_FROM_EMAIL=your-verified-sender@example.com
+BREVO_FROM_NAME=Sucol Water System
+UPSTASH_REDIS_REST_URL=https://your-database.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your-upstash-rest-token
 # Optional; minimum 60000 ms. Defaults to six hours.
 NOTIFICATION_REMINDER_INTERVAL_MS=21600000
 ```
 
-`SENDGRID_FROM_EMAIL` must be verified in SendGrid. Password recovery and admin login verification cannot send codes when the SendGrid variables are missing or invalid.
+`BREVO_FROM_EMAIL` must be an active, verified sender in the Brevo account associated with `BREVO_API_KEY`. Password recovery, admin login, staff-action, resident password-change, and email-change codes use the Brevo Transactional Email API. For better deliverability, authenticate a sender domain with DKIM and DMARC.
+
+Upstash credentials are server-only. When they are absent or Redis is temporarily unavailable, WaterWise bypasses the shared cache and queries Supabase directly.
 
 The frontend uses `/api` by default. An optional `frontend/.env` can override its API address:
 
@@ -212,7 +233,7 @@ $env:WATERWISE_API_TARGET="http://127.0.0.1:5000"
 npm run dev
 ```
 
-Never expose the Supabase service-role key, JWT secret, SendGrid API key, or Gemini API key through frontend environment variables.
+Never expose the Supabase service-role key, JWT secret, Brevo API key, Upstash REST token, or Gemini API key through frontend environment variables.
 
 ## Installation and Development
 
@@ -254,7 +275,7 @@ Administrators use two-step authentication:
 
 1. The administrator submits a valid username/email and password.
 2. The backend validates the credentials but does not issue an access token yet.
-3. SendGrid sends a six-digit OTP to the registered administrator email.
+3. Brevo sends a six-digit OTP to the registered administrator email.
 4. The administrator verifies the OTP through `POST /api/auth/admin/verify-login-otp`.
 5. Successful OTP verification creates the admin JWT and a random trusted-device token in an `HttpOnly` browser cookie.
 
@@ -269,7 +290,7 @@ Admin Profile Management contains one **Profile security** section with **Truste
 ### Forgot-password OTP flow
 
 1. The user opens **Forgot password?** and enters the registered email.
-2. The backend sends a six-digit OTP through SendGrid.
+2. The backend sends a six-digit OTP through Brevo Transactional Email.
 3. The user verifies the OTP.
 4. Only verified users can open the new-password step.
 5. The reset session becomes invalid after the password is changed.
@@ -490,11 +511,12 @@ npm start
 
 ### OTP email is not received
 
-- Confirm `SENDGRID_API_KEY` is valid.
-- Confirm `SENDGRID_FROM_EMAIL` is a verified SendGrid sender.
+- Confirm `BREVO_API_KEY` is a valid Brevo API v3 key.
+- Confirm `BREVO_FROM_EMAIL` is an active, verified sender in the same Brevo account.
+- Confirm the sender domain's DKIM and DMARC status when inbox placement is poor.
 - Check spam or junk folders.
 - Confirm the account contains the intended valid email address.
-- Review the backend response and SendGrid activity logs.
+- Review the backend response and Brevo transactional activity logs.
 
 ### Admin credentials are accepted but portal access is not granted
 
