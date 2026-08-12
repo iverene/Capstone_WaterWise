@@ -37,13 +37,16 @@ function formatReading(record) {
   };
 }
 
-function addDays(date, days) {
-  const value = new Date(
+function endOfMonth(date) {
+  const source = new Date(
     `${date}T00:00:00.000Z`
   );
-
-  value.setUTCDate(
-    value.getUTCDate() + days
+  const value = new Date(
+    Date.UTC(
+      source.getUTCFullYear(),
+      source.getUTCMonth() + 1,
+      0
+    )
   );
 
   return value
@@ -102,10 +105,7 @@ async function syncBilling(record) {
           consumption_id: record.id,
           user_id: record.consumer_id,
           billing_date: record.reading_date,
-          due_date: addDays(
-            record.reading_date,
-            15
-          ),
+          due_date: endOfMonth(record.reading_date),
           total_bill: totalBill,
           remaining_balance: totalBill,
           status: "Unpaid",
@@ -140,10 +140,7 @@ async function syncBilling(record) {
       .update({
         user_id: record.consumer_id,
         billing_date: record.reading_date,
-        due_date: addDays(
-          record.reading_date,
-          15
-        ),
+        due_date: endOfMonth(record.reading_date),
         total_bill: totalBill,
         remaining_balance: remainingBalance,
         status,

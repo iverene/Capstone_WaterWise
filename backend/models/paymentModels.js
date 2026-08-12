@@ -36,7 +36,7 @@ const parsePaymentDate = (value) => {
 
 const parsePaymentMethod = (value) => {
   const method = String(value ?? "Cash").trim();
-  if (!["Cash", "GCash", "Bank transfer"].includes(method)) {
+  if (!["Cash", "GCash"].includes(method)) {
     throw createError("Unsupported payment method.");
   }
   return method;

@@ -48,9 +48,9 @@ function ConsumerListTable({ consumers = [], isLoading = false, onEdit = () => {
     <Table
       ariaLabel="Resident accounts"
       columns={[
+        { key: "purok", label: "Purok" },
         { key: "username", label: "Username" },
         { key: "name", label: "Name" },
-        { key: "purok", label: "Purok" },
         { key: "email", label: "Email" },
         { key: "status", label: "Status" },
         { key: "action", label: "Action", className: "text-right" },
@@ -59,26 +59,27 @@ function ConsumerListTable({ consumers = [], isLoading = false, onEdit = () => {
       emptyDescription="Adjust the search or purok filter, or add a resident to the directory."
       emptyTitle="No residents found"
       getRowKey={(consumer) => consumer.id}
+      rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-3 transition-colors hover:bg-slate-50 md:table-row md:p-0"
       renderRow={(consumer) => (
         <>
-                  <td className="col-span-2 flex flex-col font-mono font-bold text-navy-900 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Username'] md:table-cell md:px-4 md:py-4 md:before:hidden">
-                    {consumer.accountName}
-                  </td>
-                  <td className="col-span-2 flex flex-col font-semibold text-navy-900 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Name'] md:table-cell md:px-4 md:py-4 md:before:hidden">
-                    {consumer.fullName}
-                  </td>
-                  <td className="flex flex-col text-slate-600 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Purok'] md:table-cell md:px-4 md:py-4 md:before:hidden">
+                  <td className="text-slate-600 md:px-4 md:py-4">
                     {consumer.purok || "Unassigned"}
                   </td>
-                  <td className="col-span-2 flex min-w-0 flex-col break-all text-slate-600 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Email'] md:table-cell md:px-4 md:py-4 md:before:hidden">
+                  <td className="font-mono font-bold text-navy-900 md:px-4 md:py-4">
+                    {consumer.accountName}
+                  </td>
+                  <td className="font-semibold leading-5 text-navy-900 md:px-4 md:py-4">
+                    {consumer.fullName}
+                  </td>
+                  <td className="min-w-0 break-all text-slate-600 md:px-4 md:py-4">
                     {consumer.email || "No email provided"}
                   </td>
-                  <td className="flex items-end md:table-cell md:px-4 md:py-4">
+                  <td className="md:px-4 md:py-4">
                     <AccountStatus status={consumer.status} />
                   </td>
-                  <td className="col-span-2 md:table-cell md:px-4 md:py-4 md:text-right">
+                  <td className="md:px-4 md:py-4 md:text-right">
                     <button
-                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50 hover:text-water-700 md:w-auto"
+                      className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-2.5 text-sm font-bold text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50 hover:text-water-700 md:min-h-11 md:w-auto md:px-4"
                       onClick={() => onEdit(consumer)}
                       type="button"
                     >
