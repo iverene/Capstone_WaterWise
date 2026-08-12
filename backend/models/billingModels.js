@@ -73,25 +73,22 @@ const getMonthRange = (billingDate) => {
 };
 
 const defaultDueDate = (billingDate) => {
-  const dueDate = new Date(`${billingDate}T00:00:00Z`);
-  dueDate.setUTCDate(dueDate.getUTCDate() + 15);
+  const billing = new Date(`${billingDate}T00:00:00Z`);
+  const dueDate = new Date(Date.UTC(
+    billing.getUTCFullYear(),
+    billing.getUTCMonth() + 1,
+    0,
+  ));
   return formatDate(dueDate);
 };
 
 export const createMonthlyBilling = async ({
   consumerId,
   billingDate = formatDate(new Date()),
-  dueDate,
 }) => {
   const userId = parsePositiveId(consumerId, "consumer ID");
   const normalizedBillingDate = parseDate(billingDate, "Billing date");
-  const normalizedDueDate = dueDate
-    ? parseDate(dueDate, "Due date")
-    : defaultDueDate(normalizedBillingDate);
-
-  if (normalizedDueDate < normalizedBillingDate) {
-    throw createError("Due date cannot be earlier than the billing date.");
-  }
+  const normalizedDueDate = defaultDueDate(normalizedBillingDate);
 
   const { monthStart, nextMonthStart } = getMonthRange(normalizedBillingDate);
 

@@ -385,9 +385,9 @@ export default function PaymentForm({
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-water-200 bg-water-50 p-4">
-                <div className="min-w-0">
-                  <p className="truncate font-bold text-navy-900">{selectedResident.name}</p>
-                  <p className="mt-1 text-sm text-slate-600">{selectedResident.purok}</p>
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-sm font-semibold text-slate-600">{selectedResident.purok}</p>
+                  <p className="font-bold text-navy-900">{selectedResident.name}</p>
                 </div>
               </div>
             )}
@@ -398,29 +398,25 @@ export default function PaymentForm({
                   <p className="text-xs font-bold uppercase tracking-wide text-water-700">
                     Oldest outstanding bill
                   </p>
-                  <div className="mt-2 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-mono text-sm font-bold text-water-700">
-                        {selectedBilling?.invoiceNumber}
-                      </p>
-                      <p className="mt-1 font-bold text-navy-900">{selectedBilling?.billingPeriod}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Due {selectedBilling?.dueDate || "Not available"}
-                      </p>
-                      <p className={`mt-2 text-xs font-bold ${
-                        selectedBillIsCurrentMonth ? "text-water-700" : "text-amber-700"
-                      }`}>
-                        {selectedBillHasPartialPayment
-                          ? "A partial payment was already made; full remaining balance is required"
-                          : selectedBillIsCurrentMonth
-                          ? "One partial payment is allowed for the current month"
-                          : "Full payment required for a previous month"}
-                      </p>
-                    </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
+                      <span className="font-mono font-bold text-water-700">{selectedBilling?.invoiceNumber}</span>
+                      <span className="font-bold text-navy-900">Billing Date: {selectedBilling?.billingPeriod}</span>
+                      <span>Due Date: {selectedBilling?.dueDate || "Not available"}</span>
+                    </p>
                     <p className="font-mono text-lg font-extrabold text-navy-900">
                       {currency(selectedBilling?.outstandingBalance)}
                     </p>
                   </div>
+                  <p className={`mt-2 text-xs font-bold ${
+                    selectedBillIsCurrentMonth ? "text-water-700" : "text-amber-700"
+                  }`}>
+                    {selectedBillHasPartialPayment
+                      ? "A partial payment was already made; full remaining balance is required"
+                      : selectedBillIsCurrentMonth
+                      ? "One partial payment is allowed for the current month"
+                      : "Full payment required for a previous month"}
+                  </p>
                 </div>
 
                 {residentBills.length > 1 && (
@@ -582,7 +578,6 @@ export default function PaymentForm({
                   options={[
                     { label: "Cash", value: "Cash" },
                     { label: "GCash", value: "GCash" },
-                    { label: "Bank transfer", value: "Bank transfer" },
                   ]}
                   value={form.paymentMethod}
                 />

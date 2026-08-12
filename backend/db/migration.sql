@@ -442,7 +442,8 @@ BEGIN
         consumption_id, user_id, billing_date, due_date, total_bill,
         remaining_balance, status
     ) VALUES (
-        v_reading.id, p_consumer_id, v_reading_date, v_reading_date + 15,
+        v_reading.id, p_consumer_id, v_reading_date,
+        (date_trunc('month', v_reading_date) + INTERVAL '1 month - 1 day')::DATE,
         v_total, v_total, 'Unpaid'
     ) RETURNING * INTO v_billing;
 
@@ -508,7 +509,7 @@ BEGIN
         RAISE EXCEPTION 'Amount received must be greater than zero.';
     END IF;
 
-    IF p_payment_method NOT IN ('Cash', 'GCash', 'Bank transfer') THEN
+    IF p_payment_method NOT IN ('Cash', 'GCash') THEN
         RAISE EXCEPTION 'Unsupported payment method.';
     END IF;
 

@@ -124,18 +124,18 @@ export default function AdminReadingsPage() {
           emptyDescription="Residents will appear here when meter readings are recorded."
           emptyTitle="No resident readings found"
           getRowKey={(resident) => resident.id}
-          rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+          rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-3 transition-colors hover:bg-slate-50 md:table-row md:p-0"
           tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
-              <td className="px-4 py-4 font-mono text-navy-900">{resident.consumerNo}</td>
-              <td className="px-4 py-4 font-extrabold text-navy-900">
+              <td className="font-mono text-navy-900 md:px-4 md:py-4">{resident.consumerNo}</td>
+              <td className="font-extrabold leading-5 text-navy-900 md:px-4 md:py-4">
                 {resident.consumerName}
               </td>
-              <td className="px-4 py-4 text-slate-600">{resident.purok}</td>
+              <td className="text-slate-600 md:px-4 md:py-4">{resident.purok}</td>
               <td className="flex flex-col items-stretch justify-end md:table-cell md:px-4 md:py-4 md:text-right">
                 <button
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100 md:w-auto md:px-4"
+                  className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-water-50 px-2.5 text-sm font-bold text-water-700 hover:bg-water-100 md:min-h-11 md:w-auto md:px-4"
                   onClick={() => setSelectedResident(resident)}
                   type="button"
                 >
