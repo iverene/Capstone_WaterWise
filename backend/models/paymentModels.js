@@ -114,7 +114,7 @@ export async function createPayment({
   if (!existingPayment) {
     const { data: targetBilling, error: targetBillingError } = await supabase
       .from("billing")
-      .select("id, user_id, billing_date, remaining_balance")
+      .select("id, user_id, billing_date, remaining_balance, status")
       .eq("id", normalizedBillingId)
       .maybeSingle();
 
@@ -123,6 +123,15 @@ export async function createPayment({
     }
     if (!targetBilling) {
       throw createError("Billing record not found.", 404);
+    }
+    if (
+      targetBilling.status === "Partially Paid" &&
+      paymentAmount < Number(targetBilling.remaining_balance)
+    ) {
+      throw createError(
+        "This bill already has a partial payment. The next payment must settle the full remaining balance.",
+        400,
+      );
     }
     if (
       String(targetBilling.billing_date).slice(0, 7) !== currentManilaMonth() &&
