@@ -26,7 +26,7 @@ WHERE id = (
 
 -- 2. CONSUMERS TABLE
 CREATE TABLE IF NOT EXISTS consumers (
-    id SERIAL PRIMARY KEY, 
+    id SERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS consumption (
     consumer_id INTEGER NOT NULL REFERENCES consumers (id) ON DELETE CASCADE,
     reading_date DATE NOT NULL,
     previous_reading NUMERIC(10,2) NOT NULL DEFAULT 0.00,
-    present_reading NUMERIC(10,2) NOT NULL, 
+    present_reading NUMERIC(10,2) NOT NULL,
     consumption NUMERIC(10,2) GENERATED ALWAYS AS (present_reading - previous_reading) STORED,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now()
@@ -250,7 +250,7 @@ CREATE TABLE IF NOT EXISTS billing (
     user_id INTEGER NOT NULL REFERENCES consumers (id) ON DELETE CASCADE,
     billing_date DATE NOT NULL,
     due_date DATE NOT NULL,
-    total_bill NUMERIC(10,2) NOT NULL, 
+    total_bill NUMERIC(10,2) NOT NULL,
     remaining_balance NUMERIC(10,2) NOT NULL DEFAULT 0.00,
     status VARCHAR(30) DEFAULT 'Unpaid',
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -562,6 +562,11 @@ BEGIN
         RAISE EXCEPTION 'This billing record is already fully paid.';
     END IF;
 
+    IF billing_record.status = 'Partially Paid'
+       AND p_amount < billing_record.remaining_balance THEN
+        RAISE EXCEPTION 'This bill already has a partial payment. The next payment must settle the full remaining balance.';
+    END IF;
+
     IF p_amount > billing_record.remaining_balance THEN
         RAISE EXCEPTION 'Payment amount cannot exceed the remaining balance.';
     END IF;
@@ -650,7 +655,7 @@ REVOKE ALL ON FUNCTION record_payment_transaction(INTEGER, NUMERIC, NUMERIC, DAT
 REVOKE ALL ON FUNCTION record_payment_transaction(INTEGER, NUMERIC, NUMERIC, DATE, TEXT, TEXT, TEXT) FROM authenticated;
 GRANT EXECUTE ON FUNCTION record_payment_transaction(INTEGER, NUMERIC, NUMERIC, DATE, TEXT, TEXT, TEXT) TO service_role;
 
--- 6. NOTIFICATIONS TABLE 
+-- 6. NOTIFICATIONS TABLE
 -- Updated to allow a targeted consumer_id (NULL tracks system-wide admin announcements)
 CREATE TABLE IF NOT EXISTS notifications (
     id SERIAL PRIMARY KEY,
@@ -695,7 +700,7 @@ END;
 $$;
 
 -- Indexes for lightning-fast queries when filtering notifications by target consumer
-CREATE INDEX IF NOT EXISTS notifications_consumer_id_idx 
+CREATE INDEX IF NOT EXISTS notifications_consumer_id_idx
 ON notifications (consumer_id);
 CREATE INDEX IF NOT EXISTS notifications_billing_id_idx ON notifications (billing_id);
 CREATE INDEX IF NOT EXISTS notifications_type_date_idx
@@ -715,7 +720,7 @@ CREATE TABLE IF NOT EXISTS notification_reads (
 ALTER TABLE notification_reads
 ADD COLUMN IF NOT EXISTS dismissed_at TIMESTAMPTZ;
 
-CREATE INDEX IF NOT EXISTS notification_reads_consumer_id_idx 
+CREATE INDEX IF NOT EXISTS notification_reads_consumer_id_idx
 ON notification_reads (consumer_id);
 
 -- Browser/device subscriptions used only for Web Push delivery. These records
