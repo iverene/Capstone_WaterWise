@@ -45,6 +45,8 @@ const staffActionAttempts = new Map();
 const staffActionAuthorizations = new Map();
 const consumerPasswordOtpAttempts = new Map();
 const consumerPasswordAuthorizations = new Map();
+const passwordResetOtpAttempts = new Map();
+const MAX_OTP_ATTEMPTS = 5;
 const OTP_RESEND_COOLDOWN_SECONDS = 300;
 const ACCESS_TOKEN_DURATION_BY_ROLE = {
   consumer: "4h",
@@ -643,6 +645,7 @@ export async function forgotPassword(req, res) {
         issuer: JWT_ISSUER,
         audience: OTP_AUDIENCE,
         expiresIn: "5m",
+        jwtid: createHash("sha256").update(`reset:${account.id}:${Date.now()}:${otp}`).digest("hex"),
       },
     );
     await sendPasswordResetOtp({ email: account.email, otp, username: account.username });
@@ -677,6 +680,7 @@ function createOtpChallenge(account, otp) {
       issuer: JWT_ISSUER,
       audience: OTP_AUDIENCE,
       expiresIn: "5m",
+      jwtid: createHash("sha256").update(`reset:${account.id}:${Date.now()}:${otp}`).digest("hex"),
     },
   );
 }
@@ -739,6 +743,9 @@ export async function changeAuthenticatedPassword(req, res) {
 
 export async function verifyPasswordResetOtp(req, res) {
   try {
+    for (const [challengeId, state] of passwordResetOtpAttempts) {
+      if (state.expiresAt <= Date.now()) passwordResetOtpAttempts.delete(challengeId);
+    }
     const { challengeToken, otp } = req.body ?? {};
     if (!challengeToken || !/^\d{6}$/.test(String(otp ?? ""))) {
       const error = new Error("Enter the 6-digit verification code.");
@@ -751,16 +758,34 @@ export async function verifyPasswordResetOtp(req, res) {
       issuer: JWT_ISSUER,
       audience: OTP_AUDIENCE,
     });
-    const currentHash = await getPasswordHash(challenge.sub, challenge.role);
-    const otpMatches = valuesMatch(otpFingerprint(otp), challenge.otpHash ?? "");
-    const accountMatches = currentHash && valuesMatch(passwordFingerprint(currentHash), challenge.passwordFingerprint ?? "");
-    if (!otpMatches || !accountMatches) {
-      const error = new Error("The verification code is incorrect or has expired.");
+    if (!challenge.jti) throw new jwt.JsonWebTokenError("Invalid verification challenge.");
+    const attemptState = passwordResetOtpAttempts.get(challenge.jti) ?? { attempts: 0, expiresAt: challenge.exp * 1000 };
+    if (attemptState.used) {
+      const error = new Error("This verification code has already been used. Request a new code.");
       error.statusCode = 400;
       error.field = "otp";
       throw error;
     }
+    if (attemptState.attempts >= MAX_OTP_ATTEMPTS) {
+      const error = new Error("Too many incorrect codes. Request a new verification code.");
+      error.statusCode = 429;
+      error.field = "otp";
+      throw error;
+    }
+    const currentHash = await getPasswordHash(challenge.sub, challenge.role);
+    const otpMatches = valuesMatch(otpFingerprint(otp), challenge.otpHash ?? "");
+    const accountMatches = currentHash && valuesMatch(passwordFingerprint(currentHash), challenge.passwordFingerprint ?? "");
+    if (!otpMatches || !accountMatches) {
+      attemptState.attempts += 1;
+      passwordResetOtpAttempts.set(challenge.jti, attemptState);
+      const remaining = MAX_OTP_ATTEMPTS - attemptState.attempts;
+      const error = new Error(remaining > 0 ? `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.` : "Too many incorrect codes. Request a new verification code.");
+      error.statusCode = remaining > 0 ? 400 : 429;
+      error.field = "otp";
+      throw error;
+    }
 
+    passwordResetOtpAttempts.set(challenge.jti, { ...attemptState, used: true });
     const resetToken = jwt.sign(
       { role: challenge.role, passwordFingerprint: passwordFingerprint(currentHash) },
       getJwtSecret(),
