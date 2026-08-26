@@ -80,6 +80,7 @@ app.use(
       "Accept",
       "X-Staff-Authorization",
       "X-Consumer-Password-Authorization",
+      "X-Device-Fingerprint",
     ],
     credentials: true,
   }),

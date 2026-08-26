@@ -1,6 +1,7 @@
 import axios from "axios";
 import { clearSession, getAccessToken, getStoredAccount } from "./authToken";
 import { clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
+import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 
 const configuredBaseUrl =
   import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL;
@@ -60,11 +61,15 @@ apiClient.defaults.adapter = async (config) => {
   return request;
 };
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(async (config) => {
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  try {
+    const fingerprint = await getDeviceFingerprint();
+    config.headers["X-Device-Fingerprint"] = fingerprint;
+  } catch {}
   return config;
 });
 
