@@ -1,5 +1,5 @@
 import express from "express";
-import { changeAuthenticatedPassword, completeConsumerEmailChange, currentAccount, forgotPassword, getAdminTrustedDevices, login, removeAdminTrustedDevice, removeOtherAdminTrustedDevices, requestAuthenticatedPasswordOtp, requestConsumerEmailChangeOtp, requestConsumerPasswordChangeOtp, requestStaffActionOtp, resendAdminLoginOtp, resetPassword, verifyAdminLoginOtp, verifyConsumerEmailChangeOtp, verifyConsumerPasswordChangeOtp, verifyPasswordResetOtp, verifyStaffActionOtp } from "../controllers/authControllers.js";
+import { changeAuthenticatedPassword, completeConsumerEmailChange, currentAccount, forgotPassword, getAdminTrustedDevices, login, logout, removeAdminTrustedDevice, removeOtherAdminTrustedDevices, requestAuthenticatedPasswordOtp, requestConsumerEmailChangeOtp, requestConsumerPasswordChangeOtp, requestStaffActionOtp, resendAdminLoginOtp, resetPassword, verifyAdminLoginOtp, verifyConsumerEmailChangeOtp, verifyConsumerPasswordChangeOtp, verifyPasswordResetOtp, verifyStaffActionOtp } from "../controllers/authControllers.js";
 import { authenticate } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -26,5 +26,6 @@ router.post("/admin/change-email/otp", authenticate, requestConsumerEmailChangeO
 router.post("/admin/change-email/verify", authenticate, verifyConsumerEmailChangeOtp);
 router.post("/admin/change-email", authenticate, completeConsumerEmailChange);
 router.get("/me", authenticate, currentAccount);
+router.post("/logout", authenticate, logout);
 
 export default router;

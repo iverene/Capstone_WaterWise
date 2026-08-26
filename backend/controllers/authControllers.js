@@ -5,6 +5,7 @@ import {
   JWT_AUDIENCE,
   JWT_ISSUER,
 } from "../config/auth.js";
+import { supabase } from "../config/supabase.js";
 import {
   authenticateAccount,
   changePasswordWithCurrent,
@@ -99,6 +100,22 @@ function createAccessToken(user) {
       expiresIn: ACCESS_TOKEN_DURATION_BY_ROLE[user.role] ?? "1h",
     },
   );
+}
+
+function hashFingerprint(fingerprint) {
+  return createHash("sha256").update(String(fingerprint || "")).digest("hex");
+}
+
+async function storeDeviceFingerprint(userId, role, fingerprint) {
+  const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
+  const hash = hashFingerprint(fingerprint);
+  await supabase.from(table).update({ device_fingerprint_hash: hash }).eq("id", userId);
+}
+
+async function getStoredFingerprintHash(userId, role) {
+  const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
+  const { data } = await supabase.from(table).select("device_fingerprint_hash").eq("id", userId).maybeSingle();
+  return data?.device_fingerprint_hash || null;
 }
 
 export async function requestStaffActionOtp(req, res) {
@@ -253,6 +270,8 @@ export async function login(req, res) {
         role: user.role,
       });
       if (isTrustedDevice) {
+        const dfp = req.get("x-device-fingerprint");
+        if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
         return res.status(200).json({
           success: true,
           token: createAccessToken(user),
@@ -292,6 +311,8 @@ export async function login(req, res) {
       });
     }
 
+    const dfp = req.get("x-device-fingerprint");
+    if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
     return res.status(200).json({ success: true, token: createAccessToken(user), user });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -415,6 +436,8 @@ export async function verifyAdminLoginOtp(req, res) {
       trustedDevice.token,
       trustedDeviceCookieOptions(account.role),
     );
+    const dfp = req.get("x-device-fingerprint");
+    if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
     return res.status(200).json({
       success: true,
       token: createAccessToken(user),
@@ -845,5 +868,16 @@ export async function resetPassword(req, res) {
       message: isTokenError ? "This password reset session is invalid or has expired." : error.message || "Unable to reset password.",
       ...(error.field ? { field: error.field } : {}),
     });
+  }
+}
+
+export async function logout(req, res) {
+  try {
+    const { id, role } = req.user;
+    const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
+    await supabase.from(table).update({ device_fingerprint_hash: null }).eq("id", id);
+    return res.status(200).json({ success: true, message: "Logged out successfully." });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Logout failed." });
   }
 }

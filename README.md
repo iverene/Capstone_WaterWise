@@ -267,6 +267,7 @@ Protected requests include:
 
 ```http
 Authorization: Bearer <token>
+X-Device-Fingerprint: <browser-fingerprint-hash>
 ```
 
 ### Administrator OTP and trusted-device login
@@ -383,6 +384,7 @@ The backend independently restricts `POST /api/admins` and `POST /api/meter-read
 | `POST` | `/api/auth/admin/change-email/otp` | Send an admin email-change OTP to the current email |
 | `POST` | `/api/auth/admin/change-email/verify` | Verify the administrator's current-email OTP |
 | `POST` | `/api/auth/admin/change-email` | Save the new administrator email after verification |
+| `POST` | `/api/auth/logout` | Clear device fingerprint hash from DB and end session |
 
 ## Main API Groups
 
@@ -540,9 +542,93 @@ This is expected until the emailed OTP is verified. The admin access token is is
 
 - Never commit `.env` files or production secrets.
 - Password hashing, JWT generation, OTP validation, and authorization belong to the backend.
-- Email OTP challenges are short-lived and bound to the account’s current password state.
+- Email OTP challenges are short-lived and bound to the account's current password state.
 - Trusted-device cookies contain random secrets, use `HttpOnly`, and are validated against hashed, expiring, revocable database records.
 - Resident password authorization is required only when a consumer update contains `password`; it is bound to the acting administrator and target resident and is single-use.
 - The frontend must never create an authenticated session before the backend returns a valid access token.
 - Validate ownership and role permissions on every protected endpoint.
 - Supabase Row Level Security blocks direct browser access to protected tables; database operations must pass through the authenticated Express backend using the server-only service-role key.
+- Device fingerprint binding prevents cross-device token theft by verifying browser properties on every API request.
+
+## Device Fingerprint Security
+
+WaterWise implements device fingerprint binding to prevent JWT access token theft across devices. If an attacker steals an access token, they cannot use it from a different device or browser.
+
+### How it works
+
+1. **Client generates a fingerprint** from browser properties (userAgent, screen size, timezone, hardware concurrency, touch points, language).
+2. **Fingerprint is regenerated on every request** — not cached in `sessionStorage`.
+3. **Fingerprint is sent** as the `X-Device-Fingerprint` request header with every API call.
+4. **Server hashes the fingerprint** (SHA-256) and compares it with the stored hash in the database.
+5. **Match** → request allowed. **Mismatch** → 401 "Session device mismatch".
+
+### Login flow
+
+```text
+Client sends fingerprint in X-Device-Fingerprint header
+                    ↓
+Server hashes the fingerprint (SHA-256)
+                    ↓
+Server stores hash in user's DB row (device_fingerprint_hash column)
+                    ↓
+Server returns JWT (no fingerprint in JWT payload)
+```
+
+### API request flow
+
+```text
+Client regenerates fingerprint from browser properties
+                    ↓
+Client sends fingerprint in X-Device-Fingerprint header
+                    ↓
+Server reads JWT → gets userId, role
+                    ↓
+Server queries DB → gets stored device_fingerprint_hash
+                    ↓
+Server hashes incoming fingerprint → compares with stored hash
+                    ↓
+Match → allow | Mismatch → 401
+```
+
+### What is blocked
+
+| Scenario | Result |
+| --- | --- |
+| Same Chrome, different tab | ✅ Works (same browser properties) |
+| Chrome → Edge (same device) | ❌ Blocked (different `userAgent`) |
+| Desktop → Mobile | ❌ Blocked (different screen, hardware) |
+| Different computer | ❌ Blocked (different everything) |
+| Copy JWT only to another device | ❌ Blocked (fingerprint mismatch) |
+
+### Logout fingerprint revocation
+
+When a user logs out, the `device_fingerprint_hash` is cleared from the database. This ensures the fingerprint cannot be reused after logout.
+
+```text
+Frontend calls POST /api/auth/logout
+                    ↓
+Server clears device_fingerprint_hash from DB
+                    ↓
+Frontend clears JWT from sessionStorage
+```
+
+### Database migration
+
+Run this SQL in Supabase SQL Editor to add the fingerprint column:
+
+```sql
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS device_fingerprint_hash VARCHAR(64);
+ALTER TABLE consumers ADD COLUMN IF NOT EXISTS device_fingerprint_hash VARCHAR(64);
+ALTER TABLE meter_readers ADD COLUMN IF NOT EXISTS device_fingerprint_hash VARCHAR(64);
+```
+
+### Relevant files
+
+| File | Purpose |
+| --- | --- |
+| `frontend/src/utils/deviceFingerprint.js` | Fingerprint generation from browser properties |
+| `frontend/src/services/apiClient.js` | Attaches `X-Device-Fingerprint` header to all requests |
+| `backend/controllers/authControllers.js` | Stores fingerprint hash on login, clears on logout |
+| `backend/middleware/authMiddleware.js` | Verifies fingerprint hash against DB on every request |
+| `backend/routes/authRoutes.js` | `POST /api/auth/logout` endpoint |
+| `backend/db/fingerprint_migration.sql` | Database migration to add fingerprint column |

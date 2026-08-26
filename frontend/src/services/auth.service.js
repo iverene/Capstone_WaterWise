@@ -245,6 +245,9 @@ export async function getCurrentAccount(options) {
 export async function logout() {
   const account = getStoredAccount();
   try {
+    await apiRequest("/auth/logout", { method: "POST" });
+  } catch {}
+  try {
     if (account?.role === "consumer") {
       await disableCurrentPushNotifications();
     }
