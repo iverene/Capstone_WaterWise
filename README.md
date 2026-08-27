@@ -24,6 +24,7 @@ WaterWise is a full-stack water consumption, billing, payment, and account-manag
 - Change a resident password after verifying a single-use OTP sent to the acting administrator's registered email. Other resident profile changes do not require OTP.
 - Super Admins can create regular Admin and Meter Reader accounts with temporary passwords from Profile Management.
 - Super Admins can browse the Admin and Meter Reader directories two accounts per page.
+- Super Admins can manage system-wide settings (e.g., water rate per cubic meter) through an OTP-gated settings page at `/admin/settings`. Accessing settings requires email OTP verification; editing the rate requires a second OTP.
 
 ### Meter Reader
 
@@ -55,6 +56,18 @@ WaterWise is a full-stack water consumption, billing, payment, and account-manag
 | Email | Brevo Transactional Email API |
 | Shared server cache | Upstash Redis |
 | AI | Google Gemini |
+
+## Mobile-First UI
+
+The frontend is designed mobile-first with responsive breakpoints:
+
+- **Font scaling:** Eyebrow labels use `text-[10px]` on mobile, headings scale from `text-2xl` to `text-3xl`, descriptions use reduced sizes via `descriptionClassName`.
+- **Buttons:** Minimum height `min-h-10` on mobile, scaling to `min-h-12` on desktop.
+- **OTP input:** Auto-verify on 6-digit completion with success animation. Toast notifications for rate-limit warnings instead of inline text.
+- **Offline banner:** Shows under the header for meter-readers with pending reading count; other roles see a generic offline message.
+- **Search + filter animation:** On RecordConsumptionPage, mobile search expands on focus and hides the filter button (300ms transition). Collapses on blur, click-outside, or Escape.
+- **Notifications:** Infinite scroll with IntersectionObserver on NotificationPage; paginated announcements on AnnouncementPage.
+- **Sticky header:** `bg-white/90 backdrop-blur-md` on mobile for readability while scrolling.
 
 ## Portal Data Caching and Realtime Refresh
 
@@ -132,7 +145,8 @@ Capstone_WaterWise/
 │   ├── config/
 │   ├── controllers/
 │   ├── db/
-│   │   └── migration.sql
+│   │   ├── migration.sql
+│   │   └── system_settings_migration.sql
 │   ├── middleware/
 │   ├── models/
 │   ├── routes/
@@ -183,10 +197,13 @@ Core tables include:
 - `consumer_push_subscriptions`
 - `notification_push_jobs`
 - `password_reset_request_limits`
+- `system_settings`
 
 The migration adds `admins.role` with `admin` and `super-admin` values. When upgrading an existing database with no Super Admin, the oldest existing administrator is promoted automatically. That account must sign out and sign in again after the migration so its new role is included in the JWT.
 
 The `admin_trusted_devices` table stores only SHA-256 hashes of random browser tokens. It records the owning administrator, role, user agent, creation time, last use, expiration, and revocation time. Run the latest migration before enabling trusted-device login; the backend does not create this table automatically.
+
+The `system_settings` table stores configurable system-wide settings such as the water rate per cubic meter. It is seeded with a default rate of ₱15.00/m³. Only the Super Admin can read or modify settings through the API, and all write operations require OTP verification. Run `backend/db/system_settings_migration.sql` to add this table.
 
 Web Push uses `consumer_push_subscriptions` for browser delivery endpoints and `notification_push_jobs` as a queue populated by a database trigger whenever a notification is inserted or materially updated. Generate a VAPID key pair once with `npm run generate-vapid-keys` inside `backend`, then set `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and a `VAPID_SUBJECT` such as `mailto:admin@example.com` in the backend environment. Never expose the private key to the frontend.
 
@@ -345,7 +362,7 @@ Successful password changes clear temporary login lockouts.
 | Role | Main Permissions |
 | --- | --- |
 | `admin` | Manage residents, OTP-protected resident password changes, grouped readings and billing records, oldest-first payments, flagged accounts, confirmed disconnections, events, announcements, analytics, reports, and personal trusted devices |
-| `super-admin` | All normal admin operations plus exclusive Admin and Meter Reader account creation |
+| `super-admin` | All normal admin operations plus exclusive Admin and Meter Reader account creation, and system-wide settings management (OTP-gated) |
 | `meter-reader` | View reading information and record consumption |
 | `consumer` | View personal usage, billing, profile, payments, announcements, and notifications |
 
@@ -358,6 +375,8 @@ Only a signed-in `super-admin` sees the **Create staff account** section in Admi
 Admin Profile Management also contains a Super Admin-only Staff Directory with separate Admin and Meter Reader lists. Each list displays two accounts per page and uses previous/next controls for additional records. The Create Staff and Staff Directory panels use matching desktop heights. The Super Admin can update a regular Admin or Meter Reader's email or assign a new temporary password. Super Admin accounts are protected from these staff-management changes, while normal administrators cannot view the directory or use its management endpoints.
 
 Creating an Admin or Meter Reader and changing a regular Admin or Meter Reader email/password require an additional single-use email OTP sent to the signed-in Super Admin's registered email. Each verified authorization is bound to the selected action (and target account for updates), expires after five minutes, and cannot be reused for another staff-management request.
+
+The same staff-action OTP mechanism also gates access to system settings. The Super Admin verifies email OTP to unlock the settings page, then verifies a second OTP to save any changes to system-wide settings such as the water rate per cubic meter.
 
 The backend independently restricts `POST /api/admins` and `POST /api/meter-readers` to `super-admin`. Hiding the form from normal admins is only a UI measure; direct API requests from normal admins return `403 Forbidden`.
 
@@ -384,6 +403,11 @@ The backend independently restricts `POST /api/admins` and `POST /api/meter-read
 | `POST` | `/api/auth/admin/change-email/otp` | Send an admin email-change OTP to the current email |
 | `POST` | `/api/auth/admin/change-email/verify` | Verify the administrator's current-email OTP |
 | `POST` | `/api/auth/admin/change-email` | Save the new administrator email after verification |
+| `POST` | `/api/auth/admin/staff-action/otp` | Send OTP for staff actions (manage-staff, manage-system-settings) |
+| `POST` | `/api/auth/admin/staff-action/verify` | Verify staff-action OTP and issue authorization token |
+| `GET` | `/api/system-settings` | List all system settings (Super Admin only) |
+| `GET` | `/api/system-settings/:key` | Get a system setting by key (Super Admin only) |
+| `PATCH` | `/api/system-settings/:key` | Update a system setting by key (Super Admin only, requires staff-action authorization) |
 | `POST` | `/api/auth/logout` | Clear device fingerprint hash from DB and end session |
 
 ## Main API Groups
@@ -403,6 +427,7 @@ The backend independently restricts `POST /api/admins` and `POST /api/meter-read
 | `/api/anomaly` | AI anomaly detection |
 | `/api/recommendation` | AI recommendations |
 | `/api/reports` | Report previews, snapshots, and PDF downloads |
+| `/api/system-settings` | System-wide settings management (Super Admin only, OTP-gated) |
 
 ## Reading and Billing Workflow
 

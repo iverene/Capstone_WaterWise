@@ -8,6 +8,7 @@ import {
 } from "../services/auth.service";
 import Modal from "./Modal";
 import OtpInput from "./OtpInput";
+import { useToast } from "./Toast";
 
 const formatCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 const PASSWORD_OTP_SESSION_KEY = "waterwise:password-otp-challenge";
@@ -28,6 +29,7 @@ function isStrongPassword(password) {
 }
 
 export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose, onSuccess }) {
+  const toast = useToast();
   const [savedChallenge] = useState(getSavedPasswordOtpChallenge);
   const [method, setMethod] = useState(emailOnly || savedChallenge ? "email" : "current");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -37,7 +39,8 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
   const [challengeToken, setChallengeToken] = useState(savedChallenge?.challengeToken ?? "");
   const [resetToken, setResetToken] = useState("");
   const [otp, setOtp] = useState("");
-  const [maskedEmail, setMaskedEmail] = useState(savedChallenge?.maskedEmail ?? "");
+  const [otpSuccess, setOtpSuccess] = useState(false);
+  const [maskedEmail, setMaskedEmail] = useState(savedChallenge?.maskedEmail ?? ""); // eslint-disable-line no-unused-vars
   const [message, setMessage] = useState(savedChallenge ? "Enter the verification code sent to your registered email." : "");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,6 +92,7 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
       setChallengeToken(result.challengeToken);
       setMaskedEmail(result.maskedEmail);
       setMessage(result.message);
+      toast.success("Code sent", result.message);
       setOtp("");
       setClock(Date.now());
       const expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
@@ -129,7 +133,7 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
   const fieldClass = "ww-field mt-1.5 py-2.5 pl-4 pr-11 text-sm sm:mt-2 sm:py-3 sm:pr-12 sm:text-base";
   const passwordField = (id, label, value, setter, autoComplete) => (
     <div>
-      <label className="text-sm font-semibold text-slate-900" htmlFor={id}>{label}</label>
+      <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor={id}>{label}</label>
       <div className="relative">
         <input autoComplete={autoComplete} className={fieldClass} disabled={isSubmitting} id={id} onChange={(event) => { setter(event.target.value); setError(""); }} type={showPasswords ? "text" : "password"} value={value} />
         <button aria-label={showPasswords ? "Hide passwords" : "Show passwords"} className="absolute inset-y-2 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowPasswords((shown) => !shown)} type="button">{showPasswords ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button>
@@ -167,10 +171,8 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
 
         {method === "email" && challengeToken && !resetToken && (
           <form className="mt-5 space-y-4" onSubmit={verifyOtp}>
-            <p className="text-sm text-slate-600">Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</p>
-            <div><label className="text-sm font-semibold" htmlFor="account-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isSubmitting || cooldownSeconds === 0} id="account-password-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); }} value={otp} /></div></div>
+            <div><label className="text-sm font-semibold" htmlFor="account-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isSubmitting || cooldownSeconds === 0} id="account-password-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); setOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsSubmitting(true); setError(""); verifyPasswordResetOtp(challengeToken, otpValue).then(result => { setOtpSuccess(true); setTimeout(() => { setResetToken(result.resetToken); window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY); setMessage("Email verified. You can now create your new password."); }, 600); }).catch(e => { setError(e.message); setOtp(""); }).finally(() => setIsSubmitting(false)); } }} success={otpSuccess} value={otp} /></div></div>
             <p aria-live="polite" className={`text-sm font-semibold ${cooldownSeconds > 0 ? "text-slate-500" : "text-red-600"}`}>{cooldownSeconds > 0 ? `Time remaining: ${formatCountdown(cooldownSeconds)}` : "This verification code has expired. Request a new code below."}</p>
-            {message && !error && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{message}</p>}
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
             <button className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting || cooldownSeconds === 0} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Verifying…" : "Verify code"}</button>
             {cooldownSeconds === 0 && <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isSubmitting} onClick={sendOtp} type="button">Resend code</button>}

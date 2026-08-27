@@ -5,15 +5,19 @@ const DEFAULT_PAGE_SIZE = 10;
 
 function withMobileColumnLabels(renderedRow, columns) {
   const cells = renderedRow?.props?.children ?? renderedRow;
+  let colIndex = 0;
 
-  return Children.map(cells, (cell, index) => {
+  return Children.map(cells, (cell) => {
     if (!isValidElement(cell)) return cell;
+
+    const label = columns[colIndex]?.label;
+    colIndex += 1;
 
     return cloneElement(
       cell,
       {},
       <span className="mb-1 block font-sans text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400 md:hidden" aria-hidden="true">
-        {columns[index]?.label}
+        {label}
       </span>,
       cell.props.children,
     );

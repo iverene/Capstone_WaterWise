@@ -1,0 +1,54 @@
+import { apiRequest } from "./apiClient";
+
+export async function fetchSystemSettings() {
+  try {
+    return await apiRequest("/system-settings");
+  } catch (error) {
+    throw new Error(error.response?.data?.message ?? "Unable to load system settings.", { cause: error });
+  }
+}
+
+export async function fetchSystemSetting(key) {
+  try {
+    return await apiRequest(`/system-settings/${key}`);
+  } catch (error) {
+    throw new Error(error.response?.data?.message ?? "Unable to load the setting.", { cause: error });
+  }
+}
+
+export async function requestSettingsChangeOtp() {
+  try {
+    return await apiRequest("/auth/admin/staff-action/otp", {
+      method: "POST",
+      body: JSON.stringify({ action: "update-system-settings" }),
+    });
+  } catch (error) {
+    const requestError = new Error(error.response?.data?.message ?? "Unable to send the verification code.", { cause: error });
+    const retryAfter = Number(error.response?.headers?.["retry-after"] ?? error.response?.data?.retryAfterSeconds);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) requestError.retryAfterSeconds = Math.ceil(retryAfter);
+    throw requestError;
+  }
+}
+
+export async function verifySettingsChangeOtp(challengeToken, otp) {
+  try {
+    return await apiRequest("/auth/admin/staff-action/verify", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken, otp }),
+    });
+  } catch (error) {
+    throw new Error(error.response?.data?.message ?? "Unable to verify the code.", { cause: error });
+  }
+}
+
+export async function updateSystemSetting(key, value, authorizationToken) {
+  try {
+    return await apiRequest(`/system-settings/${key}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value }),
+      headers: { "X-Staff-Authorization": authorizationToken },
+    });
+  } catch (error) {
+    throw new Error(error.response?.data?.message ?? "Unable to update the setting.", { cause: error });
+  }
+}

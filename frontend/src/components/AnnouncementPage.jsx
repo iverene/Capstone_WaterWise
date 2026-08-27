@@ -1,6 +1,9 @@
+import { useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Megaphone,
   Pencil,
   Send,
@@ -29,6 +32,8 @@ function displayDate(value) {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
+const PAGE_SIZE = 10;
+
 export default function AnnouncementPage({
   announcements = sampleAnnouncements,
   onEdit,
@@ -37,6 +42,12 @@ export default function AnnouncementPage({
   showHeader = true,
   title = "Community updates",
 }) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(announcements.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const pageRows = announcements.slice(startIndex, startIndex + PAGE_SIZE);
+  const endIndex = Math.min(startIndex + pageRows.length, announcements.length);
   return (
     <section aria-labelledby={showHeader ? "announcement-feed-heading" : undefined}>
       {showHeader && (
@@ -60,7 +71,7 @@ export default function AnnouncementPage({
         </div>
       ) : (
         <div className="space-y-4">
-          {announcements.map((announcement) => (
+          {pageRows.map((announcement) => (
             <article
               className={`overflow-hidden rounded-2xl border bg-white shadow-card ${
                 announcement.priority === "critical"
@@ -86,7 +97,7 @@ export default function AnnouncementPage({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-bold text-navy-900">WaterWise Administration</p>
+                      <p className="font-bold text-sm text-navy-900 sm:text-base">WaterWise Administration</p>
                       <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500">
                         <CalendarDays aria-hidden="true" className="h-3.5 w-3.5" />
                         <span className="font-mono tabular-nums">{displayDate(announcement.publicationDate)}</span>
@@ -110,8 +121,8 @@ export default function AnnouncementPage({
                 <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
                   {announcement.relatedEvent || "General Announcement"}
                 </span>
-                <h3 className="mt-3 text-lg font-extrabold text-navy-900 sm:text-xl">{announcement.title}</h3>
-                <p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600 sm:text-base">
+                <h3 className="mt-3 text-base font-extrabold text-navy-900 sm:text-xl">{announcement.title}</h3>
+                <p className="mt-2 whitespace-pre-line text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6">
                   {announcement.content}
                 </p>
               </div>
@@ -156,6 +167,37 @@ export default function AnnouncementPage({
           <Send aria-hidden="true" className="h-3.5 w-3.5" />
           End of published updates
         </div>
+      )}
+
+      {announcements.length > 0 && (
+        <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-center text-xs font-semibold text-slate-500 sm:text-left">
+            Showing <span className="font-mono tabular-nums text-slate-700">{startIndex + 1}–{endIndex}</span> of <span className="font-mono tabular-nums text-slate-700">{announcements.length}</span>
+          </p>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              aria-label="Previous page"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:border-water-300 hover:bg-water-50 disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((page) => page - 1)}
+              type="button"
+            >
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            </button>
+            <span className="min-w-24 text-center text-xs font-bold text-slate-600">
+              Page <span className="font-mono tabular-nums">{safePage}</span> of <span className="font-mono tabular-nums">{totalPages}</span>
+            </span>
+            <button
+              aria-label="Next page"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:border-water-300 hover:bg-water-50 disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((page) => page + 1)}
+              type="button"
+            >
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+            </button>
+          </div>
+        </footer>
       )}
     </section>
   );

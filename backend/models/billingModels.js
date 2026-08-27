@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { getRatePerCubicMeter } from "./systemSettingsModels.js";
 
 export const RATE_PER_CUBIC_METER = 15;
 
@@ -142,8 +143,9 @@ export const createMonthlyBilling = async ({
     return total + (Number.isFinite(consumption) ? consumption : 0);
   }, 0);
 
+  const rate = await getRatePerCubicMeter();
   const totalBill = Number(
-    (monthlyConsumption * RATE_PER_CUBIC_METER).toFixed(2)
+    (monthlyConsumption * rate).toFixed(2)
   );
 
   const { data, error } = await supabase
@@ -170,7 +172,7 @@ export const createMonthlyBilling = async ({
   return {
     ...data,
     monthly_consumption: Number(monthlyConsumption.toFixed(2)),
-    rate_per_cubic_meter: RATE_PER_CUBIC_METER,
+    rate_per_cubic_meter: rate,
   };
 };
 

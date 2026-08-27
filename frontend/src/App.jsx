@@ -29,6 +29,7 @@ import PaymentProcessingPage from "./pages/PaymentProcessingPage";
 import FlaggedAccountsPage from "./pages/FlaggedAccountsPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminProfile from "./pages/AdminProfile";
+import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminAccountInformation from "./pages/AdminAccountInformation";
 import RecordConsumptionPage from "./pages/RecordConsumptionPage";
 import { clearApiCache } from "./services/apiCache";
@@ -39,6 +40,7 @@ const portalRoutes = [
   { label: "Profile", path: "/admin/profile" },
   { label: "Account information", path: "/admin/account-information" },
   { label: "Staff management", path: "/admin/staff-management" },
+  { label: "System settings", path: "/admin/settings" },
   { label: "Residents", path: "/admin/consumers" },
   { label: "Readings", path: "/admin/readings" },
   { label: "Billing", path: "/admin/billings" },
@@ -104,7 +106,7 @@ const roleAccess = {
 roleAccess["super-admin"] = {
   ...roleAccess.admin,
   label: "Super Admin",
-  paths: [...roleAccess.admin.paths, "/admin/staff-management"],
+  paths: [...roleAccess.admin.paths, "/admin/staff-management", "/admin/settings"],
 };
 
 function findRouteLabel(pathname) {
@@ -403,6 +405,14 @@ export function AppRoutes() {
         element={
           <RoleRouteGuard requiredRole="super-admin">
             <AppLayout><AdminProfile /></AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        path="/admin/settings"
+        element={
+          <RoleRouteGuard requiredRole="super-admin">
+            <AppLayout><AdminSettingsPage /></AppLayout>
           </RoleRouteGuard>
         }
       />
