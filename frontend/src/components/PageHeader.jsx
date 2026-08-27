@@ -2,7 +2,7 @@
  * Compact page-level heading. Keep actions and metrics in sibling sections so
  * the title remains easy to scan on small screens.
  */
-export default function PageHeader({ eyebrow, title, description, className = "", compact = false, mobileCompact = false }) {
+export default function PageHeader({ eyebrow, title, description, className = "", compact = false, mobileCompact = false, descriptionClassName = "" }) {
   return (
     <header
       className={`bg-transparent pr-0 lg:pr-16 ${className}`.trim()}
@@ -16,7 +16,7 @@ export default function PageHeader({ eyebrow, title, description, className = ""
         {title}
       </h1>
       {description ? (
-        <p className={`mt-1.5 max-w-3xl ${mobileCompact ? "text-[13px] leading-5 sm:text-sm sm:leading-6" : "text-sm leading-6"} text-slate-600`}>
+        <p className={`mt-1.5 max-w-3xl ${mobileCompact ? "text-[13px] leading-5 sm:text-sm sm:leading-6" : "text-sm leading-6"} ${descriptionClassName} text-slate-600`}>
           {description}
         </p>
       ) : null}

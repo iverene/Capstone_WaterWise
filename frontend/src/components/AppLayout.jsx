@@ -17,6 +17,7 @@ import { useLocation, useNavigate } from "react-router";
 import { ACCOUNT_STORAGE_KEY, getCurrentAccount, logout } from "../services/auth.service";
 import { enableConsumerPushSessionPersistence, getStoredAccount } from "../services/authToken";
 import { isCanceledRequest } from "../services/apiClient";
+import { getPendingMeterReadings } from "../services/offlineMeterReadings";
 import { getNotificationPresentation } from "../utils/notificationPresentation";
 import {
   fetchNotifications,
@@ -125,6 +126,7 @@ export default function AppLayout({ children }) {
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [accountName, setAccountName] = useState("");
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [pendingCount, setPendingCount] = useState(0);
   const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
   const [isEnablingPush, setIsEnablingPush] = useState(false);
   const activeRole = account?.role ?? pathRole ?? "consumer";
@@ -143,6 +145,21 @@ export default function AppLayout({ children }) {
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (activeRole !== "meter-reader") return;
+    const fetchPending = async () => {
+      try {
+        const pending = await getPendingMeterReadings();
+        setPendingCount(pending.length);
+      } catch {
+        // silent
+      }
+    };
+    fetchPending();
+    const interval = setInterval(fetchPending, 15000);
+    return () => clearInterval(interval);
+  }, [activeRole]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -406,11 +423,11 @@ export default function AppLayout({ children }) {
 
       {!isOnline && (
         <div
-          className="sticky top-16 z-30 flex min-h-11 items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-semibold text-amber-800"
+          className="sticky top-16 z-30 flex min-h-9 items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-center text-xs font-semibold text-amber-800 sm:min-h-11 sm:text-sm"
           role="status"
         >
           <FiWifiOff aria-hidden="true" className="h-4 w-4 shrink-0" />
-          You are offline. New changes will be submitted after you reconnect.
+          Offline mode · {activeRole === "meter-reader" ? `${pendingCount} reading${pendingCount === 1 ? "" : "s"} safely stored on this device. Changes will be submitted after you reconnect.` : "Changes will be submitted after you reconnect."}
         </div>
       )}
 

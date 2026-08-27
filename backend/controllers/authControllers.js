@@ -61,6 +61,7 @@ const STAFF_ACTIONS = {
   "create-meter-reader": "create a Meter Reader account",
   "update-admin": "change an Admin account",
   "update-meter-reader": "change a Meter Reader account",
+  "manage-system-settings": "update system settings",
 };
 
 function passwordFingerprint(passwordHash) {

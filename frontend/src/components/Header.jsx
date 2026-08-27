@@ -38,7 +38,7 @@ export default function Header({
   }, [isAccountOpen]);
 
   return (
-    <header className="sticky top-0 z-30 bg-transparent lg:absolute lg:right-0 lg:top-0 lg:w-auto">
+    <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md lg:bg-transparent lg:backdrop-blur-none lg:absolute lg:right-0 lg:top-0 lg:w-auto">
       <div className="flex min-h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:min-h-0 lg:justify-end lg:px-8 lg:py-6">
         <div className="flex min-w-0 items-center gap-3 lg:hidden">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm">

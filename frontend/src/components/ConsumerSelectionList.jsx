@@ -6,7 +6,7 @@ export default function ConsumerSelectionList({ consumers = [], emptyDescription
       <div className="border-b border-slate-200 p-4 sm:p-6">
         <p className="ww-eyebrow !text-water-700">Step 1 of 3</p>
         <h2 className="mt-1 text-xl font-extrabold text-slate-900 sm:text-2xl">Select a resident</h2>
-        <p className="mt-1 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">Choose an available resident to record a reading, or open the receipt for one already recorded this month.</p>
+        <p className="mt-1 text-[13px] leading-5 text-slate-600 sm:text-sm sm:leading-6">Select resident to record a reading, or open the receipt for one already recorded this month.</p>
       </div>
       <div className="max-h-[46rem] space-y-2 overflow-y-auto p-3 sm:space-y-3 sm:p-6">
         {consumers.length === 0 ? (

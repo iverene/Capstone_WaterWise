@@ -93,7 +93,8 @@ export default function UsageMetrics({ amountDue: amountDueProp, usageHistory })
         : `Your latest water use is ${usageNumber(Math.abs(usageDifference))} m³ ${usageDifference > 0 ? "higher" : "lower"} than the previous recorded month.`;
   const pageHeader = (
     <PageHeader
-      description="Understand your monthly water use, compare recorded periods, and review the meter values behind each result."
+      description="Understand your monthly water use and review the meter values behind each result."
+      descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
       eyebrow="Resident analytics"
       title="Water analytics"
     />
@@ -135,7 +136,7 @@ export default function UsageMetrics({ amountDue: amountDueProp, usageHistory })
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Usage insight</p>
               <h2 className="mt-1 text-lg font-extrabold text-navy-900" id="usage-insight-heading">{periodLabel} at a glance</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-600">{insightMessage}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm sm:leading-6">{insightMessage}</p>
             </div>
           </div>
           <span className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${

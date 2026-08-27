@@ -64,6 +64,7 @@ export default function ConsumerHome() {
   const pageHeader = (
     <PageHeader
       description="See your account, water use, upcoming payments, and the latest community updates in one place."
+      descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
       eyebrow="Resident portal"
       title={home ? `Welcome home, ${home.account.name.split(" ")[0]}` : "Consumer home"}
     />

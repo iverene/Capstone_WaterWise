@@ -267,10 +267,10 @@ export default function Login() {
   };
 
   return (
-    <main className="ww-app min-h-screen px-4 py-4 font-sans text-slate-900 sm:px-8 sm:py-8 lg:px-10">
-      <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl items-center justify-center sm:min-h-[calc(100vh-4rem)]">
+    <main className="ww-app h-screen overflow-hidden px-4 py-4 font-sans text-slate-900 sm:px-8 sm:py-8 lg:px-10">
+      <section className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
         <div className="ww-glass-strong grid w-full overflow-hidden rounded-2xl lg:grid-cols-[0.94fr_1.06fr]">
-          <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10 lg:min-h-[650px]">
+          <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10">
             <div>
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm"><FiDroplet aria-hidden="true" className="h-5 w-5" /></span>
@@ -279,24 +279,24 @@ export default function Login() {
                   <p className="text-xs font-medium text-water-200">Sucol Water System</p>
                 </div>
               </div>
-              <h1 className="mt-6 max-w-md text-3xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl">
+              <h1 className="mt-6 max-w-md text-2xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl">
                 Every drop, clearly understood.
               </h1>
-              <p className="mt-4 max-w-md text-sm leading-6 text-water-100 sm:text-base">One secure place for water readings, bills, payments, and barangay updates.</p>
+              <p className="mt-4 max-w-md text-xs leading-5 text-water-100 sm:text-base sm:leading-6">One secure place for water readings, bills, payments, and barangay updates.</p>
             </div>
 
           </aside>
 
-          <div className="bg-white p-6 sm:p-10 lg:flex lg:items-center lg:p-12">
+          <div className="bg-white p-6 sm:p-10 lg:flex lg:items-center lg:p-12 overflow-auto">
             <div className="mx-auto max-w-xl">
               <div className="mb-7">
-                <p className="ww-eyebrow !text-water-700">
+                <p className="ww-eyebrow text-[10px] sm:text-xs !text-water-700">
                   Secure sign in
                 </p>
-                <h2 className="mt-2 text-3xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-4xl">
+                <h2 className="mt-2 text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-4xl">
                   {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
                 </h2>
-                <p className="mt-3 text-sm leading-6 text-slate-500">
+                <p className="mt-3 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-500">
                   {adminChallengeToken ? `Enter the code sent to ${maskedEmail}. It expires in 5 minutes.` : "Use the credentials assigned to your WaterWise account."}
                 </p>
               </div>
@@ -304,18 +304,18 @@ export default function Login() {
               <form aria-busy={isSubmitting} className="space-y-5" onSubmit={handleSubmit}>
                 {!adminChallengeToken && <div>
                   <label
-                    className="text-sm font-semibold text-slate-900"
+                    className="text-sm sm:text-sm font-semibold text-slate-900"
                     htmlFor="login-identifier"
                   >
                     Email or username
                   </label>
                   <div className="relative mt-2">
-                    <FiMail aria-hidden="true" className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${identifierError ? "text-red-500" : "text-slate-400"}`} />
+                    <FiMail aria-hidden="true" className={`pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 ${identifierError ? "text-red-500" : "text-slate-400"}`} />
                     <input
                       aria-describedby={identifierError ? "login-identifier-error" : undefined}
                       aria-invalid={Boolean(identifierError)}
                       autoComplete="username"
-                      className="ww-field py-3 pl-12 pr-4 text-base"
+                      className="ww-field py-2.5 sm:py-3 pl-10 sm:pl-12 pr-4 text-sm sm:text-base"
                       disabled={isSubmitting || lockSeconds > 0}
                       id="login-identifier"
                       onChange={(event) => {
@@ -330,7 +330,7 @@ export default function Login() {
                     />
                   </div>
                   {identifierError && (
-                    <p className="mt-2 text-sm font-semibold text-red-700" id="login-identifier-error">
+                    <p className="mt-2 text-xs sm:text-sm font-semibold text-red-700" id="login-identifier-error">
                       {identifierError}
                     </p>
                   )}
@@ -338,16 +338,16 @@ export default function Login() {
 
                 {!adminChallengeToken && <div>
                   <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm font-semibold text-slate-900" htmlFor="login-password">Password</label>
-                    <Link className="text-sm font-bold text-water-700 hover:text-water-900" to="/forgot-password">Forgot password?</Link>
+                    <label className="text-sm sm:text-sm font-semibold text-slate-900" htmlFor="login-password">Password</label>
+                    <Link className="text-sm sm:text-sm font-bold text-water-700 hover:text-water-900" to="/forgot-password">Forgot password?</Link>
                   </div>
                   <div className="relative mt-2">
-                    <FiLock aria-hidden="true" className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-slate-400"}`} />
+                    <FiLock aria-hidden="true" className={`pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-slate-400"}`} />
                     <input
                       aria-describedby={passwordError ? "login-password-error" : undefined}
                       aria-invalid={Boolean(passwordError)}
                       autoComplete="current-password"
-                      className="ww-field py-3 pl-12 pr-12 text-base"
+                      className="ww-field py-2.5 sm:py-3 pl-10 sm:pl-12 pr-12 text-sm sm:text-base"
                       disabled={isSubmitting || lockSeconds > 0}
                       id="login-password"
                       onChange={(event) => {
@@ -376,7 +376,7 @@ export default function Login() {
                     </button>
                   </div>
                   {passwordError && (
-                    <p className="mt-2 text-sm font-semibold text-red-700" id="login-password-error">
+                    <p className="mt-2 text-xs sm:text-sm font-semibold text-red-700" id="login-password-error">
                       {passwordError}
                     </p>
                   )}
@@ -384,13 +384,13 @@ export default function Login() {
 
                 {adminChallengeToken && (
                   <div>
-                    <label className="text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
-                    <div aria-labelledby="admin-login-otp-label" className="mt-3 grid grid-cols-6 gap-2 sm:gap-3" role="group">
+                    <label className="text-xs sm:text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
+                    <div aria-labelledby="admin-login-otp-label" className="mt-3 grid grid-cols-6 gap-1 sm:gap-3" role="group">
                       {Array.from({ length: 6 }, (_, index) => (
                         <input
                           aria-label={`Verification code digit ${index + 1} of 6`}
                           autoComplete={index === 0 ? "one-time-code" : "off"}
-                          className="h-14 min-w-0 rounded-xl border border-slate-300 bg-white text-center font-mono text-2xl font-bold text-slate-900 outline-none transition focus:border-water-600 focus:ring-4 focus:ring-water-100 disabled:bg-slate-100 disabled:text-slate-400 sm:h-16"
+                          className="h-11 min-w-0 rounded-lg border border-slate-300 bg-white text-center font-mono text-xl font-bold text-slate-900 outline-none transition focus:border-water-600 focus:ring-4 focus:ring-water-100 disabled:bg-slate-100 disabled:text-slate-400 sm:h-16 sm:rounded-xl sm:text-2xl"
                           disabled={isSubmitting || otpSecondsLeft === 0}
                           inputMode="numeric"
                           key={index}
@@ -404,12 +404,12 @@ export default function Login() {
                         />
                       ))}
                     </div>
-                    <p aria-live="polite" className={`mt-3 text-sm font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
+                    <p aria-live="polite" className={`mt-3 text-xs sm:text-sm font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
                       {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
                     </p>
                     {otpSecondsLeft === 0 && (
                       <button
-                        className="mt-3 text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
+                        className="mt-3 text-xs sm:text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
                         disabled={isSubmitting || isResending}
                         onClick={handleResendOtp}
                         type="button"
@@ -421,12 +421,12 @@ export default function Login() {
                 )}
 
                 <button
-                  className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
+                  className="ww-primary-button flex min-h-10 sm:min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
                   disabled={isSubmitting || lockSeconds > 0 || (Boolean(adminChallengeToken) && otpSecondsLeft === 0)}
                   style={{ cursor: isSubmitting ? "default" : undefined }}
                   type="submit"
                 >
-                  {isSubmitting && <FiLoader aria-hidden="true" className="h-5 w-5 animate-spin" />}
+                  {isSubmitting && <FiLoader aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />}
                   {isSubmitting ? (adminChallengeToken ? "Verifying…" : "Signing in…") : (adminChallengeToken ? "Verify and continue" : "Sign in")}
                 </button>
 
@@ -435,21 +435,21 @@ export default function Login() {
                 </span>
 
                 {lockMessage && (
-                  <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                  <p className="rounded-xl bg-red-50 px-4 py-3 text-xs sm:text-sm font-semibold text-red-700" role="alert">
                     {lockMessage}
                   </p>
                 )}
 
                 {message && (
                   <p
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900"
+                    className="rounded-xl bg-white px-4 py-3 text-xs sm:text-sm font-medium text-slate-900"
                     role="status"
                   >
                     {message}
                   </p>
                 )}
                 {adminChallengeToken && (
-                  <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
+                  <button className="w-full text-xs sm:text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
                 )}
               </form>
             </div>

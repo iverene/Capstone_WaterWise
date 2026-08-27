@@ -20,6 +20,8 @@ export default function Search({
   disabled = false,
   id,
   name,
+  onBlur,
+  onFocus,
   onValueChange,
   placeholder = "Search",
   surface = "muted",
@@ -43,6 +45,8 @@ export default function Search({
         id={id}
         name={name}
         onChange={(event) => onValueChange?.(event.target.value)}
+        onBlur={onBlur}
+        onFocus={onFocus}
         placeholder={placeholder}
         type="search"
         value={value}

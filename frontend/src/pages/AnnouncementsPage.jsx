@@ -34,10 +34,11 @@ export default function AnnouncementsPage() {
         type="button"
       >
         <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-        Back
+        Back to home
       </button>
       <PageHeader
-        description="Browse all official notices, service advisories, and community updates from WaterWise Administration."
+        description="Browse all official notice updates from WaterWise Administration."
+        descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
         eyebrow="Community feed"
         title="Announcements"
       />

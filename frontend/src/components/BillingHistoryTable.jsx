@@ -45,9 +45,8 @@ export default function BillingHistoryTable({
         { key: "date", label: "Reading Date" },
         { key: "consumption", label: "Consumption" },
         { key: "amount", label: "Total Bill", className: "text-right" },
-        { key: "balance", label: "Balance", className: "text-right" },
         { key: "status", label: "Status" },
-        ...(onViewReceipt ? [{ key: "receipt", label: "Receipt", className: "text-right" }] : []),
+        { key: "balance", label: "Balance", className: "text-right" },
       ]}
       data={historyData}
       emptyDescription={emptyDescription}
@@ -60,7 +59,7 @@ export default function BillingHistoryTable({
           : "hover:bg-slate-50"
       }`}
       tableClassName={`block w-full text-left text-sm md:table ${
-        showConsumerDetails ? "md:min-w-[1120px]" : onViewReceipt ? "md:min-w-[980px]" : "md:min-w-[860px]"
+        showConsumerDetails ? "md:min-w-[1020px]" : onViewReceipt ? "md:min-w-[880px]" : "md:min-w-[760px]"
       }`}
       testId="billing-history-table"
       renderRow={(row) => {
@@ -70,7 +69,7 @@ export default function BillingHistoryTable({
           <>
             {showConsumerDetails && (
               <td
-                className="col-span-2 flex flex-col border-b border-slate-100 pb-3 font-extrabold before:text-xs before:font-semibold before:text-slate-500 before:content-['Consumer_name'] md:table-cell md:border-0 md:px-4 md:py-4 md:text-sm md:before:hidden"
+                className="col-span-2 flex flex-col border-b border-slate-100 pb-3 font-extrabold md:col-span-1 md:table-cell md:border-0 md:px-4 md:py-4 md:text-sm"
                 data-testid="row-consumer-name"
               >
                 {row.consumerName ?? "Unknown consumer"}
@@ -78,49 +77,44 @@ export default function BillingHistoryTable({
             )}
             {showConsumerDetails && (
               <td
-                className="flex flex-col gap-1 text-slate-600 before:text-xs before:font-semibold before:text-slate-500 before:content-['Purok'] md:table-cell md:px-4 md:py-4 md:before:hidden"
+                className="flex flex-col gap-1 text-slate-600 md:table-cell md:px-4 md:py-4"
                 data-testid="row-purok"
               >
                 {row.purok ?? "Unassigned"}
               </td>
             )}
-            <td className="flex flex-col gap-1 font-mono text-xs font-bold text-water-700 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Invoice'] md:table-cell md:px-4 md:py-4 md:before:hidden">
+            <td className="flex flex-col gap-1 font-mono text-xs font-bold text-water-700 md:table-cell md:px-4 md:py-4">
               {row.invoiceNumber}
             </td>
             <td
-              className="col-span-2 flex items-center justify-between border-b border-slate-100 pb-3 text-base font-extrabold before:text-xs before:font-semibold before:text-slate-500 before:content-['Billing_period'] md:table-cell md:border-0 md:px-4 md:py-4 md:text-sm md:before:hidden"
+              className="col-span-2 flex items-center justify-between border-b border-slate-100 pb-3 text-sm font-extrabold md:col-span-1 md:table-cell md:border-0 md:px-4 md:py-4 md:text-sm"
               data-testid="row-month"
             >
               {row.billingPeriod}
             </td>
             <td
-              className="flex flex-col gap-1 font-mono text-slate-600 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Reading_date'] md:table-cell md:px-4 md:py-4 md:before:hidden"
+              className="flex flex-col gap-1 font-mono text-slate-600 md:table-cell md:px-4 md:py-4"
               data-testid="row-reading-date"
             >
               {row.readingDate}
             </td>
             <td
-              className="flex flex-col gap-1 font-mono before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Consumption'] md:table-cell md:px-4 md:py-4 md:before:hidden"
+              className="flex flex-col gap-1 font-mono md:table-cell md:px-4 md:py-4"
               data-testid="row-consumption"
             >
               {row.cubicMetersConsumed} m³
             </td>
             <td
-              className="flex flex-col gap-1 font-mono font-bold tabular-nums before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Total_bill'] md:table-cell md:px-4 md:py-4 md:text-right md:before:hidden"
+              className="flex flex-col gap-1 font-mono font-bold tabular-nums md:table-cell md:px-4 md:py-4 md:text-right"
               data-testid="row-amount-due"
             >
               ₱{Number(row.amountDue ?? 0).toLocaleString("en-US", {
                 minimumFractionDigits: 2,
               })}
             </td>
-            <td className="flex flex-col gap-1 font-mono font-bold tabular-nums text-slate-700 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Balance'] md:table-cell md:px-4 md:py-4 md:text-right md:before:hidden">
-              ₱{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", {
-                minimumFractionDigits: 2,
-              })}
-            </td>
-            <td className="flex flex-col items-end gap-1 before:self-start before:text-xs before:font-semibold before:text-slate-500 before:content-['Status'] md:table-cell md:px-4 md:py-4 md:before:hidden">
+            <td className="flex flex-col gap-1 md:table-cell md:px-4 md:py-4 md:col-span-1">
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${statusClassName}`}
+                className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${statusClassName}`}
                 data-status={row.status}
                 data-testid="row-status"
               >
@@ -128,8 +122,13 @@ export default function BillingHistoryTable({
                 {row.status}
               </span>
             </td>
+            <td className="hidden font-mono font-bold tabular-nums text-slate-700 md:table-cell md:px-4 md:py-4 md:text-right">
+              ₱{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+              })}
+            </td>
             {onViewReceipt && (
-              <td className="col-span-2 flex items-center justify-end md:table-cell md:px-4 md:py-4 md:text-right">
+              <td className="col-span-2 flex items-center justify-end md:col-span-1 md:table-cell md:px-4 md:py-4 md:text-right">
                 <button
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 md:w-auto"
                   onClick={() => onViewReceipt(row)}

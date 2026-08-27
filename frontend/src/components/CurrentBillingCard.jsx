@@ -22,8 +22,8 @@ export default function CurrentBillingCard({ outstandingBalance = 0, dueDate = "
             <ReceiptText aria-hidden="true" className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Current billing</p>
-            <h2 className="mt-0.5 text-base font-bold text-navy-900">Amount due</h2>
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-water-700 sm:text-xs">Current billing</p>
+            <h2 className="mt-0.5 text-sm font-bold text-navy-900 sm:text-base">Amount due</h2>
           </div>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-bold ${
@@ -37,14 +37,14 @@ export default function CurrentBillingCard({ outstandingBalance = 0, dueDate = "
       </div>
 
       <p
-        className="mt-5 font-sans text-3xl font-extrabold tracking-tight text-navy-900 tabular-nums sm:text-4xl"
+        className="mt-4 font-sans text-2xl font-extrabold tracking-tight text-navy-900 tabular-nums sm:mt-5 sm:text-4xl"
         data-testid="outstanding-balance"
       >
         {currency(outstandingBalance)}
       </p>
 
-      <div className="mt-5 flex items-start gap-3 border-t border-slate-200 pt-4">
-        <CalendarDays aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-water-700" />
+      <div className="mt-4 flex items-start gap-3 border-t border-slate-200 pt-4 sm:mt-5">
+        <CalendarDays aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-water-700 sm:h-5 sm:w-5" />
         <div>
           <p className="text-xs font-semibold text-slate-500">Due date</p>
           <p className="mt-1 font-mono text-sm font-bold text-navy-900 sm:text-base" data-testid="due-date">

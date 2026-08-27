@@ -86,6 +86,18 @@ WaterWise binds JWT access tokens to the device that logged in. If a token is st
 - OTP-based password reset and change
 - Account lockout after 5 failed attempts (5 minute cooldown)
 
+### Staff Action OTP
+
+Super Admins can perform sensitive actions (manage staff accounts, manage system settings) through a shared OTP verification flow:
+
+1. Frontend calls `POST /api/auth/admin/staff-action/otp` with the action name
+2. Backend sends a six-digit OTP to the Super Admin's registered email
+3. Frontend calls `POST /api/auth/admin/staff-action/verify` with the OTP
+4. Backend returns a short-lived authorization token bound to the action
+5. The token is used in the subsequent request's `X-Staff-Authorization` header
+
+Supported actions: `manage-staff`, `create-admin`, `create-meter-reader`, `update-admin`, `update-meter-reader`, `manage-system-settings`.
+
 ## API Endpoints
 
 ### Authentication
@@ -102,6 +114,21 @@ WaterWise binds JWT access tokens to the device that logged in. If a token is st
 | `POST` | `/api/auth/reset-password` | No | Set new password |
 | `POST` | `/api/auth/change-password` | Yes | Change password (current password) |
 | `POST` | `/api/auth/change-password/email-otp` | Yes | Send OTP for password change |
+
+### Staff Action OTP
+
+| Method | Endpoint | Auth | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/auth/admin/staff-action/otp` | Super Admin | Send OTP for staff management or system settings |
+| `POST` | `/api/auth/admin/staff-action/verify` | Super Admin | Verify staff-action OTP and issue authorization token |
+
+### System Settings
+
+| Method | Endpoint | Auth | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/system-settings` | Super Admin | List all system settings |
+| `GET` | `/api/system-settings/:key` | Super Admin | Get a setting by key |
+| `PATCH` | `/api/system-settings/:key` | Super Admin + staff-action auth | Update a setting by key |
 
 ### Admin Trusted Devices
 
@@ -127,6 +154,7 @@ WaterWise binds JWT access tokens to the device that logged in. If a token is st
 | `/api/anomaly` | AI anomaly detection |
 | `/api/recommendation` | AI recommendations |
 | `/api/reports` | Report generation |
+| `/api/system-settings` | System-wide settings (Super Admin only) |
 
 ## Database
 
@@ -134,6 +162,7 @@ Run migrations from `db/` folder in Supabase SQL Editor:
 
 1. `migration.sql` — main schema
 2. `fingerprint_migration.sql` — adds `device_fingerprint_hash` column
+3. `system_settings_migration.sql` — adds `system_settings` table with default water rate
 
 ## Environment Variables
 

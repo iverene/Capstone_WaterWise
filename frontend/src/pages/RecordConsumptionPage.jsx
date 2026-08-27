@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ConsumerSelectionList from "../components/ConsumerSelectionList";
 import ConsumptionEntryPanel from "../components/ConsumptionEntryPanel";
 import Filter from "../components/Filter";
@@ -56,6 +56,8 @@ export default function RecordConsumptionPage() {
   const [selectedConsumer, setSelectedConsumer] = useState(null);
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchWrapperRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -67,6 +69,29 @@ export default function RecordConsumptionPage() {
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [showSynced, setShowSynced] = useState(false);
+  const prevPendingRef = useRef(pendingCount);
+
+  useEffect(() => {
+    const prev = prevPendingRef.current;
+    prevPendingRef.current = pendingCount;
+    if (isOnline && !syncing && prev > 0 && pendingCount === 0) {
+      setShowSynced(true);
+      const timer = setTimeout(() => setShowSynced(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOnline, syncing, pendingCount]);
+
+  useEffect(() => {
+    if (!searchFocused) return;
+    const handleClickOutside = (event) => {
+      if (searchWrapperRef.current && !searchWrapperRef.current.contains(event.target)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [searchFocused]);
 
   const applyPendingState = useCallback(async (contexts) => {
     const pending = await getPendingMeterReadings();
@@ -251,13 +276,17 @@ export default function RecordConsumptionPage() {
   return (
     <main className="space-y-4 sm:space-y-6">
       <PageHeader description="Select a resident and type the cumulative meter value." eyebrow="Field workspace" mobileCompact title="Record a meter reading" />
-      <div className={`rounded-xl border p-3 text-[13px] font-semibold sm:p-4 sm:text-sm ${isOnline ? "border-water-200 bg-water-50 text-water-800" : "border-amber-200 bg-amber-50 text-amber-800"}`} role="status">
-        {isOnline ? (syncing ? "Online · Syncing saved readings…" : `Online${pendingCount ? ` · ${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync` : " · All readings synced"}`) : `Offline mode · ${pendingCount} reading${pendingCount === 1 ? "" : "s"} safely stored on this device`}
-      </div>
+      {(syncing || pendingCount > 0 || showSynced) && (
+        <div className="rounded-xl border p-3 text-[13px] font-semibold sm:p-4 sm:text-sm border-water-200 bg-water-50 text-water-800" role="status">
+          {syncing ? "Online · Syncing saved readings…" : pendingCount > 0 ? `${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync` : "All readings synced"}
+        </div>
+      )}
       {loadError && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{loadError}</span><button className="font-bold underline" onClick={loadData} type="button">Try again</button></div>}
-      <div aria-label="Resident directory controls" className="flex flex-col gap-3 sm:flex-row sm:items-center" role="search">
-        <Search ariaLabel="Search residents by name or account number" className="flex-1 [&_input]:min-h-11 [&_input]:py-2 sm:[&_input]:min-h-12 sm:[&_input]:py-3" onValueChange={setQuery} placeholder="Search name or account number" value={query} />
-        <Filter ariaLabel="Filter residents by purok" className="w-full sm:w-48" disabled={loading} onValueChange={setPurok} options={purokOptions} value={purok} />
+      <div aria-label="Resident directory controls" className="flex items-center gap-2" ref={searchWrapperRef} role="search">
+        <Search ariaLabel="Search residents by name or account number" className={`min-w-0 transition-all duration-300 ease-in-out [&_input]:min-h-11 [&_input]:py-2 sm:[&_input]:min-h-12 sm:[&_input]:py-3 ${searchFocused ? "flex-1" : "w-1/2 sm:flex-1"}`} onBlur={() => setSearchFocused(false)} onFocus={() => setSearchFocused(true)} onValueChange={setQuery} placeholder="Search name or account number" value={query} />
+        <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${searchFocused ? "w-0 opacity-0" : "w-1/2 opacity-100 sm:w-48 sm:opacity-100"}`}>
+          <Filter ariaLabel="Filter residents by purok" className="w-full" disabled={loading} onValueChange={setPurok} options={purokOptions} value={purok} />
+        </div>
       </div>
       {loading ? <LoadingSkeleton label="Loading residents and reading status" variant="list" /> : <ConsumerSelectionList consumers={visibleConsumers} emptyDescription={consumers.length ? "Try a different search or choose another purok." : undefined} emptyTitle={consumers.length ? "No matching residents" : undefined} onSelect={selectConsumer} selectedId={selectedConsumer?.id} selectingId={selectingId} />}
 

@@ -15,6 +15,7 @@ import anomaly from "./routes/anomalyRoutes.js";
 import recomendationRoutes from "./routes/recommendationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import changeEventRoutes from "./routes/changeEventRoutes.js";
+import systemSettingsRoutes from "./routes/systemSettingsRoutes.js";
 import { publishDataChange } from "./services/changeEventService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
 import { startPushNotificationWorker } from "./services/pushNotificationService.js";
@@ -144,6 +145,7 @@ app.use("/api/anomaly", anomaly);
 app.use("/api/recommendation", recomendationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/changes", changeEventRoutes);
+app.use("/api/system-settings", systemSettingsRoutes);
 
 app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && "body" in error) {

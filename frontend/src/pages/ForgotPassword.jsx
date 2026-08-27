@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { FiArrowLeft, FiDroplet, FiLoader, FiMail } from "react-icons/fi";
+import { FiArrowLeft, FiLoader, FiMail } from "react-icons/fi";
 import { Link, useNavigate } from "react-router";
 import { requestPasswordReset, verifyPasswordResetOtp } from "../services/auth.service";
 import OtpInput from "../components/OtpInput";
+import { useToast } from "../components/Toast";
 
 const formatCountdown = (totalSeconds) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -12,11 +13,12 @@ const formatCountdown = (totalSeconds) => {
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
+  const [otpSuccess, setOtpSuccess] = useState(false);
   const [challengeToken, setChallengeToken] = useState("");
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState(0);
   const [cooldownEmail, setCooldownEmail] = useState("");
@@ -40,12 +42,11 @@ export default function ForgotPassword() {
   const sendResetCode = async () => {
     setIsSubmitting(true);
     setError("");
-    setMessage("");
     try {
       const result = await requestPasswordReset(normalizedEmail);
       setChallengeToken(result.challengeToken);
       setOtp("");
-      setMessage(result.message);
+      toast.success("Code sent", result.message);
       setCooldownEmail(normalizedEmail);
       setClock(Date.now());
       setCooldownUntil(Date.now() + Number(result.cooldownSeconds ?? 300) * 1000);
@@ -91,10 +92,9 @@ export default function ForgotPassword() {
   return (
     <main className="ww-app flex min-h-screen items-center justify-center px-4 py-8 font-sans text-slate-900">
       <section className="ww-glass-strong w-full max-w-lg rounded-2xl bg-white p-6 sm:p-10">
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-water-600 text-white"><FiDroplet className="h-5 w-5" /></span>
-        <p className="ww-eyebrow mt-6 !text-water-700">Account recovery</p>
-        <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.04em]">{challengeToken ? "Verify your email" : "Forgot your password?"}</h1>
-        <p className="mt-3 text-sm leading-6 text-slate-500">{challengeToken ? `Enter the 6-digit code sent to ${email.trim()}. The code expires in 5 minutes.` : "Enter the email address registered to your WaterWise account. We’ll send you a verification code."}</p>
+        <p className="ww-eyebrow text-[10px] sm:text-xs !text-water-700">Account recovery</p>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] sm:text-3xl">{challengeToken ? "Verify your email" : "Forgot your password?"}</h1>
+        <p className="mt-3 text-xs leading-5 sm:text-sm sm:leading-6 text-slate-500">{challengeToken ? `Enter the 6-digit code sent to ${email.trim()}. The code expires in 5 minutes.` : "Enter the email address registered to your WaterWise account. We’ll send you a verification code."}</p>
 
         <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
           {!challengeToken ? <div>
@@ -105,15 +105,14 @@ export default function ForgotPassword() {
             </div>
           </div> : <div>
             <label className="text-sm font-semibold" htmlFor="recovery-otp">Verification code</label>
-            <div className="mt-3"><OtpInput disabled={isSubmitting} id="recovery-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); }} value={otp} /></div>
+            <div className="mt-3"><OtpInput disabled={isSubmitting} id="recovery-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); setOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsSubmitting(true); setError(""); verifyPasswordResetOtp(challengeToken, otpValue).then(result => { setOtpSuccess(true); setTimeout(() => navigate(`/reset-password?token=${encodeURIComponent(result.resetToken)}`, { replace: true }), 600); }).catch(e => { setError(e.message); setOtp(""); }).finally(() => setIsSubmitting(false)); } }} success={otpSuccess} value={otp} /></div>
           </div>}
-          {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{isCurrentEmailCoolingDown ? `Please wait ${countdownLabel} before requesting another verification code.` : error}</p>}
-          {!challengeToken && isCurrentEmailCoolingDown && !error && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800" role="status">You can request another code in {countdownLabel}.</p>}
-          {message && challengeToken && !error && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800" role="status">{message}</p>}
-          <button className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting || (!challengeToken && isCurrentEmailCoolingDown)} type="submit">{isSubmitting && <FiLoader className="h-5 w-5 animate-spin" />}{isSubmitting ? (challengeToken ? "Verifying code…" : "Sending code…") : (challengeToken ? "Verify code" : isCurrentEmailCoolingDown ? `Try again in ${countdownLabel}` : "Send verification code")}</button>
+          {error && <p className="rounded-xl bg-red-50 p-3 text-xs sm:text-sm font-semibold text-red-700" role="alert">{error}</p>}
+          {!challengeToken && isCurrentEmailCoolingDown && !error && <p className="rounded-xl bg-amber-50 p-3 text-xs sm:text-sm font-semibold text-amber-800" role="status">You can request another code in {countdownLabel}.</p>}
+          <button className="ww-primary-button flex min-h-10 sm:min-h-12 w-full items-center justify-center gap-2 text-sm sm:text-base" disabled={isSubmitting || (!challengeToken && isCurrentEmailCoolingDown)} type="submit">{isSubmitting && <FiLoader className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />}{isSubmitting ? (challengeToken ? "Verifying code…" : "Sending code…") : (challengeToken ? "Verify code" : isCurrentEmailCoolingDown ? `Try again in ${countdownLabel}` : "Send verification code")}</button>
           {challengeToken && <div className="space-y-3">
-            <button className="w-full text-sm font-bold text-water-700 hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isSubmitting || isCurrentEmailCoolingDown} onClick={sendResetCode} type="button">{isCurrentEmailCoolingDown ? `Resend code in ${countdownLabel}` : "Resend code"}</button>
-            <button className="w-full text-sm font-bold text-slate-600 hover:text-slate-900" disabled={isSubmitting} onClick={() => { setChallengeToken(""); setEmail(""); setOtp(""); setMessage(""); setError(""); }} type="button">Use a different email</button>
+            <button className="w-full text-xs sm:text-sm font-bold text-water-700 hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isSubmitting || isCurrentEmailCoolingDown} onClick={sendResetCode} type="button">{isCurrentEmailCoolingDown ? `Resend code in ${countdownLabel}` : "Resend code"}</button>
+            <button className="w-full text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900" disabled={isSubmitting} onClick={() => { setChallengeToken(""); setEmail(""); setOtp(""); setError(""); }} type="button">Use a different email</button>
           </div>}
         </form>
         <Link className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-water-700 hover:text-water-900" to="/login"><FiArrowLeft /> Back to sign in</Link>
