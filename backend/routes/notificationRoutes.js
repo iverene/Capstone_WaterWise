@@ -2,7 +2,9 @@ import express from "express";
 import {
   addNotification,
   listNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
+  removeNotifications,
   runNotificationReminders,
   showNotification,
   showPushConfiguration,
@@ -31,6 +33,8 @@ router.post(
   authorizeRoles("admin"),
   runNotificationReminders,
 );
+router.put("/read-all", authorizeRoles("consumer"), markAllNotificationsRead);
+router.post("/delete", authorizeRoles("consumer"), removeNotifications);
 router.put("/:id/read", authorizeRoles("consumer"), markNotificationRead);
 router.get("/:id", authorizeRoles("admin"), showNotification);
 router.post("/", authorizeRoles("admin"), addNotification);

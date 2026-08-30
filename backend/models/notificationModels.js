@@ -253,3 +253,104 @@ export async function markNotificationAsRead(notificationIdValue, consumerIdValu
 
   return { ...data, is_read: true };
 }
+
+export async function markAllNotificationsAsRead(consumerIdValue) {
+  const consumerId = parsePositiveId(consumerIdValue, "consumer ID");
+
+  const { data: notifications, error: fetchError } = await supabase
+    .from("notifications")
+    .select("id")
+    .or(`consumer_id.eq.${consumerId},consumer_id.is.null`);
+
+  if (fetchError) {
+    throw createError(
+      `Failed to retrieve notifications: ${fetchError.message}`,
+      500,
+    );
+  }
+
+  if (!notifications || notifications.length === 0) {
+    return { markedCount: 0 };
+  }
+
+  const notificationIds = notifications.map((n) => n.id);
+
+  const { data: readRecords, error: readError } = await supabase
+    .from("notification_reads")
+    .select("notification_id")
+    .eq("consumer_id", consumerId)
+    .in("notification_id", notificationIds);
+
+  if (readError) {
+    throw createError(
+      `Failed to retrieve read status: ${readError.message}`,
+      500,
+    );
+  }
+
+  const readSet = new Set((readRecords ?? []).map((r) => r.notification_id));
+  const unreadIds = notificationIds.filter((id) => !readSet.has(id));
+
+  if (unreadIds.length === 0) {
+    return { markedCount: 0 };
+  }
+
+  const now = new Date().toISOString();
+  const rows = unreadIds.map((notificationId) => ({
+    notification_id: notificationId,
+    consumer_id: consumerId,
+    read_at: now,
+    dismissed_at: null,
+  }));
+
+  const { error: upsertError } = await supabase
+    .from("notification_reads")
+    .upsert(rows, { onConflict: "notification_id,consumer_id" });
+
+  if (upsertError) {
+    throw createError(
+      `Failed to mark notifications as read: ${upsertError.message}`,
+      500,
+    );
+  }
+
+  return { markedCount: unreadIds.length };
+}
+
+export async function deleteNotificationReads(notificationIds, consumerIdValue) {
+  const consumerId = parsePositiveId(consumerIdValue, "consumer ID");
+
+  if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
+    throw createError("At least one notification ID is required.");
+  }
+
+  const validIds = notificationIds.map((id) => parsePositiveId(id, "notification ID"));
+
+  const { data: notifications, error: fetchError } = await supabase
+    .from("notifications")
+    .select("id, consumer_id")
+    .in("id", validIds);
+
+  if (fetchError) {
+    throw createError(`Failed to retrieve notifications: ${fetchError.message}`, 500);
+  }
+
+  const ownedIds = (notifications ?? [])
+    .filter((n) => n.consumer_id === null || Number(n.consumer_id) === consumerId)
+    .map((n) => n.id);
+
+  if (ownedIds.length === 0) {
+    return { deletedCount: 0 };
+  }
+
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .in("id", ownedIds);
+
+  if (error) {
+    throw createError(`Failed to delete notifications: ${error.message}`, 500);
+  }
+
+  return { deletedCount: ownedIds.length };
+}
