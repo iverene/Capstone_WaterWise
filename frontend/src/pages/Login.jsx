@@ -10,6 +10,7 @@ import {
 import { Link, useNavigate } from "react-router";
 import { login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
+import OtpInput from "../components/OtpInput";
 import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
 
 const accountDestinations = {
@@ -24,7 +25,6 @@ export default function Login() {
   const toast = useToast();
   const identifierRef = useRef(null);
   const passwordRef = useRef(null);
-  const otpInputRefs = useRef([]);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -135,7 +135,6 @@ export default function Login() {
         setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
         setPassword("");
         setMessage(result.message);
-        requestAnimationFrame(() => otpInputRefs.current[0]?.focus());
         return;
       }
       const authenticatedRole = result.user?.role === "tenant"
@@ -205,41 +204,26 @@ export default function Login() {
     }
   };
 
-  const updateOtpDigit = (index, value) => {
-    const digits = value.replace(/\D/g, "");
-    if (!digits) {
-      setOtp((current) => `${current.slice(0, index)} ${current.slice(index + 1)}`.trimEnd());
-      setMessage("");
-      return;
-    }
-
-    const nextOtp = otp.padEnd(6, " ").split("");
-    digits.slice(0, 6 - index).split("").forEach((digit, offset) => {
-      nextOtp[index + offset] = digit;
-    });
-    setOtp(nextOtp.join("").trimEnd());
-    setMessage("");
-    otpInputRefs.current[Math.min(index + digits.length, 5)]?.focus();
-  };
-
-  const handleOtpKeyDown = (index, event) => {
-    if (event.key === "Backspace" && !otp[index] && index > 0) {
-      event.preventDefault();
-      const nextOtp = otp.padEnd(6, " ").split("");
-      nextOtp[index - 1] = " ";
-      setOtp(nextOtp.join("").trimEnd());
-      setMessage("");
-      otpInputRefs.current[index - 1]?.focus();
-    } else if (event.key === "ArrowLeft" && index > 0) {
-      event.preventDefault();
-      otpInputRefs.current[index - 1]?.focus();
-    } else if (event.key === "ArrowRight" && index < 5) {
-      event.preventDefault();
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
-
   const otpCountdown = `${Math.floor(otpSecondsLeft / 60)}:${String(otpSecondsLeft % 60).padStart(2, "0")}`;
+
+  const [otpSuccess, setOtpSuccess] = useState(false);
+
+  const handleAutoVerifyOtp = async (otpValue) => {
+    if (!/^\d{6}$/.test(otpValue)) return;
+    setIsSubmitting(true);
+    setMessage("");
+    try {
+      const result = await verifyAdminLoginOtp(adminChallengeToken, otpValue);
+      setOtpSuccess(true);
+      toast.success("Admin verified", "Welcome to the WaterWise admin portal.");
+      setTimeout(() => navigate(accountDestinations[result.user.role]), 600);
+    } catch (error) {
+      setMessage(error.message);
+      setOtp("");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleResendOtp = async () => {
     if (isResending || otpSecondsLeft > 0) return;
@@ -253,7 +237,6 @@ export default function Login() {
       setOtpSecondsLeft(300);
       setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
       setMessage(result.message);
-      requestAnimationFrame(() => otpInputRefs.current[0]?.focus());
     } catch (error) {
       const retryAfterSeconds = Number(error.cause?.response?.data?.retryAfterSeconds ?? 0);
       if (retryAfterSeconds > 0) {
@@ -267,10 +250,10 @@ export default function Login() {
   };
 
   return (
-    <main className="ww-app h-screen overflow-hidden px-4 py-4 font-sans text-slate-900 sm:px-8 sm:py-8 lg:px-10">
+    <main className="ww-app h-screen overflow-hidden px-5 py-5 font-sans text-slate-900 sm:px-8 sm:py-8 lg:px-12 lg:py-10">
       <section className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
         <div className="ww-glass-strong grid w-full overflow-hidden rounded-2xl lg:grid-cols-[0.94fr_1.06fr]">
-          <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10">
+          <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10 lg:p-14">
             <div>
               <div className="flex items-center gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm"><FiDroplet aria-hidden="true" className="h-5 w-5" /></span>
@@ -279,29 +262,29 @@ export default function Login() {
                   <p className="text-xs font-medium text-water-200">Sucol Water System</p>
                 </div>
               </div>
-              <h1 className="mt-6 max-w-md text-2xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl">
+              <h1 className="mt-6 max-w-md text-2xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:mt-8">
                 Every drop, clearly understood.
               </h1>
-              <p className="mt-4 max-w-md text-xs leading-5 text-water-100 sm:text-base sm:leading-6">One secure place for water readings, bills, payments, and barangay updates.</p>
+              <p className="mt-4 max-w-md text-xs leading-5 text-water-100 sm:text-base sm:leading-6 lg:mt-5">One secure place for water readings, bills, payments, and barangay updates.</p>
             </div>
 
           </aside>
 
-          <div className="bg-white p-6 sm:p-10 lg:flex lg:items-center lg:p-12 overflow-auto">
+          <div className="bg-white p-6 sm:p-10 lg:flex lg:items-center lg:p-14 overflow-auto">
             <div className="mx-auto max-w-xl">
-              <div className="mb-7">
+              <div className="mb-8 lg:mb-10">
                 <p className="ww-eyebrow text-[10px] sm:text-xs !text-water-700">
                   Secure sign in
                 </p>
-                <h2 className="mt-2 text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-4xl">
+                <h2 className="mt-2 text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-4xl lg:mt-3">
                   {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
                 </h2>
-                <p className="mt-3 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-500">
+                <p className="mt-3 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-500 lg:mt-4">
                   {adminChallengeToken ? `Enter the code sent to ${maskedEmail}. It expires in 5 minutes.` : "Use the credentials assigned to your WaterWise account."}
                 </p>
               </div>
 
-              <form aria-busy={isSubmitting} className="space-y-5" onSubmit={handleSubmit}>
+              <form aria-busy={isSubmitting} className="space-y-5 lg:space-y-6" onSubmit={handleSubmit}>
                 {!adminChallengeToken && <div>
                   <label
                     className="text-sm sm:text-sm font-semibold text-slate-900"
@@ -315,7 +298,7 @@ export default function Login() {
                       aria-describedby={identifierError ? "login-identifier-error" : undefined}
                       aria-invalid={Boolean(identifierError)}
                       autoComplete="username"
-                      className="ww-field py-2.5 sm:py-3 pl-10 sm:pl-12 pr-4 text-sm sm:text-base"
+                      className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-4 text-sm sm:text-base"
                       disabled={isSubmitting || lockSeconds > 0}
                       id="login-identifier"
                       onChange={(event) => {
@@ -347,7 +330,7 @@ export default function Login() {
                       aria-describedby={passwordError ? "login-password-error" : undefined}
                       aria-invalid={Boolean(passwordError)}
                       autoComplete="current-password"
-                      className="ww-field py-2.5 sm:py-3 pl-10 sm:pl-12 pr-12 text-sm sm:text-base"
+                      className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-12 text-sm sm:text-base"
                       disabled={isSubmitting || lockSeconds > 0}
                       id="login-password"
                       onChange={(event) => {
@@ -385,24 +368,16 @@ export default function Login() {
                 {adminChallengeToken && (
                   <div>
                     <label className="text-xs sm:text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
-                    <div aria-labelledby="admin-login-otp-label" className="mt-3 grid grid-cols-6 gap-1 sm:gap-3" role="group">
-                      {Array.from({ length: 6 }, (_, index) => (
-                        <input
-                          aria-label={`Verification code digit ${index + 1} of 6`}
-                          autoComplete={index === 0 ? "one-time-code" : "off"}
-                          className="h-11 min-w-0 rounded-lg border border-slate-300 bg-white text-center font-mono text-xl font-bold text-slate-900 outline-none transition focus:border-water-600 focus:ring-4 focus:ring-water-100 disabled:bg-slate-100 disabled:text-slate-400 sm:h-16 sm:rounded-xl sm:text-2xl"
-                          disabled={isSubmitting || otpSecondsLeft === 0}
-                          inputMode="numeric"
-                          key={index}
-                          maxLength={index === 0 ? 6 : 1}
-                          onChange={(event) => updateOtpDigit(index, event.target.value)}
-                          onFocus={(event) => event.target.select()}
-                          onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                          ref={(element) => { otpInputRefs.current[index] = element; }}
-                          type="text"
-                          value={otp[index] ?? ""}
-                        />
-                      ))}
+                    <div className="mt-3">
+                      <OtpInput
+                        disabled={isSubmitting || otpSecondsLeft === 0}
+                        id="admin-login-otp"
+                        invalid={Boolean(message)}
+                        onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
+                        onAutoVerify={handleAutoVerifyOtp}
+                        success={otpSuccess}
+                        value={otp}
+                      />
                     </div>
                     <p aria-live="polite" className={`mt-3 text-xs sm:text-sm font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
                       {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
@@ -420,15 +395,17 @@ export default function Login() {
                   </div>
                 )}
 
+                {!adminChallengeToken && (
                 <button
-                  className="ww-primary-button flex min-h-10 sm:min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
-                  disabled={isSubmitting || lockSeconds > 0 || (Boolean(adminChallengeToken) && otpSecondsLeft === 0)}
+                  className="ww-primary-button flex min-h-10 sm:min-h-12 lg:min-h-[3.25rem] w-full items-center justify-center gap-2 px-5 py-3 text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
+                  disabled={isSubmitting || lockSeconds > 0}
                   style={{ cursor: isSubmitting ? "default" : undefined }}
                   type="submit"
                 >
                   {isSubmitting && <FiLoader aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />}
-                  {isSubmitting ? (adminChallengeToken ? "Verifying…" : "Signing in…") : (adminChallengeToken ? "Verify and continue" : "Sign in")}
+                  {isSubmitting ? "Signing in…" : "Sign in"}
                 </button>
+                )}
 
                 <span aria-live="polite" className="sr-only" role="status">
                   {isSubmitting ? (adminChallengeToken ? "Verifying admin code. Please wait." : "Signing in. Please wait.") : ""}

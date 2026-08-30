@@ -9,6 +9,24 @@ const consumptionValue = (record) => Number(record?.consumption ?? record?.total
 
 function HistoryKpi({ Icon, label, records, periodKey, compact }) {
   const latest = records.at(-1);
+  const previous = records.at(-2);
+
+  let trendDirection = "neutral";
+  let trend = null;
+  let trendTone = "neutral";
+
+  if (latest && previous) {
+    const current = consumptionValue(latest);
+    const prev = consumptionValue(previous);
+    if (prev > 0) {
+      const change = ((current - prev) / prev) * 100;
+      const rounded = Math.round(change * 10) / 10;
+      trend = `${change >= 0 ? "+" : ""}${rounded}%`;
+      trendDirection = change > 0 ? "up" : change < 0 ? "down" : "neutral";
+      trendTone = change > 0 ? "negative" : change < 0 ? "positive" : "neutral";
+    }
+  }
+
   return (
     <KPI
       className={compact ? "min-h-32 sm:h-48" : "min-h-40 sm:h-56"}
@@ -17,6 +35,9 @@ function HistoryKpi({ Icon, label, records, periodKey, compact }) {
       descriptionIcon={CalendarDays}
       icon={Icon}
       title={label}
+      trend={trend}
+      trendDirection={trendDirection}
+      trendTone={trendTone}
       unit="m³"
       value={consumptionValue(latest).toLocaleString("en-PH", { maximumFractionDigits: 2 })}
     />

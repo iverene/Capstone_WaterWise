@@ -210,28 +210,108 @@ export function renderReportPdf(report) {
     pdf.on("error", reject);
     pdf.on("end", () => resolve(Buffer.concat(chunks)));
 
+    const PAGE_TOP = 44;
+    const PAGE_BOTTOM = 780;
+    const TABLE_LEFT = 44;
+    const TABLE_WIDTH = 507;
     const data = report.report_data ?? {};
     const sections = report.sections ?? [];
-    const ensureSpace = (height = 42) => {
-      if (pdf.y + height > 760) pdf.addPage();
+
+    const ensureSpace = (height = 32) => {
+      if (pdf.y + height > PAGE_BOTTOM) {
+        pdf.addPage();
+      }
     };
+
     const heading = (title) => {
-      ensureSpace(54);
-      pdf.moveDown(0.7).font("Helvetica-Bold").fontSize(14).fillColor("#0f172a").text(title);
-      pdf.moveDown(0.25).strokeColor("#bae6fd").lineWidth(1).moveTo(44, pdf.y).lineTo(551, pdf.y).stroke();
-      pdf.moveDown(0.5);
-    };
-    const row = (text) => {
-      ensureSpace(32);
-      pdf.font("Helvetica").fontSize(8.5).fillColor("#334155").text(text, { lineGap: 2 });
+      ensureSpace(48);
+      if (pdf.y > 60) pdf.moveDown(0.5);
+      pdf.font("Helvetica-Bold").fontSize(13).fillColor("#0f172a").text(title);
+      pdf.moveDown(0.15).strokeColor("#bae6fd").lineWidth(1).moveTo(44, pdf.y).lineTo(551, pdf.y).stroke();
       pdf.moveDown(0.35);
     };
 
+    const row = (text) => {
+      ensureSpace(18);
+      pdf.font("Helvetica").fontSize(8).fillColor("#334155").text(text, { lineGap: 1 });
+      pdf.moveDown(0.2);
+    };
+
+    const drawTable = (columns, rows) => {
+      const HEADER_HEIGHT = 18;
+      const ROW_HEIGHT = 16;
+      const FONT_SIZE = 7.5;
+      const HEADER_FONT_SIZE = 7.5;
+      const totalWidth = columns.reduce((sum, col) => sum + col.width, 0);
+
+      const drawHeader = (y) => {
+        let x = TABLE_LEFT;
+        pdf.rect(TABLE_LEFT, y, totalWidth, HEADER_HEIGHT).fill("#0b2b40");
+        columns.forEach((col) => {
+          pdf.font("Helvetica-Bold").fontSize(HEADER_FONT_SIZE).fillColor("#ffffff").text(col.label, x + 4, y + 5, { width: col.width - 8, lineBreak: false });
+          x += col.width;
+        });
+        return y + HEADER_HEIGHT;
+      };
+
+      const drawRow = (rowIndex, y) => {
+        let x = TABLE_LEFT;
+        if (rowIndex % 2 === 0) {
+          pdf.rect(TABLE_LEFT, y, totalWidth, ROW_HEIGHT).fill("#f8fafc");
+        }
+        columns.forEach((col) => {
+          const value = col.format ? col.format(rows[rowIndex]) : String(rows[rowIndex][col.key] ?? "");
+          pdf.font("Helvetica").fontSize(FONT_SIZE).fillColor("#334155").text(value, x + 4, y + 4, { width: col.width - 8, lineBreak: false });
+          x += col.width;
+        });
+        return y + ROW_HEIGHT;
+      };
+
+      const drawBorders = (startY, endY) => {
+        let x = TABLE_LEFT;
+        pdf.strokeColor("#e2e8f0").lineWidth(0.5);
+        columns.forEach((col) => {
+          pdf.moveTo(x, startY).lineTo(x, endY).stroke();
+          x += col.width;
+        });
+        pdf.moveTo(x, startY).lineTo(x, endY).stroke();
+        pdf.moveTo(TABLE_LEFT, startY).lineTo(TABLE_LEFT + totalWidth, startY).stroke();
+        pdf.moveTo(TABLE_LEFT, endY).lineTo(TABLE_LEFT + totalWidth, endY).stroke();
+      };
+
+      if (!rows.length) {
+        ensureSpace(40);
+        row("No records were found for this reporting period.");
+        return;
+      }
+
+      let y = pdf.y;
+      ensureSpace(HEADER_HEIGHT + ROW_HEIGHT + 10);
+      y = pdf.y;
+      let contentTop = y;
+      y = drawHeader(y);
+
+      rows.forEach((rowData, index) => {
+        if (y + ROW_HEIGHT > PAGE_BOTTOM) {
+          drawBorders(contentTop, y);
+          pdf.addPage();
+          y = pdf.y;
+          contentTop = y;
+          y = drawHeader(y);
+        }
+        y = drawRow(index, y);
+      });
+
+      drawBorders(contentTop, y);
+      pdf.y = y;
+    };
+
     pdf.font("Helvetica-Bold").fontSize(10).fillColor("#0284c7").text("WATERWISE | SUCOL WATER SYSTEM");
-    pdf.moveDown(0.45).fontSize(21).fillColor("#0f172a").text(report.title);
-    pdf.moveDown(0.35).font("Helvetica").fontSize(9.5).fillColor("#64748b");
+    pdf.moveDown(0.3).fontSize(20).fillColor("#0f172a").text(report.title);
+    pdf.moveDown(0.25).font("Helvetica").fontSize(9).fillColor("#64748b");
     pdf.text(`Reporting period: ${report.start_date} to ${report.end_date}`);
     pdf.text(`Generated: ${dateOnly(report.created_at)} | Records: ${report.record_count} | Status: ${report.status}`);
+    pdf.moveDown(0.5);
 
     if (sections.includes("summary")) {
       heading("Executive summary");
@@ -254,16 +334,43 @@ export function renderReportPdf(report) {
     const recordSection = report.report_type === "billing" ? "billing" : report.report_type === "residents" ? "residents" : "consumption";
     if (sections.includes(recordSection)) {
       heading(`${REPORT_TYPES[report.report_type]?.label ?? "Report"} records`);
-      if (!(data.records ?? []).length) row("No records were found for this reporting period.");
-      (data.records ?? []).forEach((record, index) => {
-        if (report.report_type === "billing") {
-          row(`${index + 1}. ${record.billingDate} | ${record.consumerName} | ${record.purok} | ${currency(record.totalBill)} | Balance ${currency(record.remainingBalance)} | ${record.status}`);
-        } else if (report.report_type === "residents") {
-          row(`${index + 1}. ${record.name} | ${record.username} | ${record.purok} | ${record.status} | Registered ${dateOnly(record.createdAt)}`);
-        } else {
-          row(`${index + 1}. ${record.readingDate} | ${record.consumerName} | ${record.purok} | ${record.previousReading} to ${record.currentReading} | ${record.consumption} m3`);
-        }
-      });
+
+      if (report.report_type === "consumption" || report.report_type === "analytics") {
+        const columns = [
+          { label: "#", key: "index", width: 28 },
+          { label: "Date", key: "readingDate", width: 68 },
+          { label: "Consumer", key: "consumerName", width: 150 },
+          { label: "Purok", key: "purok", width: 62 },
+          { label: "Prev. Reading", key: "previousReading", width: 72 },
+          { label: "Curr. Reading", key: "currentReading", width: 72 },
+          { label: "Usage (m³)", key: "consumption", width: 55 },
+        ];
+        const rows = (data.records ?? []).map((r, i) => ({ ...r, index: i + 1 }));
+        drawTable(columns, rows);
+      } else if (report.report_type === "billing") {
+        const columns = [
+          { label: "#", key: "index", width: 28 },
+          { label: "Date", key: "billingDate", width: 72 },
+          { label: "Consumer", key: "consumerName", width: 140 },
+          { label: "Purok", key: "purok", width: 62 },
+          { label: "Total Bill", key: "totalBill", width: 70, format: (r) => currency(r.totalBill) },
+          { label: "Balance", key: "remainingBalance", width: 70, format: (r) => currency(r.remainingBalance) },
+          { label: "Status", key: "status", width: 65 },
+        ];
+        const rows = (data.records ?? []).map((r, i) => ({ ...r, index: i + 1 }));
+        drawTable(columns, rows);
+      } else if (report.report_type === "residents") {
+        const columns = [
+          { label: "#", key: "index", width: 28 },
+          { label: "Name", key: "name", width: 140 },
+          { label: "Username", key: "username", width: 100 },
+          { label: "Purok", key: "purok", width: 62 },
+          { label: "Status", key: "status", width: 62 },
+          { label: "Registered", key: "createdAt", width: 115, format: (r) => dateOnly(r.createdAt) },
+        ];
+        const rows = (data.records ?? []).map((r, i) => ({ ...r, index: i + 1 }));
+        drawTable(columns, rows);
+      }
     }
 
     const pageRange = pdf.bufferedPageRange();
