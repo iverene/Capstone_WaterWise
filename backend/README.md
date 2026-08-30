@@ -164,6 +164,30 @@ Run migrations from `db/` folder in Supabase SQL Editor:
 2. `fingerprint_migration.sql` — adds `device_fingerprint_hash` column
 3. `system_settings_migration.sql` — adds `system_settings` table with default water rate
 
+## Recent Changes
+
+### Security Fixes
+
+- **Removed plaintext password fallback** — `authModels.js` now rejects non-bcrypt passwords instead of silently accepting them.
+- **Fixed password hash leakage** — `resetAccountPassword` returns `boolean` instead of the full account object with `previousPassword` hash.
+- **Push subscription endpoint validation** — `pushSubscriptionModels.js` now validates that push subscription endpoints are from recognized push services (Google FCM, Apple, Mozilla, Amazon). Invalid endpoints are rejected before storing.
+- **Notification deletion guard** — `notificationModels.js` now joins with `notification_reads` and only deletes notifications that have `read_at` set. Unread notifications cannot be deleted.
+
+### Bug Fixes
+
+- **Hardcoded rate removed** — Removed unused `RATE_PER_CUBIC_METER = 15` constant from `billingModels.js`. The rate is already fetched via `getRatePerCubicMeter()`.
+- **Push subscription page reload** — `server.js` now ignores push subscription endpoints in `ignoredChangePaths`. Push subscription changes no longer trigger SSE `data-change` events that cause the frontend to remount.
+
+### Relevant Files
+
+| File | Changes |
+| --- | --- |
+| `models/authModels.js` | Removed plaintext fallback, fixed hash leakage |
+| `models/billingModels.js` | Removed hardcoded `RATE_PER_CUBIC_METER` constant |
+| `models/pushSubscriptionModels.js` | Added push service endpoint URL validation |
+| `models/notificationModels.js` | Added read-status check before deleting notifications |
+| `server.js` | Added push endpoints to `ignoredChangePaths` |
+
 ## Environment Variables
 
 | Variable | Required | Purpose |

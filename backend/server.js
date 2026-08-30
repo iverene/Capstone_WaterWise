@@ -104,6 +104,8 @@ const ignoredChangePaths = [
   "/api/auth/consumer/change-email/verify",
   "/api/auth/admin/change-email/otp",
   "/api/auth/admin/change-email/verify",
+  "/api/notifications/push/subscriptions",
+  "/api/notifications/push/subscriptions/current",
 ];
 
 app.use((req, res, next) => {

@@ -1,8 +1,6 @@
 import { supabase } from "../config/supabase.js";
 import { getRatePerCubicMeter } from "./systemSettingsModels.js";
 
-export const RATE_PER_CUBIC_METER = 15;
-
 const BILLING_FIELDS = `
   id,
   consumption_id,

@@ -82,8 +82,7 @@ export async function syncPendingMeterReadings() {
       synced += 1;
     } catch (error) {
       if (!error.response) break;
-      // A server rejection needs review; retain it instead of silently losing field data.
-      break;
+      // Server rejection for this record; skip it and try the next one.
     }
   }
   return { synced, remaining: (await getPendingMeterReadings()).length };

@@ -90,13 +90,18 @@ apiClient.interceptors.response.use(
 );
 
 export async function apiRequest(path, options = {}) {
+  let data = options.body;
+  if (typeof data === "string") {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      data = undefined;
+    }
+  }
   const response = await apiClient.request({
     url: path,
     method: options.method ?? "GET",
-    data:
-      typeof options.body === "string"
-        ? JSON.parse(options.body)
-        : options.body,
+    data,
     headers: options.headers,
     signal: options.signal,
   });

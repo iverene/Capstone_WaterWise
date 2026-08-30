@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import { timingSafeEqual } from "node:crypto";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
 
@@ -88,38 +87,15 @@ const resetLoginFailures = async (table, accountId) => {
   }
 };
 
-const verifyAndUpgradePassword = async (table, account, password) => {
+const verifyAndUpgradePassword = async (_table, account, password) => {
   const storedPassword = String(account.password ?? "");
   const isBcryptHash = /^\$2[aby]\$\d{2}\$/.test(storedPassword);
 
-  if (isBcryptHash) {
-    return bcrypt.compare(password, storedPassword);
+  if (!isBcryptHash) {
+    return false;
   }
 
-  const suppliedBuffer = Buffer.from(password, "utf8");
-  const storedBuffer = Buffer.from(storedPassword, "utf8");
-  const matches =
-    suppliedBuffer.length === storedBuffer.length &&
-    timingSafeEqual(suppliedBuffer, storedBuffer);
-
-  if (!matches) return false;
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const { error } = await supabase
-    .from(table)
-    .update({
-      password: hashedPassword,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", account.id);
-
-  if (error) {
-    throw new Error(
-      `Failed to secure the legacy account password: ${error.message}`,
-    );
-  }
-
-  return true;
+  return bcrypt.compare(password, storedPassword);
 };
 
 export async function authenticateAccount(identifier, password) {
@@ -263,7 +239,7 @@ export async function resetAccountPassword({ accountId, password, role }) {
     })
     .eq("id", accountId);
   if (error) throw new Error(`Failed to reset password: ${error.message}`);
-  return { previousPassword: String(account.password ?? "") };
+  return true;
 }
 
 export async function getPasswordHash(accountId, role) {

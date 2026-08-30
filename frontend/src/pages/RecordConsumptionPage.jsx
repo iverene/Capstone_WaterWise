@@ -10,6 +10,7 @@ import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { createMeterReading, fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
 import { cacheRecordingContexts, getCachedRecordingContexts, getPendingMeterReadings, queueMeterReading, syncPendingMeterReadings } from "../services/offlineMeterReadings";
+import { fetchSystemSetting } from "../services/systemSettingsService";
 
 const requestMessage = (error, fallback) => error?.response?.data?.message ?? error.message ?? fallback;
 
@@ -30,24 +31,24 @@ const recordedAt = (timestamp, readingDate) => {
   return "Timestamp unavailable";
 };
 
-const consumptionReceiptData = (consumerName, receipt) => ({
+const consumptionReceiptData = (consumerName, receipt, rate = 15) => ({
   meterName: consumerName,
   runDate: recordedAt(receipt.createdAt, receipt.readingDate),
   previousReading: receipt.previousReading,
   presentReading: receipt.currentReading,
-  baselineBill: receipt.baselineBill ?? receipt.consumption * 15,
+  baselineBill: receipt.baselineBill ?? receipt.consumption * rate,
   arrears30Days: Number(receipt.arrears30Days ?? 0),
   arrears60Days: Number(receipt.arrears60Days ?? 0),
   arrears90Days: Number(receipt.arrears90Days ?? 0),
 });
 
-const receiptFromContext = (context) => context.currentMonthReceipt ?? {
+const receiptFromContext = (context, rate = 15) => context.currentMonthReceipt ?? {
   createdAt: context.latestCreatedAt,
   readingDate: context.latestReadingDate,
   previousReading: context.latestPreviousReading ?? (Number(context.latestPresentReading ?? 0) - Number(context.latestConsumption ?? 0)),
   currentReading: Number(context.latestPresentReading ?? 0),
   consumption: Number(context.latestConsumption ?? 0),
-  baselineBill: Number(context.latestConsumption ?? 0) * 15,
+  baselineBill: Number(context.latestConsumption ?? 0) * rate,
 };
 
 export default function RecordConsumptionPage() {
@@ -70,7 +71,17 @@ export default function RecordConsumptionPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [showSynced, setShowSynced] = useState(false);
+  const [rate, setRate] = useState(15);
   const prevPendingRef = useRef(pendingCount);
+
+  useEffect(() => {
+    fetchSystemSetting("rate_per_cubic_meter")
+      .then((setting) => {
+        const value = Number(setting?.setting_value);
+        if (Number.isFinite(value) && value > 0) setRate(value);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const prev = prevPendingRef.current;
@@ -146,6 +157,8 @@ export default function RecordConsumptionPage() {
       if (result.synced) {
         toast.success("Offline readings synced", `${result.synced} saved reading${result.synced === 1 ? "" : "s"} uploaded successfully.`);
         await loadData();
+      } else if (result.remaining > 0) {
+        toast.warning("Sync incomplete", `${result.remaining} reading${result.remaining === 1 ? "" : "s"} could not be uploaded. They will retry when connectivity improves.`);
       }
       setSyncing(false);
     };
@@ -193,7 +206,8 @@ export default function RecordConsumptionPage() {
         const receiptContext = context.hasReadingInSelectedMonth ? context : consumer;
         setReceiptData(consumptionReceiptData(
           receiptContext.consumerName,
-          receiptFromContext(receiptContext),
+          receiptFromContext(receiptContext, rate),
+          rate,
         ));
         setReceiptResidentName(receiptContext.consumerName);
         setSelectedConsumer(null);
@@ -205,7 +219,7 @@ export default function RecordConsumptionPage() {
       }
     } catch (requestError) {
       if (expectsReceipt) {
-        setReceiptData(consumptionReceiptData(consumer.consumerName, receiptFromContext(consumer)));
+        setReceiptData(consumptionReceiptData(consumer.consumerName, receiptFromContext(consumer, rate), rate));
       } else {
         setLoadError(requestMessage(requestError, "Unable to check the resident's latest reading."));
       }
@@ -245,13 +259,14 @@ export default function RecordConsumptionPage() {
         const receiptContext = await fetchRecordingContext(payload.consumerId);
         setReceiptData(consumptionReceiptData(
           payload.consumerName,
-          receiptFromContext(receiptContext),
+          receiptFromContext(receiptContext, rate),
+          rate,
         ));
       } catch {
         setReceiptData(consumptionReceiptData(payload.consumerName, {
           ...result,
           baselineBill: result.billing?.totalBill,
-        }));
+        }, rate));
       } finally {
         setReceiptLoading(false);
       }
