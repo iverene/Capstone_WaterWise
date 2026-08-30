@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiCheckCircle, FiLoader, FiPlus, FiUsers } from "react-icons/fi";
+import { FiCheckCircle, FiPlus, FiUsers } from "react-icons/fi";
 import ConsumerForm from "../components/ConsumerForm";
 import ConsumerListTable from "../components/ConsumerListTable";
 import Filter from "../components/Filter";
@@ -182,20 +182,21 @@ function ConsumerManagementPage() {
 
   return (
     <main className="space-y-6">
-      <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." eyebrow="Resident accounts" title="Resident management" />
-
-      <div className="hidden justify-end lg:flex">
-        <button
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
-          onClick={() => {
-            setSelectedConsumer(null);
-            setFormMode("add");
-          }}
-          type="button"
-        >
-          <FiPlus aria-hidden="true" className="h-5 w-5" />
-          Add Resident
-        </button>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." eyebrow="Resident accounts" title="Resident management" />
+        <div className="hidden pt-8 lg:block">
+          <button
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+            onClick={() => {
+              setSelectedConsumer(null);
+              setFormMode("add");
+            }}
+            type="button"
+          >
+            <FiPlus aria-hidden="true" className="h-5 w-5" />
+            Add Resident
+          </button>
+        </div>
       </div>
 
       <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -236,7 +237,6 @@ function ConsumerManagementPage() {
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={confirmPasswordChange}>
           <div><label className="text-sm font-semibold text-slate-900" htmlFor="resident-password-otp">Verification code</label><div className="mt-3"><OtpInput disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
           {passwordOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{passwordOtpError}</p>}
-          <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isPasswordVerifying} type="submit">{isPasswordVerifying && <FiLoader className="h-5 w-5 animate-spin" />}{isPasswordVerifying ? "Verifying..." : "Verify and update password"}</button>
         </form>
       </Modal>
 

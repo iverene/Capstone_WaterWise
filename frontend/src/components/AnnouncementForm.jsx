@@ -24,12 +24,22 @@ const emptyAnnouncement = () => ({
   relatedEvent: "",
 });
 
-export default function AnnouncementForm({ onSubmit, initialData = null, onCancel }) {
+export default function AnnouncementForm({
+  onSubmit,
+  initialData = null,
+  onCancel,
+  hideComposeCard = false,
+  isOpen: controlledIsOpen,
+  onOpenChange: controlledOnOpenChange,
+}) {
   const [announcement, setAnnouncement] = useState(() => initialData ?? emptyAnnouncement());
   const [errors, setErrors] = useState({});
-  const [isOpen, setIsOpen] = useState(Boolean(initialData));
+  const [internalIsOpen, setInternalIsOpen] = useState(Boolean(initialData));
   const [submitting, setSubmitting] = useState(false);
   const formRef = useRef(null);
+
+  const isOpen = controlledIsOpen ?? internalIsOpen;
+  const setIsOpen = controlledOnOpenChange ?? setInternalIsOpen;
 
   const closeComposer = () => {
     if (submitting) return;
@@ -91,34 +101,36 @@ export default function AnnouncementForm({ onSubmit, initialData = null, onCance
 
   return (
     <>
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5" aria-label="Create announcement">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-water-100 text-water-700">
-            <Megaphone aria-hidden="true" className="h-5 w-5" />
-          </span>
-          <button
-            className="min-h-12 flex-1 rounded-full bg-slate-100 px-5 text-left text-sm font-semibold text-slate-500 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-            onClick={() => setIsOpen(true)}
-            type="button"
-          >
-            Share an update with residents…
-          </button>
-        </div>
-        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
-          <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
-            <ShieldCheck aria-hidden="true" className="h-4 w-4 text-emerald-600" />
-            Published by WaterWise administrators
-          </span>
-          <button
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-water-700 hover:bg-water-50"
-            onClick={() => setIsOpen(true)}
-            type="button"
-          >
-            <Send aria-hidden="true" className="h-4 w-4" />
-            Create post
-          </button>
-        </div>
-      </section>
+      {!hideComposeCard && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5" aria-label="Create announcement">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-water-100 text-water-700">
+              <Megaphone aria-hidden="true" className="h-5 w-5" />
+            </span>
+            <button
+              className="min-h-12 flex-1 rounded-full bg-slate-100 px-5 text-left text-sm font-semibold text-slate-500 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+              onClick={() => setIsOpen(true)}
+              type="button"
+            >
+              Share an update with residents…
+            </button>
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
+              <ShieldCheck aria-hidden="true" className="h-4 w-4 text-emerald-600" />
+              Published by WaterWise administrators
+            </span>
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold text-water-700 hover:bg-water-50"
+              onClick={() => setIsOpen(true)}
+              type="button"
+            >
+              <Send aria-hidden="true" className="h-4 w-4" />
+              Create post
+            </button>
+          </div>
+        </section>
+      )}
 
       <Modal
         closeLabel="Close announcement form"

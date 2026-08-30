@@ -130,7 +130,7 @@ export default function Reports() {
             tableClassName="block w-full min-w-[920px] text-left text-sm md:table"
             renderRow={(report) => (
               <>
-                <td className="px-4 py-4"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><FileText aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0"><p className="max-w-72 truncate font-bold text-navy-900">{report.title}</p><p className="mt-0.5 text-xs text-slate-500">{typeLabels[report.report_type] ?? report.report_type}</p></div></div></td>
+                <td className="px-4 py-4"><button className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity" onClick={() => setSelectedReportId(report.id)} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><FileText aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0"><p className="max-w-72 truncate font-bold text-navy-900">{report.title}</p><p className="mt-0.5 text-xs text-slate-500">{typeLabels[report.report_type] ?? report.report_type}</p></div></button></td>
                 <td className="px-4 py-4 font-mono text-xs tabular-nums text-slate-600">{report.start_date}<br />{report.end_date}</td>
                 <td className="px-4 py-4 font-mono font-bold tabular-nums text-navy-900">{report.record_count.toLocaleString()}</td>
                 <td className="px-4 py-4 text-xs text-slate-600">{dateTime(report.created_at)}</td>

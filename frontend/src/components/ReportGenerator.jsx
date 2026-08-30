@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Check,
-  Eye,
   FileDown,
   FileText,
   LoaderCircle,
@@ -11,10 +10,14 @@ import Dropdown from "./Dropdown";
 import KPI from "./KPI";
 import { useToast } from "./Toast";
 import {
+  clearSession,
+  getAccessToken,
+  getAccessTokenExpiresAt,
+} from "../services/authToken";
+import {
   downloadReportPDF,
   generateReport,
   openPrintableReport,
-  previewReport as previewReportRequest,
   savePdfBlob,
 } from "../services/reportAPI";
 
@@ -125,28 +128,29 @@ export default function ReportGenerator({ onGenerated }) {
     return Object.keys(nextErrors).length === 0;
   };
 
-  const previewReport = async () => {
+  const generate = async () => {
     if (!validate()) return;
-    try {
-      setBusyAction("preview");
-      setError("");
-      setPreview(await previewReportRequest(form));
-    } catch (requestError) {
-      const message = requestMessage(requestError, "The report preview could not be prepared.");
-      setError(message);
-      toast.error("Preview unavailable", message);
-    } finally {
-      setBusyAction("");
-    }
-  };
 
-  const createReport = async () => {
-    if (!preview || !validate()) return;
+    const token = getAccessToken();
+    const expiresAt = getAccessTokenExpiresAt(token);
+    if (!token || !expiresAt || expiresAt <= Date.now()) {
+      toast.error("Session expired", "Your session has expired. Please sign in again.");
+      clearSession();
+      return;
+    }
+
     try {
       setBusyAction("generate");
       setError("");
       const report = await generateReport(form);
       setGeneratedReport(report);
+      setPreview({
+        title: report.title,
+        startDate: report.start_date,
+        endDate: report.end_date,
+        recordCount: report.record_count,
+        summary: report.report_data?.summary ?? {},
+      });
       await Promise.resolve(onGenerated?.()).catch(() => undefined);
       toast.success("Report generated", `${report.title} was saved to the report archive.`);
     } catch (requestError) {
@@ -270,16 +274,10 @@ export default function ReportGenerator({ onGenerated }) {
       </fieldset>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-water-200 bg-water-50 px-5 font-bold text-water-800 hover:bg-water-100 disabled:opacity-60" disabled={Boolean(busyAction)} onClick={previewReport} type="button">
-          {busyAction === "preview" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Eye aria-hidden="true" className="h-4 w-4" />}
-          {busyAction === "preview" ? "Checking records…" : "Preview report"}
+        <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white hover:bg-water-700 disabled:opacity-60" disabled={Boolean(busyAction)} onClick={generate} type="button">
+          {busyAction === "generate" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileText aria-hidden="true" className="h-4 w-4" />}
+          {busyAction === "generate" ? "Generating report…" : "Generate report"}
         </button>
-        {preview && (
-          <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white hover:bg-water-700 disabled:bg-water-300" disabled={Boolean(busyAction)} onClick={createReport} type="button">
-            {busyAction === "generate" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileText aria-hidden="true" className="h-4 w-4" />}
-            {busyAction === "generate" ? "Generating PDF…" : "Generate final report"}
-          </button>
-        )}
       </div>
 
       {preview && (

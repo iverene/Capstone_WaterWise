@@ -88,6 +88,13 @@ export default function KPI({
           ? "negative"
           : "neutral"
       : trendTone;
+  const trendBadgeTone = trendTone === "neutral"
+    ? trendDirection === "up"
+      ? "positive"
+      : trendDirection === "down"
+        ? "negative"
+        : "neutral"
+    : trendTone;
 
   return (
     <article className={`flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-5 ${className}`.trim()} data-testid={cardTestId}>
@@ -100,6 +107,12 @@ export default function KPI({
         <h2 className="min-w-0 flex-1 text-xs font-bold leading-4 text-slate-600 sm:text-sm">
           {title}
         </h2>
+        {trend ? (
+          <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset sm:px-2 sm:py-1 sm:text-xs ${supportingToneStyles[trendBadgeTone] ?? supportingToneStyles.water}`}>
+            {trendDirection === "up" ? <TrendingUp aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" /> : trendDirection === "down" ? <TrendingDown aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" /> : null}
+            <span className="truncate">{trend}</span>
+          </span>
+        ) : null}
         {headerAction}
         {onMenu ? (
           <button

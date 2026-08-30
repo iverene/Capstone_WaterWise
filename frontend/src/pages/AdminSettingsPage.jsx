@@ -240,14 +240,6 @@ export default function AdminSettingsPage() {
             {otpChallenge ? (
               <>
                 <button
-                  className="ww-primary-button flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold sm:min-h-11"
-                  disabled={verifying || cooldownSeconds === 0}
-                  type="button"
-                >
-                  {verifying && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {verifying ? "Verifying…" : "Verify & save"}
-                </button>
-                <button
                   className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-11"
                   disabled={verifying}
                   onClick={cancelEdit}
