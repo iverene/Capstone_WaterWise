@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FiBarChart2,
   FiBell,
@@ -10,8 +10,10 @@ import {
   FiGrid,
   FiHome,
   FiMessageSquare,
+  FiTrash2,
   FiUsers,
   FiWifiOff,
+  FiX,
 } from "react-icons/fi";
 import { useLocation, useNavigate } from "react-router";
 import { ACCOUNT_STORAGE_KEY, getCurrentAccount, logout } from "../services/auth.service";
@@ -20,7 +22,9 @@ import { isCanceledRequest } from "../services/apiClient";
 import { getPendingMeterReadings } from "../services/offlineMeterReadings";
 import { getNotificationPresentation } from "../utils/notificationPresentation";
 import {
+  deleteNotifications,
   fetchNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
 } from "../services/consumerPortal.service";
 import NotificationPage from "../pages/NotificationPage";
@@ -129,6 +133,11 @@ export default function AppLayout({ children }) {
   const [pendingCount, setPendingCount] = useState(0);
   const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
   const [isEnablingPush, setIsEnablingPush] = useState(false);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const longPressTimerRef = useRef(null);
+  const dismissedIdsRef = useRef(new Set());
   const activeRole = account?.role ?? pathRole ?? "consumer";
   const activeRoleConfig = ROLE_CONFIG[activeRole] ?? ROLE_CONFIG.consumer;
 
@@ -182,14 +191,16 @@ export default function AppLayout({ children }) {
         fetchNotifications({ signal: controller.signal })
           .then((incomingNotifications) =>
             setNotifications((currentNotifications) =>
-              incomingNotifications.map((incoming) => ({
-                ...incoming,
-                isRead:
-                  incoming.isRead ||
-                  currentNotifications.some(
-                    (current) => current.id === incoming.id && current.isRead,
-                  ),
-              })),
+              incomingNotifications
+                .filter((incoming) => !dismissedIdsRef.current.has(incoming.id))
+                .map((incoming) => ({
+                  ...incoming,
+                  isRead:
+                    incoming.isRead ||
+                    currentNotifications.some(
+                      (current) => current.id === incoming.id && current.isRead,
+                    ),
+                })),
             ),
           )
           .catch((error) => {
@@ -249,6 +260,7 @@ export default function AppLayout({ children }) {
     if (!isNotificationOpen) return undefined;
 
     const closeOnOutsideClick = (event) => {
+      if (isDeleteConfirmOpen) return;
       if (!notificationMenuRef.current?.contains(event.target)) {
         setIsNotificationOpen(false);
       }
@@ -267,6 +279,13 @@ export default function AppLayout({ children }) {
       document.removeEventListener("pointerdown", closeOnOutsideClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
+  }, [isNotificationOpen, isDeleteConfirmOpen]);
+
+  useEffect(() => {
+    if (!isNotificationOpen) {
+      setIsSelectionMode(false);
+      setSelectedIds(new Set());
+    }
   }, [isNotificationOpen]);
 
   useEffect(() => {
@@ -350,6 +369,70 @@ export default function AppLayout({ children }) {
     }
   };
 
+  const handleMarkAllNotificationsAsRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((item) => ({ ...item, isRead: true })),
+      );
+      toast.success("All caught up", "All notifications marked as read.");
+    } catch {
+      toast.error("Notifications not updated", "WaterWise could not mark all notifications as read.");
+    }
+  };
+
+  const handleNotificationLongPressStart = useCallback((notificationId) => {
+    longPressTimerRef.current = setTimeout(() => {
+      setIsSelectionMode(true);
+      setSelectedIds(new Set([notificationId]));
+    }, 500);
+  }, []);
+
+  const handleNotificationLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleToggleSelection = useCallback((notificationId) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(notificationId)) {
+        next.delete(notificationId);
+      } else {
+        next.add(notificationId);
+      }
+      if (next.size === 0) setIsSelectionMode(false);
+      return next;
+    });
+  }, []);
+
+  const handleCancelSelection = useCallback(() => {
+    setIsSelectionMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    const ids = [...selectedIds];
+    setIsDeleteConfirmOpen(false);
+    try {
+      await deleteNotifications(ids);
+      ids.forEach((id) => dismissedIdsRef.current.add(id));
+      setNotifications((current) => current.filter((item) => !selectedIds.has(item.id)));
+      setIsSelectionMode(false);
+      setSelectedIds(new Set());
+      toast.success("Deleted", `${ids.length} notification${ids.length === 1 ? "" : "s"} removed.`);
+    } catch {
+      toast.error("Delete failed", "WaterWise could not delete the selected notifications.");
+    }
+  };
+
   const handleNotificationClick = (notification) => {
     setIsNotificationOpen(false);
     if (notification.actionPath) {
@@ -398,17 +481,59 @@ export default function AppLayout({ children }) {
                   role="dialog"
                 >
                   <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-100 px-4 py-3">
-                    <div>
-                      <h2 className="text-xl font-extrabold tracking-[-0.03em] text-navy-900">Notifications</h2>
-                      <p className="mt-0.5 text-xs font-medium text-slate-500">{unreadCount ? `${unreadCount} unread` : "You’re all caught up"}</p>
-                    </div>
-                    {unreadCount > 0 && <span className="rounded-full bg-water-50 px-3 py-1 text-xs font-bold text-water-700">New</span>}
+                    {isSelectionMode ? (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <button
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100"
+                            onClick={handleCancelSelection}
+                            type="button"
+                          >
+                            <FiX aria-hidden="true" className="h-4 w-4" />
+                          </button>
+                          <span className="text-sm font-bold text-navy-900">{selectedIds.size} selected</span>
+                        </div>
+                        <button
+                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                          disabled={selectedIds.size === 0}
+                          onClick={handleDeleteSelected}
+                          type="button"
+                        >
+                          <FiTrash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <h2 className="text-base font-extrabold tracking-[-0.03em] text-navy-900">Notifications</h2>
+                          <p className="mt-0.5 text-xs font-medium text-slate-500">{unreadCount ? `${unreadCount} unread` : "You're all caught up"}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {unreadCount > 0 && (
+                            <button
+                              className="rounded-lg px-3 py-1.5 text-xs font-bold text-water-700 transition-colors hover:bg-water-50"
+                              onClick={handleMarkAllNotificationsAsRead}
+                              type="button"
+                            >
+                              Mark all as read
+                            </button>
+                          )}
+                          {unreadCount > 0 && <span className="rounded-full bg-water-50 px-3 py-1 text-xs font-bold text-water-700">New</span>}
+                        </div>
+                      </>
+                    )}
                   </header>
                   <NotificationPage
                     isLoading={isNotificationLoading}
                     notifications={notifications}
                     onNotificationClick={handleNotificationClick}
                     onMarkAsRead={handleMarkNotificationAsRead}
+                    isSelectionMode={isSelectionMode}
+                    selectedIds={selectedIds}
+                    onLongPressStart={handleNotificationLongPressStart}
+                    onLongPressEnd={handleNotificationLongPressEnd}
+                    onToggleSelection={handleToggleSelection}
                   />
                 </section>
               )}
@@ -551,6 +676,18 @@ export default function AppLayout({ children }) {
           </div>
         )}
       </Modal>
+
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-4 pb-8 sm:items-center sm:pb-4" onClick={() => setIsDeleteConfirmOpen(false)}>
+          <div className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <p className="text-base font-bold text-slate-900">Delete {selectedIds.size} notification{selectedIds.size === 1 ? "" : "s"}?</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button className="rounded-lg px-3 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100" onClick={() => setIsDeleteConfirmOpen(false)} type="button">Cancel</button>
+              <button className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-red-700" onClick={handleConfirmDelete} type="button">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

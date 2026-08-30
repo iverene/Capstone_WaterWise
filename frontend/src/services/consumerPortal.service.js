@@ -291,4 +291,17 @@ export async function markNotificationRead(notificationId, options) {
   });
 }
 
-export async function deleteNotification() {}
+export async function markAllNotificationsRead(options) {
+  return apiRequest("/notifications/read-all", {
+    ...options,
+    method: "PUT",
+  });
+}
+
+export async function deleteNotifications(notificationIds, options) {
+  return apiRequest("/notifications/delete", {
+    ...options,
+    method: "POST",
+    body: { notificationIds },
+  });
+}

@@ -1,7 +1,9 @@
 import {
   createNotification,
+  deleteNotificationReads,
   getNotificationById,
   getNotifications,
+  markAllNotificationsAsRead,
   markNotificationAsRead,
 } from "../models/notificationModels.js";
 import { processBillingReminders } from "../services/notificationServices.js";
@@ -67,6 +69,35 @@ export async function markNotificationRead(req, res) {
     });
   } catch (error) {
     return sendError(res, error, "Failed to mark notification as read.");
+  }
+}
+
+export async function markAllNotificationsRead(req, res) {
+  try {
+    const result = await markAllNotificationsAsRead(req.user.id);
+    return res.status(200).json({
+      success: true,
+      message: "All notifications marked as read.",
+      data: result,
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to mark all notifications as read.");
+  }
+}
+
+export async function removeNotifications(req, res) {
+  try {
+    const result = await deleteNotificationReads(
+      req.body?.notificationIds,
+      req.user.id,
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Notifications deleted.",
+      data: result,
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to delete notifications.");
   }
 }
 

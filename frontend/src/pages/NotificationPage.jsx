@@ -11,6 +11,11 @@ export default function NotificationPage({
   onDelete,
   onMarkAsRead,
   onNotificationClick,
+  isSelectionMode = false,
+  selectedIds = new Set(),
+  onLongPressStart,
+  onLongPressEnd,
+  onToggleSelection,
 }) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef(null);
@@ -56,6 +61,11 @@ export default function NotificationPage({
               onDelete={onDelete}
               onMarkAsRead={onMarkAsRead}
               onNotificationClick={onNotificationClick}
+              isSelectionMode={isSelectionMode}
+              isSelected={selectedIds.has(notification.id)}
+              onLongPressStart={onLongPressStart}
+              onLongPressEnd={onLongPressEnd}
+              onToggleSelection={onToggleSelection}
             />
           ))}
           {hasMore && (

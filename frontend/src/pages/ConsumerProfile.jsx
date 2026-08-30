@@ -56,7 +56,7 @@ function PushNotificationSetting() {
   };
 
   return <div>
-    <div className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4">
+    <div className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Bell aria-hidden="true" className="h-5 w-5" /></span>
       <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-navy-900">Push notifications</span><span className="mt-1 block text-xs leading-5 text-slate-500">Receive notification and alerts.</span></span>
       <button aria-checked={Boolean(currentSubscription)} aria-label="Toggle push notifications on this device" className={`relative h-7 w-12 shrink-0 rounded-full transition ${currentSubscription ? "bg-water-600" : "bg-slate-300"} disabled:opacity-60`} disabled={busy || !supported} onClick={toggleNotifications} role="switch" type="button"><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${currentSubscription ? "translate-x-5" : "translate-x-0"}`} /></button>
@@ -105,6 +105,7 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
     <PageHeader
       compact
       description="Review the personal  information registered to your account."
+      descriptionClassName="!text-[13px] !leading-5 !text-slate-900 sm:!text-sm sm:!leading-6"
       eyebrow="Resident profile"
     />
   );
@@ -149,7 +150,7 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
             </span>
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-water-700">Account holder</p>
-              <h2 className="mt-1 break-words text-lg font-extrabold tracking-tight text-navy-900 sm:text-xl" id="profile-name">
+              <h2 className="mt-1 break-words text-sm font-extrabold tracking-tight text-navy-900 sm:text-base" id="profile-name">
                 {consumer.name}
               </h2>
               {hasValue(consumer.purok) && <p className="mt-1 text-[11px] font-semibold text-slate-600 sm:text-xs">{consumer.purok}</p>}
@@ -169,27 +170,27 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
       </section>
 
       <section aria-labelledby="account-center-heading">
-        <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="account-center-heading">Account center</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600">Review the information registered to your household account.</p>
-        <button className="mt-5 flex min-h-16 w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-1   text-left transition hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/consumer/account-information")} type="button">
+        <h2 className="text-base font-extrabold tracking-tight text-navy-900" id="account-center-heading">Account center</h2>
+        <p className="mt-1 text-xs leading-6 text-slate-600">Review your household account info.</p>
+        <button className="mt-5 flex min-h-16 w-full items-center justify-between gap-4 rounded-xl bg-slate-50 px-4 py-1   text-left transition hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/consumer/account-information")} type="button">
           <span className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound aria-hidden="true" className="h-5 w-5" /></span>
-            <span><span className="block text-sm font-extrabold text-navy-900">Account information</span><span className="mt-1 block text-xs leading-5 text-slate-500">View your registered account service details.</span></span>
+            <span><span className="block text-sm font-extrabold text-navy-900">Account information</span><span className="mt-1 block text-xs leading-5 text-slate-500">View account details.</span></span>
           </span>
         </button>
       </section>
 
       <section aria-labelledby="account-settings-heading">
-        <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="account-settings-heading">Account settings</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600">Manage your password, email address, and notifications.</p>
+        <h2 className="text-base font-extrabold tracking-tight text-navy-900" id="account-settings-heading">Account settings</h2>
+        <p className="mt-1 text-xs leading-6 text-slate-600">Manage your password, email address, and notifications.</p>
         <div className="mt-5 grid gap-3">
-          <button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-1 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-password"))} type="button">
+          <button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 py-1 text-left transition-colors hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-password"))} type="button">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><KeyRound aria-hidden="true" className="h-5 w-5" /></span>
             <span><span className="block text-sm font-bold text-navy-900">Change password</span><span className="mt-1 block text-xs leading-5 text-slate-500">Use your current password or email OTP.</span></span>
           </button>
-          <button className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-1 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button">
+          <button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 py-1 text-left transition-colors hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Mail aria-hidden="true" className="h-5 w-5" /></span>
-            <span><span className="block text-sm font-bold text-navy-900">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify through your current registered email.</span></span>
+            <span><span className="block text-sm font-bold text-navy-900">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify through registered email.</span></span>
           </button>
           <PushNotificationSetting />
         </div>
