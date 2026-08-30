@@ -328,7 +328,7 @@ export async function deleteNotificationReads(notificationIds, consumerIdValue) 
 
   const { data: notifications, error: fetchError } = await supabase
     .from("notifications")
-    .select("id, consumer_id")
+    .select("id, consumer_id, notification_reads!inner(notification_id, consumer_id, read_at)")
     .in("id", validIds);
 
   if (fetchError) {
@@ -336,7 +336,11 @@ export async function deleteNotificationReads(notificationIds, consumerIdValue) 
   }
 
   const ownedIds = (notifications ?? [])
-    .filter((n) => n.consumer_id === null || Number(n.consumer_id) === consumerId)
+    .filter((n) => {
+      if (n.consumer_id !== null && Number(n.consumer_id) !== consumerId) return false;
+      const read = n.notification_reads?.find((r) => Number(r.consumer_id) === consumerId);
+      return Boolean(read?.read_at);
+    })
     .map((n) => n.id);
 
   if (ownedIds.length === 0) {

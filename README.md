@@ -534,6 +534,31 @@ cd backend
 npm start
 ```
 
+## Recent Changes
+
+### Security Fixes
+
+- **Removed plaintext password fallback** — `authModels.js` now rejects non-bcrypt passwords instead of silently accepting them.
+- **Fixed password hash leakage** — `resetAccountPassword` returns `boolean` instead of the full account object with `previousPassword` hash.
+- **Push subscription endpoint validation** — `pushSubscriptionModels.js` now validates that push subscription endpoints are from recognized push services (Google, Apple, Mozilla, Amazon). Invalid endpoints are rejected.
+- **Notification deletion guard** — Notifications can only be deleted after being marked as read. Both backend (`notificationModels.js`) and frontend (`AppLayout.jsx`) enforce this rule.
+
+### Bug Fixes
+
+- **Null guard on ConsumerHome name split** — `ConsumerHome.jsx` now falls back to "Resident" if `account.name` is null or undefined, preventing a crash on render.
+- **Toast hook inconsistency** — `AdminSettingsPage.jsx` now uses the correct `const toast = useToast()` pattern instead of the broken `const { toast } = useToast()` destructuring.
+- **Missing isOpen prop on OTP modal** — `ConsumerManagementPage.jsx` password-change OTP modal now uses `isOpen={Boolean(passwordChallenge)}` with optional chaining for the description, matching the standard Modal pattern.
+- **Offline sync blocks on first failure** — `offlineMeterReadings.js` now skips server-rejected records and continues syncing the remaining queue instead of breaking on the first failure. A warning toast shows how many readings still need to sync.
+- **Unhandled JSON.parse in apiClient** — `apiClient.js` `apiRequest` now catches invalid JSON in `options.body` instead of throwing an unhandled `SyntaxError`.
+- **Hardcoded rate in frontend** — `RecordConsumptionPage.jsx` now fetches the water rate from `system_settings` API on mount instead of using a hardcoded `* 15` multiplier. Falls back to 15 if the fetch fails.
+- **Hardcoded rate in backend** — Removed unused `RATE_PER_CUBIC_METER = 15` constant from `billingModels.js`. The rate is already fetched via `getRatePerCubicMeter()`.
+- **Push toggle page reload** — Added `/api/notifications/push/subscriptions` and `/api/notifications/push/subscriptions/current` to `ignoredChangePaths` in `server.js`. Push subscription changes no longer trigger SSE `data-change` events that cause the entire page to remount.
+
+### UX Improvements
+
+- **Push notification toggle** — Toggle in Consumer Profile now flips instantly with CSS animation. API call runs in background without blocking the UI. No toast on success; only shows error toast on failure.
+- **Push notification prompt** — Shortened the first-open push notification description: "Get bill reminders and service alerts even when the app is closed."
+
 ## Troubleshooting
 
 ### OTP email is not received

@@ -232,13 +232,13 @@ function ConsumerManagementPage() {
             />
       </Modal>
 
-      {passwordChallenge && <Modal description={`Enter the code sent to ${passwordChallenge.maskedEmail}. It expires in 5 minutes.`} eyebrow="Password security" isOpen onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); } }} size="sm" title="Verify resident password change">
+      <Modal description={passwordChallenge ? `Enter the code sent to ${passwordChallenge.maskedEmail}. It expires in 5 minutes.` : undefined} eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); } }} size="sm" title="Verify resident password change">
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={confirmPasswordChange}>
           <div><label className="text-sm font-semibold text-slate-900" htmlFor="resident-password-otp">Verification code</label><div className="mt-3"><OtpInput disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
           {passwordOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{passwordOtpError}</p>}
           <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isPasswordVerifying} type="submit">{isPasswordVerifying && <FiLoader className="h-5 w-5 animate-spin" />}{isPasswordVerifying ? "Verifying..." : "Verify and update password"}</button>
         </form>
-      </Modal>}
+      </Modal>
 
       {error && !formMode && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">{error}</p>}
 

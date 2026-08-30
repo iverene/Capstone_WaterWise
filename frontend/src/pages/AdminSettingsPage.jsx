@@ -11,7 +11,7 @@ const formatOtpCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:$
 
 export default function AdminSettingsPage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const toast = useToast();
   const mountedRef = useRef(true);
   const [settings, setSettings] = useState([]);
   const [loading, setLoading] = useState(true);

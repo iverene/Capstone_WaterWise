@@ -382,11 +382,13 @@ export default function AppLayout({ children }) {
   };
 
   const handleNotificationLongPressStart = useCallback((notificationId) => {
+    const notification = notifications.find((n) => n.id === notificationId);
+    if (!notification?.isRead) return;
     longPressTimerRef.current = setTimeout(() => {
       setIsSelectionMode(true);
       setSelectedIds(new Set([notificationId]));
     }, 500);
-  }, []);
+  }, [notifications]);
 
   const handleNotificationLongPressEnd = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -396,6 +398,8 @@ export default function AppLayout({ children }) {
   }, []);
 
   const handleToggleSelection = useCallback((notificationId) => {
+    const notification = notifications.find((n) => n.id === notificationId);
+    if (!notification?.isRead) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(notificationId)) {
@@ -406,7 +410,7 @@ export default function AppLayout({ children }) {
       if (next.size === 0) setIsSelectionMode(false);
       return next;
     });
-  }, []);
+  }, [notifications]);
 
   const handleCancelSelection = useCallback(() => {
     setIsSelectionMode(false);
@@ -609,7 +613,7 @@ export default function AppLayout({ children }) {
       )}
 
       <Modal
-        description="Receive important household water-service updates on this device."
+        description="Get bill reminders and service alerts even when the app is closed."
         eyebrow="Stay informed"
         isOpen={isPushPromptOpen}
         onClose={dismissPushPrompt}
@@ -622,8 +626,8 @@ export default function AppLayout({ children }) {
               <FiBell aria-hidden="true" className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-sm leading-6 text-slate-700">Get alerts for new bills, due dates, payments, service interruptions, and account updates—even when WaterWise is closed.</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">You can turn this off anytime from your Household Profile.</p>
+              <p className="text-sm leading-6 text-slate-700">Stay updated on payments, due dates, and service interruptions.</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">You can turn this off anytime.</p>
             </div>
           </div>
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

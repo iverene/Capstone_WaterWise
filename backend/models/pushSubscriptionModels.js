@@ -10,6 +10,14 @@ const createError = (message, statusCode = 400) => {
   return error;
 };
 
+const PUSH_SERVICE_HOSTS = [
+  "fcm.googleapis.com",
+  "android.googleapis.com",
+  "web.push.apple.com",
+  "api.push.amazon.com",
+  "push.services.mozilla.com",
+];
+
 const normalizeSubscription = (subscription) => {
   const endpoint = String(subscription?.endpoint ?? "").trim();
   const p256dh = String(subscription?.keys?.p256dh ?? "").trim();
@@ -19,6 +27,15 @@ const normalizeSubscription = (subscription) => {
   }
   if (endpoint.length > 2000 || p256dh.length > 500 || auth.length > 500) {
     throw createError("The browser push subscription is too long.");
+  }
+  let host;
+  try {
+    host = new URL(endpoint).hostname;
+  } catch {
+    throw createError("The push subscription endpoint is not a valid URL.");
+  }
+  if (!PUSH_SERVICE_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))) {
+    throw createError("The push subscription endpoint is not from a recognized push service.");
   }
   return { endpoint, p256dh, auth };
 };

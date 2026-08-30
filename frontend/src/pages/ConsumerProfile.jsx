@@ -23,8 +23,8 @@ const hasValue = (value) => value !== null && value !== undefined && value !== "
 
 function PushNotificationSetting() {
   const [currentSubscription, setCurrentSubscription] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: "" });
   const supported = pushSupported();
 
   const loadCurrentSubscription = useCallback(async () => {
@@ -33,25 +33,36 @@ function PushNotificationSetting() {
   }, [supported]);
 
   useEffect(() => {
-    queueMicrotask(() => loadCurrentSubscription().catch((error) => setMessage(error.message)));
+    queueMicrotask(() => loadCurrentSubscription().catch(() => {}));
   }, [loadCurrentSubscription]);
 
-  const toggleNotifications = async () => {
-    setBusy(true);
-    setMessage("");
+  const showToast = (message) => {
+    setToast({ show: true, message });
+    setTimeout(() => setToast({ show: false, message: "" }), 3000);
+  };
+
+  const performToggle = async () => {
+    setConfirmOpen(false);
+    const wasEnabled = Boolean(currentSubscription);
+    setCurrentSubscription(wasEnabled ? null : {});
     try {
-      if (currentSubscription) {
+      if (wasEnabled) {
         await disableCurrentPushNotifications();
-        setMessage("Push notifications are off on this device.");
       } else {
         await enablePushNotifications();
-        setMessage("Push notifications are on for this device.");
       }
-      await loadCurrentSubscription();
     } catch (error) {
-      setMessage(error.message);
-    } finally {
-      setBusy(false);
+      await loadCurrentSubscription();
+      showToast(error.message);
+    }
+  };
+
+  const handleToggle = () => {
+    if (!supported) return;
+    if (currentSubscription) {
+      setConfirmOpen(true);
+    } else {
+      performToggle();
     }
   };
 
@@ -59,10 +70,29 @@ function PushNotificationSetting() {
     <div className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Bell aria-hidden="true" className="h-5 w-5" /></span>
       <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-navy-900">Push notifications</span><span className="mt-1 block text-xs leading-5 text-slate-500">Receive notification and alerts.</span></span>
-      <button aria-checked={Boolean(currentSubscription)} aria-label="Toggle push notifications on this device" className={`relative h-7 w-12 shrink-0 rounded-full transition ${currentSubscription ? "bg-water-600" : "bg-slate-300"} disabled:opacity-60`} disabled={busy || !supported} onClick={toggleNotifications} role="switch" type="button"><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${currentSubscription ? "translate-x-5" : "translate-x-0"}`} /></button>
+      <button aria-checked={Boolean(currentSubscription)} aria-label="Toggle push notifications on this device" className={`relative h-7 w-12 shrink-0 rounded-full transition ${currentSubscription ? "bg-water-600" : "bg-slate-300"} disabled:opacity-60`} disabled={!supported} onClick={handleToggle} role="switch" type="button"><span className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${currentSubscription ? "translate-x-5" : "translate-x-0"}`} /></button>
     </div>
     {!supported && <p className="mt-2 text-xs font-semibold text-amber-700">This browser does not support push notifications.</p>}
-    {message && <p className="mt-2 text-xs font-semibold text-slate-600" role="status">{message}</p>}
+
+    {confirmOpen && (
+      <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-4 pb-8 sm:items-center sm:pb-4" onClick={() => setConfirmOpen(false)}>
+        <div className="w-full max-w-xs rounded-2xl bg-white p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+          <p className="text-base font-bold text-slate-900">Turn off push notifications?</p>
+          <p className="mt-1 text-sm text-slate-500">You won't receive bill reminders or service alerts on this device.</p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button className="rounded-lg px-3 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100" onClick={() => setConfirmOpen(false)} type="button">Cancel</button>
+            <button className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-bold text-white hover:bg-red-700" onClick={performToggle} type="button">Turn off</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {toast.show && (
+      <div className="mt-2 flex items-center gap-2 rounded-xl border border-water-200 bg-water-50 px-3 py-2 text-xs font-semibold text-water-800" role="status">
+        <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0" />
+        {toast.message}
+      </div>
+    )}
   </div>;
 }
 
