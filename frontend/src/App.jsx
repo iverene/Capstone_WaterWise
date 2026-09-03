@@ -32,6 +32,8 @@ import AdminProfile from "./pages/AdminProfile";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminAccountInformation from "./pages/AdminAccountInformation";
 import RecordConsumptionPage from "./pages/RecordConsumptionPage";
+import MeterReaderProfile from "./pages/MeterReaderProfile";
+import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation";
 import { clearApiCache } from "./services/apiCache";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
 
@@ -49,6 +51,8 @@ const portalRoutes = [
   { label: "Events", path: "/admin/events" },
   { label: "Announcements", path: "/admin/announcements" },
   { label: "Record Consumption Entry", path: "/meter-reader/readings-entry" },
+  { label: "Profile", path: "/meter-reader/profile" },
+  { label: "Account information", path: "/meter-reader/account-information" },
   { label: "Profile", path: "/consumer/profile-details" },
   { label: "Account information", path: "/consumer/account-information" },
   { label: "Bills", path: "/consumer/billing-ledger" },
@@ -85,6 +89,8 @@ const roleAccess = {
     paths: [
       "/meter-reader",
       "/meter-reader/readings-entry",
+      "/meter-reader/profile",
+      "/meter-reader/account-information",
     ],
   },
   consumer: {
@@ -213,6 +219,22 @@ export function AppRoutes() {
           </RoleRouteGuard>
         }
         path="/meter-reader/readings-entry"
+      />
+      <Route
+        element={
+          <RoleRouteGuard requiredRole="meter-reader">
+            <AppLayout><MeterReaderProfile /></AppLayout>
+          </RoleRouteGuard>
+        }
+        path="/meter-reader/profile"
+      />
+      <Route
+        element={
+          <RoleRouteGuard requiredRole="meter-reader">
+            <AppLayout><MeterReaderAccountInformation /></AppLayout>
+          </RoleRouteGuard>
+        }
+        path="/meter-reader/account-information"
       />
       <Route
         element={
