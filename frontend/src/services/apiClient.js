@@ -79,9 +79,13 @@ apiClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    if ([401, 403].includes(error.response?.status)) {
-      clearSession();
-      if (window.location.pathname !== "/login") {
+    const status = error.response?.status;
+    if (status === 401 || status === 403) {
+      if (window.location.pathname === "/login") {
+        return Promise.reject(error);
+      }
+      const storedToken = getAccessToken();
+      if (!storedToken) {
         window.location.assign("/login");
       }
     }
