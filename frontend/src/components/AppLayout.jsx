@@ -12,6 +12,7 @@ import {
   FiMessageSquare,
   FiTrash2,
   FiUsers,
+  FiUser,
   FiWifiOff,
   FiX,
 } from "react-icons/fi";
@@ -181,7 +182,7 @@ export default function AppLayout({ children }) {
       })
       .catch((error) => {
         setAccountName("");
-        if (error.status === 401) navigate("/login");
+        if (error.response?.status === 401) navigate("/login");
       });
 
     if (activeRole === "consumer") {
@@ -544,9 +545,16 @@ export default function AppLayout({ children }) {
             </div>
           ) : null
         }
-        onChangePassword={activeRole === "meter-reader" ? () => { setIsPasswordEmailOnly(false); setIsChangePasswordOpen(true); } : undefined}
         onLogout={() => setIsLogoutConfirmOpen(true)}
-        onProfile={activeRole === "consumer" ? () => navigate("/consumer/profile-details") : ["admin", "super-admin"].includes(activeRole) ? () => navigate("/admin/profile") : undefined}
+        onProfile={
+          activeRole === "consumer"
+            ? () => navigate("/consumer/profile-details")
+            : ["admin", "super-admin"].includes(activeRole)
+              ? () => navigate("/admin/profile")
+              : activeRole === "meter-reader"
+                ? () => navigate("/meter-reader/profile")
+                : undefined
+        }
         title="WaterWise"
       />
 
@@ -567,9 +575,16 @@ export default function AppLayout({ children }) {
           accountName={accountName || activeRoleConfig.userName}
           activeRoleLabel={activeRoleConfig.label}
           items={activeRoleConfig.links}
-          onChangePassword={activeRole === "meter-reader" ? () => { setIsPasswordEmailOnly(false); setIsChangePasswordOpen(true); } : undefined}
           onLogout={() => setIsLogoutConfirmOpen(true)}
-          onProfile={activeRole === "consumer" ? () => navigate("/consumer/profile-details") : ["admin", "super-admin"].includes(activeRole) ? () => navigate("/admin/profile") : undefined}
+          onProfile={
+            activeRole === "consumer"
+              ? () => navigate("/consumer/profile-details")
+              : ["admin", "super-admin"].includes(activeRole)
+                ? () => navigate("/admin/profile")
+                : activeRole === "meter-reader"
+                  ? () => navigate("/meter-reader/profile")
+                  : undefined
+          }
         />
 
         <main

@@ -280,9 +280,6 @@ export async function login(req, res) {
           trustedDevice: true,
         });
       }
-      if (deviceToken) {
-        clearTrustedDeviceCookie(res, user.role);
-      }
 
       const account = await getPasswordResetAccountById(user.id, user.role);
       const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -534,7 +531,7 @@ export async function resendAdminLoginOtp(req, res) {
 export async function requestConsumerEmailChangeOtp(req, res) {
   try {
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
-    if (!["admin", "super-admin", "consumer"].includes(req.user.role) || !account || account.status !== "active") {
+    if (!["admin", "super-admin", "consumer", "meter-reader"].includes(req.user.role) || !account || account.status !== "active") {
       return res.status(403).json({ success: false, message: "Only active accounts can change their email." });
     }
     const requestLimit = await reservePasswordResetOtpRequest(passwordResetRequestKey(account.email, "email-change"));
