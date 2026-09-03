@@ -4,7 +4,7 @@ import { supabase } from "../config/supabase.js";
 const TRUSTED_DEVICE_COOKIE = "waterwise_admin_device";
 const ROLE_TRUST_DAYS = {
   "super-admin": 7,
-  admin: 30,
+  admin: 15,
 };
 
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
