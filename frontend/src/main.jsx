@@ -4,6 +4,10 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import App from './App.jsx'
 import { ToastProvider } from './components/Toast.jsx'
+import { initPWAInstallCapture } from './services/pwaInstall.js'
+
+// Capture `beforeinstallprompt` before React mounts so no download icon misses it.
+initPWAInstallCapture()
 
 registerSW({
   immediate: true,

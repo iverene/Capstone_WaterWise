@@ -1,4 +1,5 @@
-import { getAccessToken } from "./authToken";
+import { clearSession, getAccessToken } from "./authToken";
+import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 import { API_BASE_URL } from "./apiClient";
 
 const RETRY_DELAY_MS = 3_000;
@@ -19,6 +20,20 @@ function parseEventBlock(block) {
   }
 }
 
+function handleStreamUnauthorized() {
+  // Mirror apiClient 401 handling so an expired/revoked/mismatched SSE
+  // session ends the session instead of retrying every 3s forever.
+  try {
+    window.sessionStorage.setItem("waterwise:session-expired", "1");
+  } catch {
+    // Storage may be disabled; the login page still loads without the notice.
+  }
+  clearSession();
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
+}
+
 export function subscribeToDataChanges(onChange) {
   const controller = new AbortController();
   let retryTimer;
@@ -27,14 +42,27 @@ export function subscribeToDataChanges(onChange) {
     const token = getAccessToken();
     if (controller.signal.aborted) return;
     if (!token) {
-      retryTimer = window.setTimeout(connect, RETRY_DELAY_MS);
+      // No session (logged out / login page): don't spam retries. A new
+      // subscription is created on `waterwise-session-changed` after login.
       return;
     }
     try {
+      const headers = { Accept: "text/event-stream", Authorization: `Bearer ${token}` };
+      try {
+        const fingerprint = await getDeviceFingerprint();
+        if (fingerprint) headers["X-Device-Fingerprint"] = fingerprint;
+      } catch {
+        // Fingerprint is best-effort; the backend enforces it only when
+        // a fingerprint is already enrolled for the account.
+      }
       const response = await fetch(`${API_BASE_URL}/changes/stream`, {
-        headers: { Accept: "text/event-stream", Authorization: `Bearer ${token}` },
+        headers,
         signal: controller.signal,
       });
+      if (response.status === 401 || response.status === 403) {
+        handleStreamUnauthorized();
+        return;
+      }
       if (!response.ok || !response.body) throw new Error("Change stream unavailable.");
 
       const reader = response.body.getReader();
@@ -66,7 +94,8 @@ export function subscribeToDataChanges(onChange) {
         }
       }
       if (!controller.signal.aborted) retryTimer = window.setTimeout(connect, RETRY_DELAY_MS);
-    } catch {
+    } catch (error) {
+      if (error?.name === "AbortError") return;
       if (!controller.signal.aborted) retryTimer = window.setTimeout(connect, RETRY_DELAY_MS);
     }
   };
