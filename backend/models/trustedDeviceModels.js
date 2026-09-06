@@ -25,15 +25,28 @@ export function readCookie(req, name) {
   return "";
 }
 
-export function trustedDeviceCookieOptions(role) {
-  const isProduction = process.env.NODE_ENV === "production";
-  return {
+export function isSecureRequest(req) {
+  const forwardedProto = req?.get?.("x-forwarded-proto") ?? "";
+  if (forwardedProto) return forwardedProto.split(",")[0].trim().toLowerCase() === "https";
+  if (typeof req?.secure === "boolean") return req.secure;
+  if (typeof req?.protocol === "string") return req.protocol === "https";
+  return process.env.NODE_ENV === "production";
+}
+
+export function trustedDeviceCookieOptions(role, req) {
+  const secure = isSecureRequest(req);
+  const options = {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
+    secure,
+    sameSite: secure ? "none" : "lax",
     maxAge: getTrustedDeviceLifetimeMs(role),
-    path: "/api/auth",
+    path: "/",
   };
+  // CHIPS: allow the cross-site (Vercel frontend -> hosted backend) trust
+  // cookie to persist when third-party cookies are partitioned (Chrome).
+  // Plain HTTP localhost ignores it; HTTPS browsers enforce Secure + SameSite=None with it.
+  if (secure) options.partitioned = true;
+  return options;
 }
 
 export async function createTrustedDevice({ adminId, role, userAgent }) {

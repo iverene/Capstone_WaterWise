@@ -84,10 +84,13 @@ function passwordResetRequestKey(email, purpose = "password-reset") {
     .digest("hex");
 }
 
-function clearTrustedDeviceCookie(res, role) {
-  const options = trustedDeviceCookieOptions(role);
+function clearTrustedDeviceCookie(res, role, req) {
+  const options = trustedDeviceCookieOptions(role, req);
   delete options.maxAge;
+  // Clear the current cookie shape plus the legacy pre-fix shape
+  // (Path=/api/auth, no Partitioned) so old cookies don't linger.
   res.clearCookie(getTrustedDeviceCookieName(), options);
+  res.clearCookie(getTrustedDeviceCookieName(), { ...options, path: "/api/auth" });
 }
 
 function createAccessToken(user) {
@@ -358,7 +361,7 @@ export async function removeAdminTrustedDevice(req, res) {
     }
     const currentToken = readCookie(req, getTrustedDeviceCookieName());
     const result = await revokeTrustedDevice({ adminId: req.user.id, deviceId, currentToken });
-    if (result.revokedCurrentDevice) clearTrustedDeviceCookie(res, req.user.role);
+    if (result.revokedCurrentDevice) clearTrustedDeviceCookie(res, req.user.role, req);
     return res.status(200).json({ success: true, ...result, message: "Trusted device removed." });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to remove trusted device." });
@@ -432,7 +435,7 @@ export async function verifyAdminLoginOtp(req, res) {
     res.cookie(
       getTrustedDeviceCookieName(),
       trustedDevice.token,
-      trustedDeviceCookieOptions(account.role),
+      trustedDeviceCookieOptions(account.role, req),
     );
     const dfp = req.get("x-device-fingerprint");
     if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
@@ -750,7 +753,7 @@ export async function changeAuthenticatedPassword(req, res) {
     });
     if (["admin", "super-admin"].includes(req.user.role)) {
       await revokeAdminTrustedDevices(req.user.id);
-      clearTrustedDeviceCookie(res, req.user.role);
+      clearTrustedDeviceCookie(res, req.user.role, req);
     }
     return res.status(200).json({ success: true, message: "Your password has been changed successfully." });
   } catch (error) {
@@ -856,7 +859,7 @@ export async function resetPassword(req, res) {
     }
     if (["admin", "super-admin"].includes(payload.role)) {
       await revokeAdminTrustedDevices(payload.sub);
-      clearTrustedDeviceCookie(res, payload.role);
+      clearTrustedDeviceCookie(res, payload.role, req);
     }
     return res.status(200).json({ success: true, message: "Your password has been reset. You can now sign in." });
   } catch (error) {
