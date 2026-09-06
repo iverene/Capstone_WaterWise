@@ -1,65 +1,60 @@
 import { useEffect, useState } from "react";
 import { FiDownload } from "react-icons/fi";
 import { useToast } from "./Toast";
+import {
+  clearDeferredInstallPrompt,
+  requestShowPWAInstall,
+  subscribePWAInstall,
+} from "../services/pwaInstall";
 
-function isRunningAsInstalledApp() {
+function isIOSDevice() {
   if (typeof window === "undefined") return false;
-  if (window.matchMedia?.("(display-mode: standalone)").matches) return true;
-  return Boolean(window.navigator?.standalone);
+  return /iPhone|iPad|iPod/i.test(window.navigator?.userAgent ?? "");
 }
 
 export default function PWAInstallButton({ variant = "header", showLabel = false }) {
   const toast = useToast();
   const [installEvent, setInstallEvent] = useState(null);
-  const [isInstalled, setIsInstalled] = useState(isRunningAsInstalledApp);
+  const [isInstalled, setIsInstalled] = useState(false);
 
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-      setInstallEvent(event);
-    };
-    const handleAppInstalled = () => {
-      setInstallEvent(null);
-      setIsInstalled(true);
-    };
-    const handleDisplayModeChange = (event) => {
-      if (event.matches) setIsInstalled(true);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
-    const mediaQuery = window.matchMedia?.("(display-mode: standalone)");
-    mediaQuery?.addEventListener?.("change", handleDisplayModeChange);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", handleAppInstalled);
-      mediaQuery?.removeEventListener?.("change", handleDisplayModeChange);
-    };
-  }, []);
+  useEffect(
+    () =>
+      subscribePWAInstall(({ deferredPrompt, isInstalled: installed }) => {
+        setInstallEvent(deferredPrompt);
+        setIsInstalled(installed);
+      }),
+    [],
+  );
 
   if (isInstalled) return null;
 
   const handleDownload = async () => {
+    // 1) Native install prompt is available: trigger the real browser install.
     if (installEvent) {
       try {
         await installEvent.prompt();
         const choice = await installEvent.userChoice;
         if (choice?.outcome === "accepted") {
           toast.success("WaterWise installed", "You can now open WaterWise from your device home screen.");
+        } else {
+          toast.info("Install WaterWise", "You can install WaterWise anytime by tapping the download icon again.");
         }
-        setInstallEvent(null);
+        clearDeferredInstallPrompt();
       } catch {
         toast.error("Installation unavailable", "WaterWise could not start the installation. Try again from your browser menu.");
       }
       return;
     }
 
-    const isIOS = /iPhone|iPad|iPod/i.test(window.navigator?.userAgent ?? "");
+    // 2) No native prompt captured (already fired, unsupported browser, or
+    // PWA criteria not met yet): open the in-app install notification/card so
+    // tapping the icon always surfaces an install message.
+    requestShowPWAInstall();
     toast.info(
       "Install WaterWise",
-      isIOS
+      isIOSDevice()
         ? "Tap Share, then choose Add to Home Screen to install WaterWise."
-        : "Open your browser menu and choose Install app or Add to Home Screen to install WaterWise.",
+        : "Follow the Install WaterWise card to add the app to your device.",
     );
   };
 

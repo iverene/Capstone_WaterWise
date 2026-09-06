@@ -34,8 +34,8 @@ self.addEventListener("push", (event) => {
   })();
   event.waitUntil(self.registration.showNotification(payload.title || "WaterWise", {
     body: payload.body || "You have a new notification.",
-    icon: "/pwa-icon-192.svg",
-    badge: "/pwa-icon-192.svg",
+    icon: "/pwa-icon-192.png",
+    badge: "/pwa-icon-192.png",
     tag: payload.tag,
     renotify: payload.priority === "critical",
     requireInteraction: payload.priority === "critical",

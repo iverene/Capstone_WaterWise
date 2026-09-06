@@ -1,56 +1,102 @@
 import { useEffect, useState } from "react";
 import { FiDownload, FiX } from "react-icons/fi";
 import { useToast } from "./Toast";
+import {
+  SHOW_PWA_INSTALL_EVENT,
+  clearDeferredInstallPrompt,
+  subscribePWAInstall,
+} from "../services/pwaInstall";
 
 const DISMISSED_KEY = "waterwise-pwa-install-dismissed";
+
+function isIOSDevice() {
+  if (typeof window === "undefined") return false;
+  return /iPhone|iPad|iPod/i.test(window.navigator?.userAgent ?? "");
+}
 
 export default function PWAInstallPrompt() {
   const toast = useToast();
   const [installEvent, setInstallEvent] = useState(null);
+  const [forceVisible, setForceVisible] = useState(false);
+
+  useEffect(
+    () =>
+      subscribePWAInstall(({ deferredPrompt, isInstalled }) => {
+        if (isInstalled) {
+          setInstallEvent(null);
+          setForceVisible(false);
+          return;
+        }
+        // Respect a previous "Not now" only for the automatic prompt. A tap
+        // on any download icon forces the card back open (see below).
+        if (!deferredPrompt) {
+          setInstallEvent(null);
+          return;
+        }
+        try {
+          if (window.sessionStorage.getItem(DISMISSED_KEY) !== "true") {
+            setInstallEvent(deferredPrompt);
+          }
+        } catch {
+          setInstallEvent(deferredPrompt);
+        }
+      }),
+    [],
+  );
 
   useEffect(() => {
-    const handleBeforeInstallPrompt = (event) => {
-      event.preventDefault();
-
-      if (window.sessionStorage.getItem(DISMISSED_KEY) !== "true") {
-        setInstallEvent(event);
+    const handleShowRequest = () => {
+      try {
+        window.sessionStorage.removeItem(DISMISSED_KEY);
+      } catch {
+        // Storage may be unavailable in private mode.
       }
+      setForceVisible(true);
     };
-
-    const handleAppInstalled = () => {
-      setInstallEvent(null);
-      window.sessionStorage.removeItem(DISMISSED_KEY);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-      window.removeEventListener("appinstalled", handleAppInstalled);
-    };
+    window.addEventListener(SHOW_PWA_INSTALL_EVENT, handleShowRequest);
+    return () => window.removeEventListener(SHOW_PWA_INSTALL_EVENT, handleShowRequest);
   }, []);
 
-  if (!installEvent) {
+  if (!installEvent && !forceVisible) {
     return null;
   }
 
   const handleDismiss = () => {
-    window.sessionStorage.setItem(DISMISSED_KEY, "true");
+    try {
+      window.sessionStorage.setItem(DISMISSED_KEY, "true");
+    } catch {
+      // Ignore storage failures.
+    }
     setInstallEvent(null);
+    setForceVisible(false);
   };
 
   const handleInstall = async () => {
-    try {
-      await installEvent.prompt();
-      const choice = await installEvent.userChoice;
-      if (choice.outcome === "accepted") {
-        toast.success("WaterWise installed", "You can now open WaterWise from your device home screen.");
+    if (installEvent) {
+      try {
+        await installEvent.prompt();
+        const choice = await installEvent.userChoice;
+        if (choice.outcome === "accepted") {
+          toast.success("WaterWise installed", "You can now open WaterWise from your device home screen.");
+        } else {
+          toast.info("Install WaterWise", "You can install WaterWise anytime by tapping the download icon again.");
+        }
+        clearDeferredInstallPrompt();
+      } catch {
+        toast.error("Installation unavailable", "WaterWise could not start the installation. Try again from your browser menu.");
       }
-      setInstallEvent(null);
-    } catch {
-      toast.error("Installation unavailable", "WaterWise could not start the installation. Try again from your browser menu.");
+      setForceVisible(false);
+      return;
     }
+
+    // No native prompt (iOS, unsupported browser, or criteria not met yet):
+    // keep the card open and show the manual install steps as a notification.
+    toast.info(
+      "Install WaterWise",
+      isIOSDevice()
+        ? "Tap Share, then choose Add to Home Screen to install WaterWise."
+        : "Open your browser menu and choose Install app or Add to Home Screen to install WaterWise.",
+    );
   };
 
   return (
@@ -70,7 +116,9 @@ export default function PWAInstallPrompt() {
             Install WaterWise
           </h2>
           <p className="mt-1 text-sm leading-5 text-slate-600">
-            Add WaterWise to your device for quick access and an app-like experience.
+            {installEvent
+              ? "Add WaterWise to your device for quick access and an app-like experience."
+              : "Tap Install app below, then follow your browser steps to add WaterWise to your device."}
           </p>
 
           <div className="mt-4 flex gap-2">
