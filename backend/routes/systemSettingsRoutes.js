@@ -6,7 +6,7 @@ import { authenticate, authorizeRoles } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.use(authenticate);
-router.get("/", authorizeRoles("super-admin"), listSystemSettings);
+router.get("/", authorizeRoles("super-admin"), authorizeStaffAction("manage-system-settings"), listSystemSettings);
 router.get("/:key", authorizeRoles("super-admin", "meter-reader"), getSystemSettingByKey);
 router.patch("/:key", authorizeRoles("super-admin"), authorizeStaffAction("update-system-settings"), updateSystemSettingByKey);
 

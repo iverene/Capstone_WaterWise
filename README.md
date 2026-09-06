@@ -19,7 +19,7 @@ WaterWise is a full-stack water consumption, billing, payment, and account-manag
 - Review the administrator username and manage email and security options from Admin Profile Management.
 - Change the administrator password using registered-email OTP only.
 - Change the administrator email after verifying the current email.
-- Trust a verified administrator browser so later logins can skip OTP after the password is validated. Trust lasts 7 days for Super Admins and 30 days for regular Admins.
+- Trust a verified administrator browser so later logins can skip OTP after the password is validated. Trust lasts 7 days for Super Admins and 15 days for regular Admins.
 - Review and revoke individual trusted devices, or revoke all other trusted devices, from Profile Security.
 - Change a resident password after verifying a single-use OTP sent to the acting administrator's registered email. Other resident profile changes do not require OTP.
 - Super Admins can create regular Admin and Meter Reader accounts with temporary passwords from Profile Management.
@@ -299,7 +299,7 @@ Administrators use two-step authentication:
 
 Admin login codes expire after 5 minutes, allow up to five incorrect attempts, and cannot be reused after successful verification.
 
-On later logins, the backend still validates the administrator password first. If the browser presents an active trusted-device cookie belonging to the same administrator and role, the backend skips only the OTP step and issues the normal role-based access JWT. Admin access tokens expire after one hour and Super Admin access tokens after 30 minutes. A regular Admin browser remains trusted for 30 days; a Super Admin browser remains trusted for 7 days.
+On later logins, the backend still validates the administrator password first. If the browser presents an active trusted-device cookie belonging to the same administrator and role, the backend skips only the OTP step and issues the normal role-based access JWT. Admin access tokens expire after one hour and Super Admin access tokens after 30 minutes. A regular Admin browser remains trusted for 15 days; a Super Admin browser remains trusted for 7 days.
 
 The browser stores the raw random token only in an `HttpOnly` cookie. The database stores only its SHA-256 hash. Production cookies use `Secure` and `SameSite=None` for the deployed cross-origin frontend/backend configuration. Frontend API requests therefore use credentials, and backend CORS allows credentialed requests only from approved origins.
 

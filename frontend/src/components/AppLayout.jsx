@@ -34,6 +34,7 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import ChangeEmailModal from "./ChangeEmailModal";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import NotificationBadgeTrigger from "./NotificationBadgeTrigger";
+import PWAInstallButton from "./PWAInstallButton";
 import Modal from "./Modal";
 import Sidebar from "./Sidebar";
 import { useToast } from "./Toast";
@@ -471,7 +472,9 @@ export default function AppLayout({ children }) {
         activeRoleLabel={activeRoleConfig.label}
         notificationSlot={
           activeRole === "consumer" ? (
-            <div className="relative" ref={notificationMenuRef}>
+            <div className="flex items-center gap-2">
+              <PWAInstallButton />
+              <div className="relative" ref={notificationMenuRef}>
               <NotificationBadgeTrigger
                 buttonRef={notificationTriggerRef}
                 isOpen={isNotificationOpen}
@@ -542,6 +545,7 @@ export default function AppLayout({ children }) {
                   />
                 </section>
               )}
+              </div>
             </div>
           ) : null
         }
