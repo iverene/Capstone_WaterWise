@@ -1,8 +1,10 @@
 import { apiRequest } from "./apiClient";
 
-export async function fetchSystemSettings() {
+export async function fetchSystemSettings(authorizationToken) {
   try {
-    return await apiRequest("/system-settings");
+    return await apiRequest("/system-settings", {
+      headers: authorizationToken ? { "X-Staff-Authorization": authorizationToken } : undefined,
+    });
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to load system settings.", { cause: error });
   }

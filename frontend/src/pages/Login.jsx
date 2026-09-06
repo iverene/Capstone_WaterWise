@@ -7,10 +7,11 @@ import {
   FiLock,
   FiMail,
 } from "react-icons/fi";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import OtpInput from "../components/OtpInput";
+import PWAInstallButton from "../components/PWAInstallButton";
 import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
 
 const accountDestinations = {
@@ -22,9 +23,25 @@ const accountDestinations = {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const identifierRef = useRef(null);
   const passwordRef = useRef(null);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(() => {
+    // Shown after an expired-session redirect (expiry modal confirm passes
+    // router state; 401 API logouts survive only via sessionStorage flag
+    // because the full-page reload drops router state).
+    if (location.state?.sessionExpired === true) return true;
+    try {
+      if (window.sessionStorage.getItem("waterwise:session-expired") === "1") {
+        window.sessionStorage.removeItem("waterwise:session-expired");
+        return true;
+      }
+    } catch {
+      // Session storage unavailable; fall through to no notice.
+    }
+    return false;
+  });
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -46,6 +63,14 @@ export default function Login() {
     const destination = accountDestinations[account?.role];
     if (destination) navigate(destination, { replace: true });
   }, [navigate]);
+
+  useEffect(() => {
+    if (location.state?.sessionExpired === true) {
+      navigate(".", { replace: true, state: null });
+    }
+    // Clear one-time router state on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (lockSeconds <= 0) return undefined;
@@ -255,12 +280,15 @@ export default function Login() {
         <div className="ww-glass-strong grid w-full overflow-hidden rounded-2xl lg:grid-cols-[0.94fr_1.06fr]">
           <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10 lg:p-14">
             <div>
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm"><FiDroplet aria-hidden="true" className="h-5 w-5" /></span>
-                <div>
-                  <p className="text-sm font-extrabold tracking-[-0.02em] text-white">WaterWise</p>
-                  <p className="text-xs font-medium text-water-200">Sucol Water System</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm"><FiDroplet aria-hidden="true" className="h-5 w-5" /></span>
+                  <div>
+                    <p className="text-sm font-extrabold tracking-[-0.02em] text-white">WaterWise</p>
+                    <p className="text-xs font-medium text-water-200">Sucol Water System</p>
+                  </div>
                 </div>
+                <PWAInstallButton variant="panel" />
               </div>
               <h1 className="mt-6 max-w-md text-2xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:mt-8">
                 Every drop, clearly understood.
@@ -283,6 +311,24 @@ export default function Login() {
                   {adminChallengeToken ? `Enter the code sent to ${maskedEmail}. It expires in 5 minutes.` : "Use the credentials assigned to your WaterWise account."}
                 </p>
               </div>
+
+              {sessionExpiredNotice && !adminChallengeToken && (
+                <div className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between" role="alert">
+                  <p className="text-xs font-semibold leading-5 text-amber-900 sm:text-sm">
+                    Your session expired. Please sign in again.
+                  </p>
+                  <button
+                    className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-water-600 px-4 text-xs font-bold text-white transition hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 sm:text-sm"
+                    onClick={() => {
+                      setSessionExpiredNotice(false);
+                      requestAnimationFrame(() => identifierRef.current?.focus());
+                    }}
+                    type="button"
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
 
               <form aria-busy={isSubmitting} className="space-y-5 lg:space-y-6" onSubmit={handleSubmit}>
                 {!adminChallengeToken && <div>

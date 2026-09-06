@@ -11,6 +11,10 @@ function hashFingerprint(fingerprint) {
   return createHash("sha256").update(String(fingerprint || "")).digest("hex");
 }
 
+function hashPasswordState(passwordHash) {
+  return createHash("sha256").update(String(passwordHash ?? "")).digest("hex");
+}
+
 export async function authenticate(req, res, next) {
   const authorization = req.get("authorization") ?? "";
   const [scheme, token] = authorization.split(" ");
@@ -37,18 +41,48 @@ export async function authenticate(req, res, next) {
     }
 
     const requestFingerprint = req.get("x-device-fingerprint");
-    if (requestFingerprint) {
-      const table = payload.role === "consumer" ? "consumers" : payload.role === "meter-reader" ? "meter_readers" : "admins";
-      const { data } = await supabase.from(table).select("device_fingerprint_hash").eq("id", userId).maybeSingle();
-      const storedHash = data?.device_fingerprint_hash;
-      if (storedHash) {
-        const requestHash = hashFingerprint(requestFingerprint);
-        if (requestHash !== storedHash) {
-          return res.status(401).json({
-            success: false,
-            message: "Session device mismatch. Please sign in again.",
-          });
-        }
+    const table = payload.role === "consumer" ? "consumers" : payload.role === "meter-reader" ? "meter_readers" : "admins";
+    const { data, error: accountError } = await supabase
+      .from(table)
+      .select("device_fingerprint_hash, password, status")
+      .eq("id", userId)
+      .maybeSingle();
+    if (accountError) {
+      const error = new Error("Failed to verify the session.");
+      error.statusCode = 500;
+      throw error;
+    }
+    if (!data || (data.status && data.status !== "active")) {
+      return res.status(401).json({
+        success: false,
+        message: "This account is no longer active. Please sign in again.",
+      });
+    }
+    // Password change/reset must invalidate already-issued JWTs: the token
+    // carries a fingerprint of the password hash at issue time. Tokens issued
+    // before this claim existed are grandfathered until they expire.
+    if (payload.pwd && data.password && payload.pwd !== hashPasswordState(data.password)) {
+      return res.status(401).json({
+        success: false,
+        message: "Your password was changed. Please sign in again.",
+      });
+    }
+    // Device binding is mandatory once a fingerprint is enrolled: a missing
+    // or mismatched header must not silently bypass the check.
+    const storedHash = data?.device_fingerprint_hash;
+    if (storedHash) {
+      if (!requestFingerprint) {
+        return res.status(401).json({
+          success: false,
+          message: "Session device verification is required. Please sign in again.",
+        });
+      }
+      const requestHash = hashFingerprint(requestFingerprint);
+      if (requestHash !== storedHash) {
+        return res.status(401).json({
+          success: false,
+          message: "Session device mismatch. Please sign in again.",
+        });
       }
     }
 

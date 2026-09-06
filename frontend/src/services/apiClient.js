@@ -69,7 +69,10 @@ apiClient.interceptors.request.use(async (config) => {
   try {
     const fingerprint = await getDeviceFingerprint();
     config.headers["X-Device-Fingerprint"] = fingerprint;
-  } catch {}
+  } catch {
+    // Fingerprint is best-effort; the backend enforces the check only when
+    // a fingerprint is already enrolled for the account.
+  }
   return config;
 });
 
@@ -80,14 +83,18 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status;
-    if (status === 401 || status === 403) {
-      if (window.location.pathname === "/login") {
-        return Promise.reject(error);
+    if (status === 401 && window.location.pathname !== "/login") {
+      // Expired, revoked (password change), deactivated, or device-mismatch
+      // sessions must end here instead of leaving the user stuck: the stored
+      // token is no longer valid server-side. The flag lets the login page
+      // explain why the redirect happened (full reload drops router state).
+      try {
+        window.sessionStorage.setItem("waterwise:session-expired", "1");
+      } catch {
+        // Storage may be disabled; the login page still loads without the notice.
       }
-      const storedToken = getAccessToken();
-      if (!storedToken) {
-        window.location.assign("/login");
-      }
+      clearSession();
+      window.location.assign("/login");
     }
     return Promise.reject(error);
   },
@@ -99,13 +106,16 @@ export async function apiRequest(path, options = {}) {
     try {
       data = JSON.parse(data);
     } catch {
-      data = undefined;
+      // Not JSON (e.g. a raw string payload): forward as-is instead of
+      // silently dropping the body.
     }
   }
   const response = await apiClient.request({
     url: path,
     method: options.method ?? "GET",
     data,
+    params: options.params,
+    responseType: options.responseType,
     headers: options.headers,
     signal: options.signal,
   });

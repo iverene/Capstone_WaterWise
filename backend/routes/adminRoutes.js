@@ -15,10 +15,10 @@ import {
 const router = express.Router();
 
 router.use(authenticate, authorizeRoles("super-admin"));
-router.get("/", listAdmins);
-router.get("/:id", showAdmin);
+router.get("/", authorizeStaffAction("manage-staff"), listAdmins);
+router.get("/:id", authorizeStaffAction("manage-staff"), showAdmin);
 router.post("/", authorizeStaffAction("create-admin"), registerAdmin);
 router.patch("/:id", authorizeStaffAction("update-admin"), editAdmin);
-router.delete("/:id", removeAdmin);
+router.delete("/:id", authorizeStaffAction("delete-admin"), removeAdmin);
 
 export default router;

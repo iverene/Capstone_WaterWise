@@ -165,10 +165,12 @@ export async function createStaffAccount(accountType, account, authorizationToke
   }
 }
 
-export async function fetchStaffAccounts(accountType, page = 1, pageSize = 5) {
+export async function fetchStaffAccounts(accountType, page = 1, pageSize = 5, authorizationToken) {
   const endpoint = accountType === "admins" ? "/admins" : "/meter-readers";
   try {
-    const result = await apiRequest(`${endpoint}?page=${page}&pageSize=${pageSize}`);
+    const result = await apiRequest(`${endpoint}?page=${page}&pageSize=${pageSize}`, {
+      headers: authorizationToken ? { "X-Staff-Authorization": authorizationToken } : undefined,
+    });
     return result.data;
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to load staff accounts.", { cause: error });

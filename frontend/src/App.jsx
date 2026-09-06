@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RouteAccessError from "./components/RouteAccessError";
+import SessionExpiredModal from "./components/SessionExpiredModal";
 import {
   getStoredAccount as getSessionAccount,
   clearSession,
@@ -145,24 +146,34 @@ function MockPortalPage() {
 function SessionExpiryGuard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
+    if (isExpired) return undefined;
     const expiresAt = getAccessTokenExpiresAt();
     if (!expiresAt) return undefined;
+    const isPublicRoute = ["/login", "/forgot-password", "/reset-password"].includes(location.pathname);
     const remainingMs = expiresAt - Date.now();
     if (remainingMs <= 0) {
       clearSession();
-      navigate("/login", { replace: true, state: { sessionExpired: true } });
-      return undefined;
+      if (isPublicRoute) return undefined;
+      // Defer so the expired flag is set from a callback, not the effect body.
+      const timer = window.setTimeout(() => setIsExpired(true), 0);
+      return () => window.clearTimeout(timer);
     }
     const timer = window.setTimeout(() => {
       clearSession();
-      navigate("/login", { replace: true, state: { sessionExpired: true } });
+      if (!isPublicRoute) setIsExpired(true);
     }, remainingMs);
     return () => window.clearTimeout(timer);
-  }, [location.pathname, navigate]);
+  }, [isExpired, location.pathname, navigate]);
 
-  return null;
+  const handleConfirm = () => {
+    setIsExpired(false);
+    navigate("/login", { replace: true, state: { sessionExpired: true } });
+  };
+
+  return <SessionExpiredModal isOpen={isExpired} onConfirm={handleConfirm} />;
 }
 
 function getStoredAccount() {

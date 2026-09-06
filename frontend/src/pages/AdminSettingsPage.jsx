@@ -6,8 +6,18 @@ import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
 import { useToast } from "../components/Toast";
 import { requestSettingsChangeOtp, verifySettingsChangeOtp, updateSystemSetting, fetchSystemSettings } from "../services/systemSettingsService";
+import { SETTINGS_PERMISSION_KEY } from "./AdminProfile";
 
 const formatOtpCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+
+function getStoredSettingsPermission() {
+  try {
+    const permission = JSON.parse(window.sessionStorage.getItem(SETTINGS_PERMISSION_KEY) ?? "null");
+    if (permission?.token && Number(permission.expiresAt) > Date.now()) return permission;
+    window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY);
+  } catch { window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY); }
+  return null;
+}
 
 export default function AdminSettingsPage() {
   const navigate = useNavigate();
@@ -31,7 +41,15 @@ export default function AdminSettingsPage() {
   const loadSettings = useCallback(async () => {
     try {
       setLoadError("");
-      const result = await fetchSystemSettings();
+      const permission = getStoredSettingsPermission();
+      if (!permission?.token) {
+        if (mountedRef.current) {
+          setLoadError("Your settings-view permission has expired. Return to your profile and verify again.");
+          setSettings([]);
+        }
+        return;
+      }
+      const result = await fetchSystemSettings(permission.token);
       if (mountedRef.current) setSettings(result.data ?? []);
     } catch (error) {
       if (mountedRef.current) setLoadError(error.message);
@@ -91,6 +109,18 @@ export default function AdminSettingsPage() {
   };
 
   const handleVerifyOtp = async (otpValue) => {
+    if (!editingKey) {
+      setSaveError("No setting is being edited. Close and reopen the editor.");
+      return;
+    }
+    // Capture locals: the editor may be cancelled while the 600ms success
+    // animation runs, which would otherwise PATCH /system-settings/null.
+    const settingKey = editingKey;
+    const settingValue = Number(editValue);
+    if (!Number.isFinite(settingValue) || settingValue < 0) {
+      setSaveError("Please enter a valid non-negative number.");
+      return;
+    }
     try {
       setVerifying(true);
       setOtpError("");
@@ -98,8 +128,8 @@ export default function AdminSettingsPage() {
       setOtpSuccess(true);
       setTimeout(async () => {
         try {
-          await updateSystemSetting(editingKey, Number(editValue), result.authorizationToken);
-          toast.success("Setting updated", `"${editingKey}" has been updated successfully.`);
+          await updateSystemSetting(settingKey, settingValue, result.authorizationToken);
+          toast.success("Setting updated", `"${settingKey}" has been updated successfully.`);
           cancelEdit();
           loadSettings();
         } catch (error) {
@@ -168,7 +198,9 @@ export default function AdminSettingsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xl font-bold text-slate-900">
-                    ₱{Number(setting.setting_value).toFixed(2)}
+                    {setting.setting_key === "rate_per_cubic_meter"
+                      ? `₱${Number(setting.setting_value).toFixed(2)}`
+                      : String(setting.setting_value)}
                   </span>
                   <button
                     className="min-h-10 rounded-xl border border-water-200 bg-water-50 px-4 text-sm font-semibold text-water-700 transition-colors hover:bg-water-100"
@@ -201,7 +233,7 @@ export default function AdminSettingsPage() {
           )}
 
           <div>
-            <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="setting-value">New value (₱ per m³)</label>
+            <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="setting-value">{editingKey === "rate_per_cubic_meter" ? "New value (₱ per m³)" : "New value"}</label>
             <input
               className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-water-500 focus:bg-white focus:ring-4 focus:ring-water-100"
               id="setting-value"
