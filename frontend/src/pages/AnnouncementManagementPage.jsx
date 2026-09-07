@@ -114,7 +114,7 @@ export default function AnnouncementManagementPage() {
         />
         <div className="hidden pt-8 lg:block">
           <button
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+            className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
             onClick={() => setIsFormOpen(true)}
             type="button"
           >

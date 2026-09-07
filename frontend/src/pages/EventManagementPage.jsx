@@ -378,16 +378,6 @@ export default function EventManagementPage() {
     <main className="space-y-5 sm:space-y-6">
       <PageHeader description="Plan fiestas, assemblies, celebrations, and community activities in one calendar." eyebrow="Community schedule" title="Events calendar" />
 
-      <section aria-label="Event summary" className="grid grid-cols-2 gap-2 sm:gap-3">
-        <KPI description="Scheduled in the selected month" icon={CalendarDays} title="Events this month" value={monthEventCount} />
-        <KPI
-          description={nextEvent ? `${nextEvent.title} · ${formatTime(nextEvent.time)}` : "Add an event to the community calendar"}
-          icon={Clock3}
-          title="Next scheduled event"
-          value={nextEvent ? formatFullDate(nextEvent.date) : "None"}
-        />
-      </section>
-
       {error && (
         <div
           className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"
@@ -411,8 +401,8 @@ export default function EventManagementPage() {
       {loading ? (
         <LoadingSkeleton label="Loading events calendar" variant="calendar" />
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_23rem]">
-          <section className="relative rounded-2xl border border-slate-200 bg-white shadow-card" aria-labelledby="calendar-heading">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+          <section className="relative order-3 rounded-2xl border border-slate-200 bg-white shadow-card lg:col-span-3" aria-labelledby="calendar-heading">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">
@@ -555,7 +545,7 @@ export default function EventManagementPage() {
             </div>
           </section>
 
-          <aside className="rounded-2xl border border-slate-200 bg-slate-50 p-4 xl:sticky xl:top-24" aria-labelledby="selected-day-heading">
+          <aside className="order-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:order-1 lg:col-span-2" aria-labelledby="selected-day-heading">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">Selected day</p>
@@ -614,6 +604,15 @@ export default function EventManagementPage() {
               )}
             </div>
           </aside>
+          <div aria-label="Event summary" className="grid order-1 grid-cols-1 gap-2 sm:gap-3 lg:order-2 lg:col-span-1">
+            <KPI description="Scheduled in the selected month" icon={CalendarDays} title="Events this month" value={monthEventCount} />
+            <KPI
+              description={nextEvent ? `${nextEvent.title} · ${formatTime(nextEvent.time)}` : "Add an event to the community calendar"}
+              icon={Clock3}
+              title="Next scheduled event"
+              value={nextEvent ? formatFullDate(nextEvent.date) : "None"}
+            />
+          </div>
         </div>
       )}
 

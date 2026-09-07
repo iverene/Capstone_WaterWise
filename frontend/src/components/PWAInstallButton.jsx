@@ -61,7 +61,7 @@ export default function PWAInstallButton({ variant = "header", showLabel = false
   const buttonClassName =
     variant === "panel"
       ? "flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-      : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-water-700 shadow-sm transition-colors hover:border-water-200 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2";
+      : "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-0 bg-transparent text-water-700 transition-colors hover:text-water-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2";
 
   return (
     <button

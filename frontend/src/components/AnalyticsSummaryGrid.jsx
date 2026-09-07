@@ -60,7 +60,11 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         descriptionTone="warning"
         icon={TrendingUp}
         title="Highest-use month"
-        value={highestRecord?.month ?? "No recorded month"}
+        value={
+          <span className="block text-lg sm:text-2xl">
+            {highestRecord?.month ?? "No recorded month"}
+          </span>
+        }
         valueTestId="stat-highest"
       />
     </section>
