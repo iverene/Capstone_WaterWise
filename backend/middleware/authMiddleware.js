@@ -6,6 +6,19 @@ import {
   JWT_ISSUER,
 } from "../config/auth.js";
 import { supabase } from "../config/supabase.js";
+import {
+  getInactivityTimeoutMs,
+  isSessionIdle,
+  touchSessionActivity,
+} from "../services/sessionActivityService.js";
+
+const ACTIVITY_PING_PATH = "/api/auth/activity";
+
+function shouldTouchSessionActivity(req) {
+  if (req.path === ACTIVITY_PING_PATH) return false;
+  if (req.method !== "GET" && req.method !== "HEAD") return true;
+  return req.get("x-user-activity") === "1";
+}
 
 function hashFingerprint(fingerprint) {
   return createHash("sha256").update(String(fingerprint || "")).digest("hex");
@@ -86,10 +99,33 @@ export async function authenticate(req, res, next) {
       }
     }
 
+    // 15-minute inactivity expiry: the JWT may still be within its absolute
+    // lifetime, but it must stop working once the account has been idle.
+    // Background polls (plain GETs, SSE) intentionally do not refresh the
+    // timestamp — only explicit activity pings, user-flagged requests, and
+    // state-changing requests do (see shouldTouchSessionActivity).
+    const idleCheck = await isSessionIdle(payload.role, userId);
+    if (idleCheck.idle) {
+      return res.status(401).json({
+        success: false,
+        code: "SESSION_INACTIVE",
+        message: "Your session expired after 15 minutes of inactivity. Please sign in again.",
+      });
+    }
+
     req.user = {
       id: userId,
       role: payload.role,
     };
+
+    if (shouldTouchSessionActivity(req)) {
+      const now = Date.now();
+      const inactivityTimeoutMs = getInactivityTimeoutMs();
+      const lastActivity = idleCheck.lastActivity ?? now;
+      if (now - lastActivity >= 0 && now - lastActivity < inactivityTimeoutMs) {
+        await touchSessionActivity(payload.role, userId, now);
+      }
+    }
     return next();
   } catch (error) {
     if (error.statusCode === 500) {

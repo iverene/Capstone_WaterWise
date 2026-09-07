@@ -25,6 +25,7 @@ function handleStreamUnauthorized() {
   // session ends the session instead of retrying every 3s forever.
   try {
     window.sessionStorage.setItem("waterwise:session-expired", "1");
+    window.sessionStorage.removeItem("waterwise:last-activity-at");
   } catch {
     // Storage may be disabled; the login page still loads without the notice.
   }

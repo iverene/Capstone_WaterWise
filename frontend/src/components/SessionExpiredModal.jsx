@@ -1,33 +1,42 @@
-import { FiClock } from "react-icons/fi";
 import Modal from "./Modal";
 
-export default function SessionExpiredModal({ isOpen, onConfirm }) {
+export default function SessionExpiredModal({ isOpen, onConfirm, reason, durationLabel = "15 minutes" }) {
+  const isInactivity = reason === "inactivity";
+  const title = isInactivity ? "Signed out" : "Session expired";
+  const description = isInactivity
+    ? `No activity for ${durationLabel}, so you were signed out.`
+    : "Your session has ended. Please sign in again.";
+
   return (
     <Modal
+      ariaLabel={title}
+      bodyClassName="min-h-0"
+      className="max-w-[min(25vw,25rem)] !rounded-none border-0 shadow-[0_26px_60px_rgba(12,55,145,0.28)]"
       closeOnOverlay={false}
-      description="Your session has ended. Please sign in again to continue."
       dismissible={false}
-      eyebrow="Session expired"
       isOpen={isOpen}
       onClose={onConfirm}
+      overlayClassName="bg-[#2167df] px-4 py-8 sm:p-8"
       showCloseButton={false}
-      size="sm"
-      title="Session expired"
+      showHeader={false}
+      size="lg"
     >
-      <div className="flex flex-col items-center gap-4 p-5 text-center sm:p-6">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-water-50 text-water-700">
-          <FiClock aria-hidden="true" className="h-7 w-7" />
-        </span>
-        <p className="max-w-sm text-sm leading-6 text-slate-600">
-          For your security, WaterWise signed you out after your session expired.
-        </p>
-        <button
-          className="ww-primary-button flex min-h-12 w-full items-center justify-center px-5 text-sm sm:text-base"
-          onClick={onConfirm}
-          type="button"
-        >
-          Sign in again
-        </button>
+      <div className="relative overflow-hidden px-6 py-12 text-center sm:px-12 sm:py-16">
+        <div aria-hidden="true" className="absolute -right-24 -top-28 h-64 w-64 rounded-full border-[3rem] border-white/10" />
+        <div aria-hidden="true" className="absolute -bottom-40 -left-24 h-72 w-72 rounded-full border-[3rem] border-water-100/60" />
+
+        <h2 className="relative text-xl font-extrabold tracking-[-0.03em] text-navy-900 sm:text-2xl">{title}</h2>
+        <p className="relative mx-auto mt-4 max-w-md text-sm leading-6 text-slate-500 sm:text-base sm:leading-7">{description}</p>
+
+        <div className="relative mx-auto mt-7 max-w-52">
+          <button
+            className="ww-primary-button flex min-h-11 w-full items-center justify-center px-5 text-sm"
+            onClick={onConfirm}
+            type="button"
+          >
+            Sign in again
+          </button>
+        </div>
       </div>
     </Modal>
   );

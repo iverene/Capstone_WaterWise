@@ -50,6 +50,12 @@ export function storeSession({ token, user }) {
   }
   window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
   window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  try {
+    window.sessionStorage.setItem("waterwise:last-activity-at", String(Date.now()));
+    window.sessionStorage.removeItem("waterwise:session-inactive");
+  } catch {
+    // Activity tracking is best-effort; backend idle enforcement still applies.
+  }
   if (user?.role === "meter-reader") {
     window.localStorage.setItem(PERSISTENT_METER_READER_KEY, JSON.stringify({ token, user }));
   } else {
@@ -87,6 +93,11 @@ export function clearSession() {
   clearStoredApiCache();
   window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
   window.sessionStorage.removeItem(ACCOUNT_STORAGE_KEY);
+  try {
+    window.sessionStorage.removeItem("waterwise:last-activity-at");
+  } catch {
+    // Ignore storage failures during logout.
+  }
   window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
   disableConsumerPushSessionPersistence();
   if (hadSession) {
