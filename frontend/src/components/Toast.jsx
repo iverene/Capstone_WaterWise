@@ -77,6 +77,9 @@ export function ToastProvider({ children }) {
     const id = createToastId();
     const duration = options.duration ?? (type === "error" ? 5000 : 4000);
     const toast = {
+      actions: Array.isArray(options.actions) ? options.actions : [],
+      dismissOnInteract: options.dismissOnInteract === true,
+      duration,
       id,
       exiting: false,
       message: options.message ?? "",
@@ -91,6 +94,28 @@ export function ToastProvider({ children }) {
     return id;
   }, [dismiss]);
 
+  const update = useCallback((id, patch = {}) => {
+    setToasts((current) => current.map((item) => (
+      item.id === id ? { ...item, ...patch } : item
+    )));
+  }, []);
+
+  useEffect(() => {
+    const interactive = toasts.filter((item) => item.dismissOnInteract && !item.exiting);
+    if (interactive.length === 0) return undefined;
+    // Passive only: the user's tap/click/keypress proceeds normally while the
+    // toast fades out. No preventDefault, no stopPropagation.
+    const dismissInteractive = () => {
+      interactive.forEach((item) => dismiss(item.id));
+    };
+    window.addEventListener("pointerdown", dismissInteractive);
+    window.addEventListener("keydown", dismissInteractive);
+    return () => {
+      window.removeEventListener("pointerdown", dismissInteractive);
+      window.removeEventListener("keydown", dismissInteractive);
+    };
+  }, [dismiss, toasts]);
+
   useEffect(() => () => {
     timers.current.forEach((timer) => window.clearTimeout(timer));
     exiting.current.clear();
@@ -103,8 +128,9 @@ export function ToastProvider({ children }) {
     info: (title, message, options = {}) => show({ ...options, message, title, type: "info" }),
     show,
     success: (title, message, options = {}) => show({ ...options, message, title, type: "success" }),
+    update,
     warning: (title, message, options = {}) => show({ ...options, message, title, type: "warning" }),
-  }), [dismiss, show]);
+  }), [dismiss, show, update]);
 
   return (
     <ToastContext.Provider value={toast}>
@@ -112,27 +138,44 @@ export function ToastProvider({ children }) {
       {typeof document !== "undefined" && createPortal(
         <div
           aria-label="System notifications"
-          className="pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[100] flex flex-col items-center gap-3 sm:inset-x-auto sm:right-6 sm:top-[4.5rem] sm:w-[25rem] sm:items-stretch lg:right-20 lg:top-6"
+          className="pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[100] flex max-h-[calc(100dvh-7rem)] flex-col items-center gap-2 overflow-y-auto overscroll-contain sm:inset-x-auto sm:right-6 sm:top-[4.5rem] sm:w-[25rem] sm:items-stretch sm:gap-3 lg:right-20 lg:top-6"
         >
           {toasts.map((item) => {
             const { badge, border, icon, Icon, label } = toastStyles[item.type];
             return (
               <div
                 aria-atomic="true"
-                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full max-w-md overflow-hidden rounded-2xl border bg-white shadow-raised ${border}`}
+                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full max-w-[20rem] overflow-hidden rounded-xl border bg-white shadow-raised sm:max-w-md sm:rounded-2xl ${border}`}
                 key={item.id}
                 role={item.type === "error" ? "alert" : "status"}
               >
-                <div className="flex items-start gap-3 p-4">
-                  <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${icon}`}>
-                    <Icon aria-hidden="true" className="h-5 w-5" />
+                <div className="flex items-start gap-2 p-2.5 sm:gap-3 sm:p-4">
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11 sm:rounded-xl ${icon}`}>
+                    <Icon aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" />
                   </span>
-                  <div className="min-w-0 flex-1 pt-0.5">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.1em] ${badge}`}>
+                  <div className="min-w-0 flex-1 pt-0">
+                    <span className={`inline-flex rounded-full border px-1.5 py-0 text-[10px] font-bold uppercase tracking-[0.1em] sm:px-2 sm:py-0.5 sm:text-[11px] ${badge}`}>
                       {label}
                     </span>
-                    <p className="mt-1.5 text-sm font-extrabold leading-5 text-navy-900">{item.title}</p>
-                    {item.message && <p className="mt-1 text-sm leading-5 text-slate-600">{item.message}</p>}
+                    <p className="mt-1 text-xs font-extrabold leading-4 text-navy-900 sm:mt-1.5 sm:text-sm sm:leading-5">{item.title}</p>
+                    {item.message && <p className="mt-0.5 text-xs leading-4 text-slate-600 sm:mt-1 sm:text-sm sm:leading-5">{item.message}</p>}
+                    {item.actions?.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-1.5 sm:mt-3 sm:gap-2">
+                        {item.actions.map((action) => (
+                          <button
+                            className={action.variant === "primary"
+                              ? "ww-primary-button flex min-h-9 w-full items-center justify-center px-3 text-xs disabled:opacity-60 sm:min-h-11 sm:px-4 sm:text-sm"
+                              : "flex min-h-9 w-full items-center justify-center rounded-xl px-3 text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-navy-900 disabled:opacity-60 sm:min-h-11 sm:px-4 sm:text-sm"}
+                            disabled={action.disabled}
+                            key={action.label}
+                            onClick={action.onClick}
+                            type="button"
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

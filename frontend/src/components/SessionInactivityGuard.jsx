@@ -1,12 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
-import SessionExpiredModal from "./SessionExpiredModal";
 import { useToast } from "./Toast";
 import { clearSession, getAccessToken } from "../services/authToken";
 import {
   clearLocalActivity,
-  fetchInactivityTimeout,
-  formatInactivityDuration,
   getIdleMs,
   getInactivityTimeoutMs,
   getLastLocalActivity,
@@ -27,13 +24,10 @@ export default function SessionInactivityGuard() {
   const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
-  const [isInactive, setIsInactive] = useState(false);
-  const [timeoutMs, setTimeoutMs] = useState(getInactivityTimeoutMs());
   const toastRef = useRef(toast);
 
   useEffect(() => {
     toastRef.current = toast;
-    if (isInactive) return undefined;
     if (!getAccessToken()) return undefined;
     if (PUBLIC_ROUTES.includes(location.pathname)) return undefined;
 
@@ -41,12 +35,6 @@ export default function SessionInactivityGuard() {
     let warningToastId = null;
     let warnedForCycle = false;
     initLocalActivity();
-
-    // Backend is the source of truth for the timeout; fall back to the
-    // cached/default value if the fetch fails (offline backend).
-    fetchInactivityTimeout().then((fetched) => {
-      if (!cancelled) setTimeoutMs(fetched);
-    });
 
     const dismissWarning = () => {
       if (warningToastId !== null) {
@@ -56,18 +44,22 @@ export default function SessionInactivityGuard() {
     };
 
     let timer;
+    const signOutForInactivity = () => {
+      dismissWarning();
+      warnedForCycle = false;
+      markInactiveSession();
+      clearLocalActivity();
+      clearSession();
+      // The explanation toast is shown on the login page (single toast site).
+      navigate("/login", { replace: true, state: { sessionInactive: true } });
+    };
     const schedule = () => {
       if (cancelled) return;
       if (timer) window.clearTimeout(timer);
       const timeout = getInactivityTimeoutMs();
       const remaining = timeout - getIdleMs();
       if (remaining <= 0) {
-        dismissWarning();
-        warnedForCycle = false;
-        markInactiveSession();
-        clearLocalActivity();
-        clearSession();
-        setIsInactive(true);
+        signOutForInactivity();
         return;
       }
       const warningLead = getWarningLeadMs();
@@ -140,20 +132,9 @@ export default function SessionInactivityGuard() {
     };
     // `toast` is a stable context value (memoized in ToastProvider); the
     // live reference is read via toastRef to avoid re-subscribing listeners.
+    // `navigate` is stable from react-router.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInactive, location.pathname]);
+  }, [location.pathname]);
 
-  const handleConfirm = () => {
-    setIsInactive(false);
-    navigate("/login", { replace: true, state: { sessionInactive: true } });
-  };
-
-  return (
-    <SessionExpiredModal
-      isOpen={isInactive}
-      onConfirm={handleConfirm}
-      reason="inactivity"
-      durationLabel={formatInactivityDuration(timeoutMs)}
-    />
-  );
+  return null;
 }

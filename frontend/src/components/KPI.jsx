@@ -97,7 +97,7 @@ export default function KPI({
     : trendTone;
 
   return (
-    <article className={`flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-5 ${className}`.trim()} data-testid={cardTestId}>
+    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-card sm:p-5 ${className}`.trim()} data-testid={cardTestId}>
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         {Icon ? (
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700 sm:h-10 sm:w-10 sm:rounded-xl">

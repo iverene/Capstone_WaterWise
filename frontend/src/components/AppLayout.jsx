@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FiBarChart2,
-  FiBell,
   FiAlertTriangle,
   FiBookOpen,
   FiCalendar,
@@ -12,7 +11,6 @@ import {
   FiMessageSquare,
   FiTrash2,
   FiUsers,
-  FiUser,
   FiWifiOff,
   FiX,
 } from "react-icons/fi";
@@ -133,8 +131,8 @@ export default function AppLayout({ children }) {
   const [accountName, setAccountName] = useState("");
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
-  const [isPushPromptOpen, setIsPushPromptOpen] = useState(false);
-  const [isEnablingPush, setIsEnablingPush] = useState(false);
+  const pushToastIdRef = useRef(null);
+  const isEnablingPushRef = useRef(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -231,13 +229,55 @@ export default function AppLayout({ children }) {
     };
   }, [activeRole, navigate]);
 
+  const accountId = account?.id;
+
+  const dismissPushPrompt = useCallback(({ markDismissed = true } = {}) => {
+    if (markDismissed && accountId) {
+      window.sessionStorage.setItem(`${PUSH_PROMPT_SESSION_PREFIX}${accountId}`, "true");
+    }
+    if (pushToastIdRef.current) {
+      toast.dismiss(pushToastIdRef.current);
+      pushToastIdRef.current = null;
+    }
+    isEnablingPushRef.current = false;
+  }, [accountId, toast]);
+
+  const handleEnablePush = useCallback(async () => {
+    if (isEnablingPushRef.current) return;
+    isEnablingPushRef.current = true;
+    try {
+      await enablePushNotifications();
+      dismissPushPrompt();
+      toast.success("Notifications enabled", "This device will receive WaterWise alerts even when the app is closed.");
+    } catch (error) {
+      isEnablingPushRef.current = false;
+      if (Notification.permission === "denied") dismissPushPrompt();
+      toast.error("Notifications not enabled", error.message);
+    }
+  }, [dismissPushPrompt, toast]);
+
+  const showPushToast = useCallback(() => {
+    if (pushToastIdRef.current) return;
+    const id = toast.show({
+      actions: [
+        { label: "Enable notifications", onClick: () => handleEnablePush(), variant: "primary" },
+        { label: "Not now", onClick: () => dismissPushPrompt(), variant: "ghost" },
+      ],
+      duration: 0,
+      message: "Get bill reminders and service alerts even when the app is closed.",
+      title: "Enable push notifications",
+      type: "info",
+    });
+    pushToastIdRef.current = id;
+  }, [dismissPushPrompt, handleEnablePush, toast]);
+
   useEffect(() => {
     if (
       activeRole !== "consumer" ||
-      !account?.id ||
+      !accountId ||
       !pushSupported() ||
       Notification.permission === "denied" ||
-      window.sessionStorage.getItem(`${PUSH_PROMPT_SESSION_PREFIX}${account.id}`)
+      window.sessionStorage.getItem(`${PUSH_PROMPT_SESSION_PREFIX}${accountId}`)
     ) return undefined;
 
     const controller = new AbortController();
@@ -249,14 +289,22 @@ export default function AppLayout({ children }) {
       if (subscription) {
         enableConsumerPushSessionPersistence();
       } else if (configuration.enabled) {
-        setIsPushPromptOpen(true);
+        showPushToast();
       }
     }).catch((error) => {
       if (!isCanceledRequest(error)) console.error("Push prompt check failed:", error.message);
     });
 
     return () => controller.abort();
-  }, [account?.id, activeRole]);
+  }, [accountId, activeRole, showPushToast]);
+
+  useEffect(() => () => {
+    if (pushToastIdRef.current) {
+      toast.dismiss(pushToastIdRef.current);
+      pushToastIdRef.current = null;
+    }
+    isEnablingPushRef.current = false;
+  }, [accountId, toast]);
 
   useEffect(() => {
     if (!isNotificationOpen) return undefined;
@@ -333,27 +381,6 @@ export default function AppLayout({ children }) {
       setIsLogoutConfirmOpen(false);
       setIsSigningOut(false);
       navigate("/login");
-    }
-  };
-
-  const dismissPushPrompt = () => {
-    if (account?.id) {
-      window.sessionStorage.setItem(`${PUSH_PROMPT_SESSION_PREFIX}${account.id}`, "true");
-    }
-    setIsPushPromptOpen(false);
-  };
-
-  const handleEnablePush = async () => {
-    setIsEnablingPush(true);
-    try {
-      await enablePushNotifications();
-      dismissPushPrompt();
-      toast.success("Notifications enabled", "This device will receive WaterWise alerts even when the app is closed.");
-    } catch (error) {
-      if (Notification.permission === "denied") dismissPushPrompt();
-      toast.error("Notifications not enabled", error.message);
-    } finally {
-      setIsEnablingPush(false);
     }
   };
 
@@ -630,31 +657,6 @@ export default function AppLayout({ children }) {
           }}
         />
       )}
-
-      <Modal
-        description="Get bill reminders and service alerts even when the app is closed."
-        eyebrow="Stay informed"
-        isOpen={isPushPromptOpen}
-        onClose={dismissPushPrompt}
-        size="sm"
-        title="Enable push notifications"
-      >
-        <div className="p-5 sm:p-6">
-          <div className="flex items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-water-100 text-water-700">
-              <FiBell aria-hidden="true" className="h-6 w-6" />
-            </span>
-            <div>
-              <p className="text-sm leading-6 text-slate-700">Stay updated on payments, due dates, and service interruptions.</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">You can turn this off anytime.</p>
-            </div>
-          </div>
-          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60" disabled={isEnablingPush} onClick={dismissPushPrompt} type="button">Not now</button>
-            <button className="ww-primary-button min-h-11 px-5 text-sm disabled:opacity-60" disabled={isEnablingPush} onClick={handleEnablePush} type="button">{isEnablingPush ? "Enabling…" : "Enable notifications"}</button>
-          </div>
-        </div>
-      </Modal>
 
       <Modal
         description={selectedNotificationPresentation.label}

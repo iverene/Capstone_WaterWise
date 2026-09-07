@@ -2,6 +2,7 @@ import { ArrowLeft, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import Modal from "../components/Modal";
+import LoadingSkeleton from "../components/LoadingSkeleton";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
 import { useToast } from "../components/Toast";
@@ -178,10 +179,7 @@ export default function AdminSettingsPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-8 text-sm text-slate-500">
-          <LoaderCircle className="h-5 w-5 animate-spin text-water-600" />
-          Loading settings…
-        </div>
+        <LoadingSkeleton count={3} label="Loading system settings" variant="list" />
       ) : (
         <div className="space-y-3">
           {settings.map((setting) => (

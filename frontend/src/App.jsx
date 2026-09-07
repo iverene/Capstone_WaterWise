@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RouteAccessError from "./components/RouteAccessError";
-import SessionExpiredModal from "./components/SessionExpiredModal";
 import SessionInactivityGuard from "./components/SessionInactivityGuard";
 import {
   getStoredAccount as getSessionAccount,
@@ -147,34 +146,26 @@ function MockPortalPage() {
 function SessionExpiryGuard() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
-    if (isExpired) return undefined;
     const expiresAt = getAccessTokenExpiresAt();
     if (!expiresAt) return undefined;
     const isPublicRoute = ["/login", "/forgot-password", "/reset-password"].includes(location.pathname);
+    const expireNow = () => {
+      clearSession();
+      // The explanation toast is shown on the login page (single toast site).
+      if (!isPublicRoute) navigate("/login", { replace: true, state: { sessionExpired: true } });
+    };
     const remainingMs = expiresAt - Date.now();
     if (remainingMs <= 0) {
-      clearSession();
-      if (isPublicRoute) return undefined;
-      // Defer so the expired flag is set from a callback, not the effect body.
-      const timer = window.setTimeout(() => setIsExpired(true), 0);
-      return () => window.clearTimeout(timer);
+      expireNow();
+      return undefined;
     }
-    const timer = window.setTimeout(() => {
-      clearSession();
-      if (!isPublicRoute) setIsExpired(true);
-    }, remainingMs);
+    const timer = window.setTimeout(expireNow, remainingMs);
     return () => window.clearTimeout(timer);
-  }, [isExpired, location.pathname, navigate]);
+  }, [location.pathname, navigate]);
 
-  const handleConfirm = () => {
-    setIsExpired(false);
-    navigate("/login", { replace: true, state: { sessionExpired: true } });
-  };
-
-  return <SessionExpiredModal isOpen={isExpired} onConfirm={handleConfirm} />;
+  return null;
 }
 
 function getStoredAccount() {

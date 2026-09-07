@@ -27,6 +27,7 @@ export default function Login() {
   const toast = useToast();
   const identifierRef = useRef(null);
   const passwordRef = useRef(null);
+  const sessionNoticeShownRef = useRef(false);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -51,7 +52,34 @@ export default function Login() {
   }, [navigate]);
 
   useEffect(() => {
-    if (location.state?.sessionExpired === true || location.state?.sessionInactive === true) {
+    const wasExpired = location.state?.sessionExpired === true;
+    const wasInactive = location.state?.sessionInactive === true;
+    let flagExpired = false;
+    let flagInactive = false;
+    try {
+      // Full-page reloads (e.g. a 401 from the API layer) drop router state,
+      // so the reason is also persisted in sessionStorage flags.
+      flagExpired = window.sessionStorage.getItem("waterwise:session-expired") === "1";
+      flagInactive = window.sessionStorage.getItem("waterwise:session-inactive") === "1";
+    } catch {
+      // Ignore storage failures.
+    }
+    // Persistent until the user taps anywhere; guarded for StrictMode remounts.
+    if ((wasExpired || flagExpired || wasInactive || flagInactive) && !sessionNoticeShownRef.current) {
+      sessionNoticeShownRef.current = true;
+      if (wasInactive || flagInactive) {
+        toast.warning("Signed out", "No activity for some time, so you were signed out. Please sign in again.", {
+          dismissOnInteract: true,
+          duration: 0,
+        });
+      } else {
+        toast.error("Session expired", "Your session has ended. Please sign in again.", {
+          dismissOnInteract: true,
+          duration: 0,
+        });
+      }
+    }
+    if (wasExpired || wasInactive) {
       navigate(".", { replace: true, state: null });
     }
     try {

@@ -108,7 +108,8 @@ export default function AnomalyRecommendationSection() {
   );
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("anomalies");
+  // BACKUP (anomalies hidden): original default was "anomalies". Restore to "anomalies" to bring back the Anomalies tab.
+  const [view, setView] = useState("recommendations");
 
   const loadAnalysis = useCallback(async (signal) => {
     setLoading(true);
@@ -163,7 +164,8 @@ export default function AnomalyRecommendationSection() {
             Consumption review
           </h2>
           <p className="mt-2 text-sm text-slate-500">
-            Detects unusual usage and provides data-based administrative actions.
+            {/* BACKUP (anomalies hidden) original text: "Detects unusual usage and provides data-based administrative actions." */}
+            Provides data-based administrative actions.
           </p>
         </div>
         <button
@@ -177,9 +179,10 @@ export default function AnomalyRecommendationSection() {
         </button>
       </div>
 
+      {/* BACKUP (anomalies hidden): toggle kept with a single option so setView stays used. Restore the anomalies option below to bring back the tab switch. */}
       <div aria-label="Decision support view" className="mb-6 inline-flex rounded-xl bg-slate-100 p-1" role="group">
         {[
-          { id: "anomalies", label: "Anomalies" },
+          // BACKUP (anomalies hidden): { id: "anomalies", label: "Anomalies" },
           { id: "recommendations", label: "Recommended actions" },
         ].map((option) => (
           <button
@@ -213,6 +216,7 @@ export default function AnomalyRecommendationSection() {
 
       {!loading && !errorMessage && (
         <div className="space-y-7">
+          {/* BACKUP (anomalies hidden): block below is intact but unreachable while the Anomalies toggle stays hidden. Restore the toggle option + default view to re-enable. */}
           {view === "anomalies" && (
             <>
               <div className="grid gap-4 lg:grid-cols-2">

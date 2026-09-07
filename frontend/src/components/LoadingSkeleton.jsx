@@ -90,8 +90,8 @@ function ChartSkeleton() {
 
 function CalendarSkeleton() {
   return (
-    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_23rem]">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
+    <div className="grid grid-cols-1 items-start gap-5">
+      <div className="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
         <div className="flex items-center justify-between gap-4 border-b border-slate-200 p-5">
           <div><SkeletonBlock className="h-3 w-24" /><SkeletonBlock className="mt-3 h-7 w-44" /></div>
           <div className="flex gap-2"><SkeletonBlock className="h-11 w-11" /><SkeletonBlock className="h-11 w-20" /><SkeletonBlock className="h-11 w-11" /></div>
@@ -105,7 +105,7 @@ function CalendarSkeleton() {
           ))}
         </div>
       </div>
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="order-1 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <SkeletonBlock className="h-3 w-24" />
         <SkeletonBlock className="mt-3 h-6 w-56 max-w-full" />
         <SkeletonBlock className="mt-2 h-3 w-32" />

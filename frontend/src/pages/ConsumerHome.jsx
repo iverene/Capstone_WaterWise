@@ -178,9 +178,9 @@ export default function ConsumerHome() {
         />
       </section>
 
-      <div className="mx-auto w-full max-w-3xl">
+      <div className="w-full">
         <section className="min-w-0" aria-labelledby="consumer-announcements-heading">
-          <div className="mb-4 px-1">
+          <div className="mb-4">
             <h2 className="text-xl font-extrabold text-navy-900" id="consumer-announcements-heading">Latest announcements</h2>
           </div>
           <AnnouncementPage announcements={home.announcements} showEndMarker={false} showHeader={false} />
