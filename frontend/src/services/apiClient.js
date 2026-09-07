@@ -84,12 +84,18 @@ apiClient.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
     if (status === 401 && window.location.pathname !== "/login") {
-      // Expired, revoked (password change), deactivated, or device-mismatch
-      // sessions must end here instead of leaving the user stuck: the stored
-      // token is no longer valid server-side. The flag lets the login page
-      // explain why the redirect happened (full reload drops router state).
+      // Expired, idle-timed-out, revoked (password change), deactivated, or
+      // device-mismatch sessions must end here instead of leaving the user
+      // stuck: the stored token is no longer valid server-side. The flag lets
+      // the login page explain why the redirect happened (full reload drops
+      // router state).
+      const isInactive = error.response?.data?.code === "SESSION_INACTIVE";
       try {
         window.sessionStorage.setItem("waterwise:session-expired", "1");
+        if (isInactive) {
+          window.sessionStorage.setItem("waterwise:session-inactive", "1");
+        }
+        window.sessionStorage.removeItem("waterwise:last-activity-at");
       } catch {
         // Storage may be disabled; the login page still loads without the notice.
       }
@@ -110,13 +116,22 @@ export async function apiRequest(path, options = {}) {
       // silently dropping the body.
     }
   }
+  const method = (options.method ?? "GET").toUpperCase();
+  const headers = { ...(options.headers ?? {}) };
+  // Mutations always imply real user action, so the backend refreshes the
+  // 15-minute inactivity timestamp for them. Plain GET polls and the SSE
+  // stream never touch it; explicit user activity travels via POST
+  // /auth/activity instead.
+  if (!["GET", "HEAD"].includes(method) && !headers["X-User-Activity"]) {
+    headers["X-User-Activity"] = "1";
+  }
   const response = await apiClient.request({
     url: path,
     method: options.method ?? "GET",
     data,
     params: options.params,
     responseType: options.responseType,
-    headers: options.headers,
+    headers,
     signal: options.signal,
   });
   return response.data;

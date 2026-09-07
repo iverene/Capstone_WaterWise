@@ -4,6 +4,7 @@ import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RouteAccessError from "./components/RouteAccessError";
 import SessionExpiredModal from "./components/SessionExpiredModal";
+import SessionInactivityGuard from "./components/SessionInactivityGuard";
 import {
   getStoredAccount as getSessionAccount,
   clearSession,
@@ -518,6 +519,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <SessionExpiryGuard />
+      <SessionInactivityGuard />
       <AppRoutes key={dataRevision} />
       <PWAInstallPrompt />
     </BrowserRouter>

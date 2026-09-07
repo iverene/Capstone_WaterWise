@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
+import { getLoginLockoutMinutes, getLoginMaxAttempts } from "../config/auth.js";
 import { supabase } from "../config/supabase.js";
 
 const ACCOUNT_SOURCES = [
@@ -53,22 +54,41 @@ const findAccount = async (table, identifier) => {
 };
 
 const recordFailedLogin = async (source, account) => {
-  const { data, error } = await supabase.rpc("record_failed_login", {
-    p_account_type: source.role,
-    p_account_id: account.id,
-  });
+  // Login lockout is enforced here in JS (not in the record_failed_login DB
+  // function) so LOGIN_MAX_ATTEMPTS / LOGIN_LOCKOUT_MINUTES from backend/.env
+  // take effect without any new SQL migration. It reuses the existing
+  // failed_login_attempts / locked_until columns from the base migration.
+  const maxAttempts = getLoginMaxAttempts();
+  const lockoutMinutes = getLoginLockoutMinutes();
+  const now = Date.now();
+  const previousLockExpired =
+    account.locked_until && new Date(account.locked_until).getTime() <= now;
+  const attempts = previousLockExpired ? 1 : Number(account.failed_login_attempts ?? 0) + 1;
+  const lockedUntil =
+    attempts >= maxAttempts
+      ? new Date(now + lockoutMinutes * 60 * 1000).toISOString()
+      : null;
+
+  const { error } = await supabase
+    .from(source.table)
+    .update({
+      failed_login_attempts: attempts,
+      locked_until: lockedUntil,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
 
   if (error) {
     throw new Error(`Failed to record login attempt: ${error.message}`);
   }
 
-  if (data?.locked_until) {
-    throw createLockoutError(data.locked_until);
+  if (lockedUntil) {
+    throw createLockoutError(lockedUntil);
   }
 
   return {
-    failedAttempts: Number(data?.failed_attempts ?? 0),
-    remainingAttempts: Math.max(0, 5 - Number(data?.failed_attempts ?? 0)),
+    failedAttempts: attempts,
+    remainingAttempts: Math.max(0, maxAttempts - attempts),
   };
 };
 

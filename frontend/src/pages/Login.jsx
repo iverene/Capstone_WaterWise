@@ -27,21 +27,6 @@ export default function Login() {
   const toast = useToast();
   const identifierRef = useRef(null);
   const passwordRef = useRef(null);
-  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(() => {
-    // Shown after an expired-session redirect (expiry modal confirm passes
-    // router state; 401 API logouts survive only via sessionStorage flag
-    // because the full-page reload drops router state).
-    if (location.state?.sessionExpired === true) return true;
-    try {
-      if (window.sessionStorage.getItem("waterwise:session-expired") === "1") {
-        window.sessionStorage.removeItem("waterwise:session-expired");
-        return true;
-      }
-    } catch {
-      // Session storage unavailable; fall through to no notice.
-    }
-    return false;
-  });
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -54,6 +39,7 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [lockSeconds, setLockSeconds] = useState(0);
+  const [lockedIdentifier, setLockedIdentifier] = useState("");
   const [otpExpiresAt, setOtpExpiresAt] = useState(null);
   const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
 
@@ -65,8 +51,14 @@ export default function Login() {
   }, [navigate]);
 
   useEffect(() => {
-    if (location.state?.sessionExpired === true) {
+    if (location.state?.sessionExpired === true || location.state?.sessionInactive === true) {
       navigate(".", { replace: true, state: null });
+    }
+    try {
+      window.sessionStorage.removeItem("waterwise:session-inactive");
+      window.sessionStorage.removeItem("waterwise:session-expired");
+    } catch {
+      // Ignore storage failures.
     }
     // Clear one-time router state on mount only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,7 +67,12 @@ export default function Login() {
   useEffect(() => {
     if (lockSeconds <= 0) return undefined;
     const timer = window.setTimeout(() => {
-      setLockSeconds((seconds) => Math.max(0, seconds - 1));
+      if (lockSeconds <= 1) {
+        setLockSeconds(0);
+        setLockedIdentifier("");
+      } else {
+        setLockSeconds(lockSeconds - 1);
+      }
     }, 1000);
     return () => window.clearTimeout(timer);
   }, [lockSeconds]);
@@ -92,13 +89,22 @@ export default function Login() {
     return () => window.clearInterval(timer);
   }, [adminChallengeToken, otpExpiresAt]);
 
-  const lockMessage = lockSeconds > 0
+  // The server lock is per account, so the countdown note and submit block
+  // apply only while the typed identifier matches the locked one. Typing a
+  // different account hides the note and allows signing in without refresh.
+  const isLockedIdentifier =
+    lockSeconds > 0 &&
+    lockedIdentifier !== "" &&
+    identifier.trim().toLowerCase() === lockedIdentifier;
+
+  const lockMessage = isLockedIdentifier
     ? `Too many incorrect attempts. Try again in ${Math.floor(lockSeconds / 60)}:${String(lockSeconds % 60).padStart(2, "0")}.`
     : "";
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (isSubmitting) return;
+    if (isLockedIdentifier) return;
 
     if (adminChallengeToken) {
       if (!/^\d{6}$/.test(otp)) {
@@ -191,6 +197,7 @@ export default function Login() {
 
       if (status === 429 && retryAfterSeconds > 0) {
         setLockSeconds(retryAfterSeconds);
+        setLockedIdentifier(trimmedIdentifier.toLowerCase());
         setIdentifierError("");
         setPasswordError("");
         setMessage("");
@@ -312,24 +319,6 @@ export default function Login() {
                 </p>
               </div>
 
-              {sessionExpiredNotice && !adminChallengeToken && (
-                <div className="mb-5 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between" role="alert">
-                  <p className="text-xs font-semibold leading-5 text-amber-900 sm:text-sm">
-                    Your session expired. Please sign in again.
-                  </p>
-                  <button
-                    className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-water-600 px-4 text-xs font-bold text-white transition hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 sm:text-sm"
-                    onClick={() => {
-                      setSessionExpiredNotice(false);
-                      requestAnimationFrame(() => identifierRef.current?.focus());
-                    }}
-                    type="button"
-                  >
-                    Sign in
-                  </button>
-                </div>
-              )}
-
               <form aria-busy={isSubmitting} className="space-y-5 lg:space-y-6" onSubmit={handleSubmit}>
                 {!adminChallengeToken && <div>
                   <label
@@ -345,7 +334,7 @@ export default function Login() {
                       aria-invalid={Boolean(identifierError)}
                       autoComplete="username"
                       className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-4 text-sm sm:text-base"
-                      disabled={isSubmitting || lockSeconds > 0}
+                      disabled={isSubmitting}
                       id="login-identifier"
                       onChange={(event) => {
                         setIdentifier(event.target.value);
@@ -377,7 +366,7 @@ export default function Login() {
                       aria-invalid={Boolean(passwordError)}
                       autoComplete="current-password"
                       className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-12 text-sm sm:text-base"
-                      disabled={isSubmitting || lockSeconds > 0}
+                      disabled={isSubmitting}
                       id="login-password"
                       onChange={(event) => {
                         setPassword(event.target.value);
@@ -393,7 +382,7 @@ export default function Login() {
                       aria-label={showPassword ? "Hide password" : "Show password"}
                       aria-pressed={showPassword}
                       className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
-                      disabled={isSubmitting || lockSeconds > 0}
+                      disabled={isSubmitting}
                       onClick={() => setShowPassword((visible) => !visible)}
                       type="button"
                     >
@@ -444,7 +433,7 @@ export default function Login() {
                 {!adminChallengeToken && (
                 <button
                   className="ww-primary-button flex min-h-10 sm:min-h-12 lg:min-h-[3.25rem] w-full items-center justify-center gap-2 px-5 py-3 text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
-                  disabled={isSubmitting || lockSeconds > 0}
+                  disabled={isSubmitting || isLockedIdentifier}
                   style={{ cursor: isSubmitting ? "default" : undefined }}
                   type="submit"
                 >

@@ -1,7 +1,11 @@
 import jwt from "jsonwebtoken";
 import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import {
+  getAccessTokenDuration,
   getJwtSecret,
+  getOtpExpiry,
+  getOtpMaxAttempts,
+  getOtpResendCooldownSeconds,
   JWT_AUDIENCE,
   JWT_ISSUER,
 } from "../config/auth.js";
@@ -31,6 +35,18 @@ import {
   trustedDeviceCookieOptions,
   verifyTrustedDevice,
 } from "../models/trustedDeviceModels.js";
+import {
+  clearSessionActivity,
+  getInactivityTimeoutMs,
+  touchSessionActivity,
+} from "../services/sessionActivityService.js";
+
+export function getSessionConfig(req, res) {
+  return res.status(200).json({
+    success: true,
+    inactivityTimeoutMs: getInactivityTimeoutMs(),
+  });
+}
 
 const ADMIN_LOGIN_OTP_AUDIENCE = "waterwise-admin-login-otp";
 const EMAIL_CHANGE_OTP_AUDIENCE = "waterwise-consumer-email-change-otp";
@@ -48,14 +64,7 @@ const staffActionAuthorizations = new Map();
 const consumerPasswordOtpAttempts = new Map();
 const consumerPasswordAuthorizations = new Map();
 const passwordResetOtpAttempts = new Map();
-const MAX_OTP_ATTEMPTS = 5;
-const OTP_RESEND_COOLDOWN_SECONDS = 300;
-const ACCESS_TOKEN_DURATION_BY_ROLE = {
-  consumer: "4h",
-  "meter-reader": "2h",
-  admin: "1h",
-  "super-admin": "30m",
-};
+
 const STAFF_ACTIONS = {
   "manage-staff": "open Super Admin staff management",
   "create-admin": "create an Admin account",
@@ -119,7 +128,7 @@ function createAccessToken(user, passwordHash) {
       subject: String(user.id),
       issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
-      expiresIn: ACCESS_TOKEN_DURATION_BY_ROLE[user.role] ?? "1h",
+      expiresIn: getAccessTokenDuration(user.role),
     },
   );
 }
@@ -155,9 +164,9 @@ export async function requestStaffActionOtp(req, res) {
       return res.status(429).json({ success: false, message: requestLimit.reason === "hourly_lock" ? "Too many verification codes were requested. Try again in 1 hour." : "Please wait 5 minutes before requesting another verification code.", retryAfterSeconds: requestLimit.retryAfterSeconds });
     }
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
-    const challengeToken = jwt.sign({ role: "super-admin", action, targetId: parsedTargetId, otpHash: otpFingerprint(otp), passwordFingerprint: passwordFingerprint(account.password), emailFingerprint: passwordFingerprint(account.email.toLowerCase()) }, getJwtSecret(), { subject: String(account.id), issuer: JWT_ISSUER, audience: STAFF_ACTION_OTP_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`staff:${account.id}:${Date.now()}:${otp}`).digest("hex") });
+    const challengeToken = jwt.sign({ role: "super-admin", action, targetId: parsedTargetId, otpHash: otpFingerprint(otp), passwordFingerprint: passwordFingerprint(account.password), emailFingerprint: passwordFingerprint(account.email.toLowerCase()) }, getJwtSecret(), { subject: String(account.id), issuer: JWT_ISSUER, audience: STAFF_ACTION_OTP_AUDIENCE, expiresIn: getOtpExpiry(), jwtid: createHash("sha256").update(`staff:${account.id}:${Date.now()}:${otp}`).digest("hex") });
     await sendStaffActionOtp({ email: account.email, otp, username: account.username, actionLabel: STAFF_ACTIONS[action] });
-    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to the Super Admin email.", cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS });
+    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to the Super Admin email.", cooldownSeconds: getOtpResendCooldownSeconds() });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the staff authorization code." });
   }
@@ -176,12 +185,12 @@ export async function verifyStaffActionOtp(req, res) {
     const challenge = jwt.verify(challengeToken, getJwtSecret(), { issuer: JWT_ISSUER, audience: STAFF_ACTION_OTP_AUDIENCE });
     if (challenge.sub !== String(req.user.id) || req.user.role !== "super-admin" || !STAFF_ACTIONS[challenge.action] || !challenge.jti) throw new jwt.JsonWebTokenError("Invalid staff action challenge.");
     const state = staffActionAttempts.get(challenge.jti) ?? { attempts: 0, expiresAt: challenge.exp * 1000 };
-    if (state.used || state.attempts >= 5) return res.status(429).json({ success: false, message: "This code can no longer be used. Request a new code." });
+    if (state.used || state.attempts >= getOtpMaxAttempts()) return res.status(429).json({ success: false, message: "This code can no longer be used. Request a new code." });
     const account = await getPasswordResetAccountById(req.user.id, "super-admin");
     const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), challenge.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), challenge.emailFingerprint ?? "");
     if (!validAccount || !valuesMatch(otpFingerprint(otp), challenge.otpHash ?? "")) {
       state.attempts += 1; staffActionAttempts.set(challenge.jti, state);
-      return res.status(state.attempts >= 5 ? 429 : 400).json({ success: false, message: state.attempts >= 5 ? "Too many incorrect codes. Request a new code." : `Incorrect verification code. ${5 - state.attempts} attempts remaining.` });
+      return res.status(state.attempts >= getOtpMaxAttempts() ? 429 : 400).json({ success: false, message: state.attempts >= getOtpMaxAttempts() ? "Too many incorrect codes. Request a new code." : `Incorrect verification code. ${getOtpMaxAttempts() - state.attempts} attempts remaining.` });
     }
     staffActionAttempts.set(challenge.jti, { ...state, used: true });
     const isReusablePermission = REUSABLE_STAFF_ACTIONS.has(challenge.action);
@@ -236,10 +245,10 @@ export async function requestConsumerPasswordChangeOtp(req, res) {
     const challengeToken = jwt.sign(
       { role: req.user.role, consumerId, otpHash: otpFingerprint(otp), passwordFingerprint: passwordFingerprint(account.password), emailFingerprint: passwordFingerprint(account.email.toLowerCase()) },
       getJwtSecret(),
-      { subject: String(account.id), issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_OTP_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`consumer-password:${account.id}:${consumerId}:${Date.now()}:${otp}`).digest("hex") },
+      { subject: String(account.id), issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_OTP_AUDIENCE, expiresIn: getOtpExpiry(), jwtid: createHash("sha256").update(`consumer-password:${account.id}:${consumerId}:${Date.now()}:${otp}`).digest("hex") },
     );
     await sendConsumerPasswordChangeOtp({ email: account.email, otp, username: account.username, consumerName: consumer.full_name ?? consumer.username });
-    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to your administrator email.", cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS });
+    return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to your administrator email.", cooldownSeconds: getOtpResendCooldownSeconds() });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the password-change code." });
   }
@@ -258,19 +267,19 @@ export async function verifyConsumerPasswordChangeOtp(req, res) {
     const challenge = jwt.verify(challengeToken, getJwtSecret(), { issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_OTP_AUDIENCE });
     if (challenge.sub !== String(req.user.id) || challenge.role !== req.user.role || !["admin", "super-admin"].includes(req.user.role) || !challenge.jti) throw new jwt.JsonWebTokenError("Invalid resident password challenge.");
     const state = consumerPasswordOtpAttempts.get(challenge.jti) ?? { attempts: 0, expiresAt: challenge.exp * 1000 };
-    if (state.used || state.attempts >= 5) return res.status(429).json({ success: false, message: "This code can no longer be used. Request a new code." });
+    if (state.used || state.attempts >= getOtpMaxAttempts()) return res.status(429).json({ success: false, message: "This code can no longer be used. Request a new code." });
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
     const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), challenge.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), challenge.emailFingerprint ?? "");
     if (!validAccount || !valuesMatch(otpFingerprint(otp), challenge.otpHash ?? "")) {
       state.attempts += 1; consumerPasswordOtpAttempts.set(challenge.jti, state);
-      const remaining = 5 - state.attempts;
+      const remaining = getOtpMaxAttempts() - state.attempts;
       return res.status(remaining > 0 ? 400 : 429).json({ success: false, message: remaining > 0 ? `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.` : "Too many incorrect codes. Request a new code." });
     }
     consumerPasswordOtpAttempts.set(challenge.jti, { ...state, used: true });
     const authorizationToken = jwt.sign(
       { role: req.user.role, consumerId: challenge.consumerId, passwordFingerprint: challenge.passwordFingerprint, emailFingerprint: challenge.emailFingerprint },
       getJwtSecret(),
-      { subject: String(account.id), issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`consumer-password-authorized:${challenge.jti}`).digest("hex") },
+      { subject: String(account.id), issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_AUDIENCE, expiresIn: getOtpExpiry(), jwtid: createHash("sha256").update(`consumer-password-authorized:${challenge.jti}`).digest("hex") },
     );
     return res.status(200).json({ success: true, authorizationToken });
   } catch (error) {
@@ -316,6 +325,7 @@ export async function login(req, res) {
         const dfp = req.get("x-device-fingerprint");
         if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
         const passwordHash = await getPasswordHash(user.id, user.role);
+        await touchSessionActivity(user.role, user.id);
         return res.status(200).json({
           success: true,
           token: createAccessToken(user, passwordHash),
@@ -337,7 +347,7 @@ export async function login(req, res) {
           subject: String(user.id),
           issuer: JWT_ISSUER,
           audience: ADMIN_LOGIN_OTP_AUDIENCE,
-          expiresIn: "5m",
+          expiresIn: getOtpExpiry(),
           jwtid: createHash("sha256").update(`${user.id}:${Date.now()}:${otp}`).digest("hex"),
         },
       );
@@ -348,13 +358,14 @@ export async function login(req, res) {
         challengeToken,
         maskedEmail: user.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
         message: "A verification code was sent to your registered admin email.",
-        cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+        cooldownSeconds: getOtpResendCooldownSeconds(),
       });
     }
 
     const dfp = req.get("x-device-fingerprint");
     if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
     const loginPasswordHash = await getPasswordHash(user.id, user.role);
+    await touchSessionActivity(user.role, user.id);
     return res.status(200).json({ success: true, token: createAccessToken(user, loginPasswordHash), user });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -376,6 +387,18 @@ export async function login(req, res) {
 
 export function currentAccount(req, res) {
   return res.status(200).json({ success: true, user: req.user });
+}
+
+export async function postSessionActivity(req, res) {
+  try {
+    const timestamp = await touchSessionActivity(req.user.role, req.user.id);
+    return res.status(200).json({
+      success: true,
+      lastActivityAt: new Date(timestamp).toISOString(),
+    });
+  } catch {
+    return res.status(200).json({ success: true, lastActivityAt: null });
+  }
 }
 
 export async function getAdminTrustedDevices(req, res) {
@@ -447,7 +470,7 @@ export async function verifyAdminLoginOtp(req, res) {
       error.statusCode = 400;
       throw error;
     }
-    if (attemptState.attempts >= 5) {
+    if (attemptState.attempts >= getOtpMaxAttempts()) {
       const error = new Error("Too many incorrect codes. Sign in again to request a new code.");
       error.statusCode = 429;
       throw error;
@@ -459,7 +482,7 @@ export async function verifyAdminLoginOtp(req, res) {
     if (!otpMatches || !accountMatches) {
       attemptState.attempts += 1;
       adminOtpAttempts.set(challenge.jti, attemptState);
-      const remaining = 5 - attemptState.attempts;
+      const remaining = getOtpMaxAttempts() - attemptState.attempts;
       const error = new Error(remaining > 0 ? `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.` : "Too many incorrect codes. Sign in again to request a new code.");
       error.statusCode = remaining > 0 ? 400 : 429;
       error.field = "otp";
@@ -480,6 +503,7 @@ export async function verifyAdminLoginOtp(req, res) {
     );
     const dfp = req.get("x-device-fingerprint");
     if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
+    await touchSessionActivity(user.role, user.id);
     return res.status(200).json({
       success: true,
       token: createAccessToken(user, account.password),
@@ -513,8 +537,8 @@ export async function resendAdminLoginOtp(req, res) {
       return res.status(400).json({ success: false, message: "This verification session has expired. Sign in again." });
     }
     const secondsSinceIssue = Math.floor((Date.now() - issuedAt) / 1000);
-    if (secondsSinceIssue < OTP_RESEND_COOLDOWN_SECONDS) {
-      const retryAfterSeconds = OTP_RESEND_COOLDOWN_SECONDS - secondsSinceIssue;
+    if (secondsSinceIssue < getOtpResendCooldownSeconds()) {
+      const retryAfterSeconds = getOtpResendCooldownSeconds() - secondsSinceIssue;
       res.set("Retry-After", String(retryAfterSeconds));
       return res.status(429).json({ success: false, message: "Please wait until the current code expires before requesting another verification code.", retryAfterSeconds });
     }
@@ -549,7 +573,7 @@ export async function resendAdminLoginOtp(req, res) {
         subject: String(account.id),
         issuer: JWT_ISSUER,
         audience: ADMIN_LOGIN_OTP_AUDIENCE,
-        expiresIn: "5m",
+        expiresIn: getOtpExpiry(),
         jwtid: createHash("sha256").update(`${account.id}:${Date.now()}:${otp}`).digest("hex"),
       },
     );
@@ -561,7 +585,7 @@ export async function resendAdminLoginOtp(req, res) {
       challengeToken: nextChallengeToken,
       maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
       message: "A new verification code was sent to your registered admin email.",
-      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+      cooldownSeconds: getOtpResendCooldownSeconds(),
     });
   } catch (error) {
     const isTokenError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
@@ -599,7 +623,7 @@ export async function requestConsumerEmailChangeOtp(req, res) {
       getJwtSecret(),
       {
         subject: String(account.id), issuer: JWT_ISSUER, audience: EMAIL_CHANGE_OTP_AUDIENCE,
-        expiresIn: "5m", jwtid: createHash("sha256").update(`email:${account.id}:${Date.now()}:${otp}`).digest("hex"),
+        expiresIn: getOtpExpiry(), jwtid: createHash("sha256").update(`email:${account.id}:${Date.now()}:${otp}`).digest("hex"),
       },
     );
     await sendConsumerEmailChangeOtp({ email: account.email, otp, username: account.username });
@@ -608,7 +632,7 @@ export async function requestConsumerEmailChangeOtp(req, res) {
       challengeToken,
       maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
       message: "A verification code was sent to your current email address.",
-      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+      cooldownSeconds: getOtpResendCooldownSeconds(),
     });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the verification code." });
@@ -627,14 +651,14 @@ export async function verifyConsumerEmailChangeOtp(req, res) {
     const challenge = jwt.verify(challengeToken, getJwtSecret(), { issuer: JWT_ISSUER, audience: EMAIL_CHANGE_OTP_AUDIENCE });
     if (challenge.sub !== String(req.user.id) || challenge.role !== req.user.role || !challenge.jti) throw new jwt.JsonWebTokenError("Invalid email challenge.");
     const state = emailChangeOtpAttempts.get(challenge.jti) ?? { attempts: 0, expiresAt: challenge.exp * 1000 };
-    if (state.used || state.attempts >= 5) {
+    if (state.used || state.attempts >= getOtpMaxAttempts()) {
       const error = new Error("This code can no longer be used. Request a new code."); error.statusCode = 429; throw error;
     }
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
     const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), challenge.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), challenge.emailFingerprint ?? "");
     if (!validAccount || !valuesMatch(otpFingerprint(otp), challenge.otpHash ?? "")) {
       state.attempts += 1; emailChangeOtpAttempts.set(challenge.jti, state);
-      const remaining = 5 - state.attempts;
+      const remaining = getOtpMaxAttempts() - state.attempts;
       const error = new Error(remaining > 0 ? `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.` : "Too many incorrect codes. Request a new code.");
       error.statusCode = remaining > 0 ? 400 : 429; throw error;
     }
@@ -711,7 +735,7 @@ export async function forgotPassword(req, res) {
         subject: String(account.id),
         issuer: JWT_ISSUER,
         audience: OTP_AUDIENCE,
-        expiresIn: "5m",
+        expiresIn: getOtpExpiry(),
         jwtid: createHash("sha256").update(`reset:${account.id}:${Date.now()}:${otp}`).digest("hex"),
       },
     );
@@ -720,7 +744,7 @@ export async function forgotPassword(req, res) {
       success: true,
       message: "A verification code has been sent to your registered email address.",
       challengeToken,
-      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+      cooldownSeconds: getOtpResendCooldownSeconds(),
     });
   } catch (error) {
     console.error("Forgot password request failed:", error);
@@ -746,7 +770,7 @@ function createOtpChallenge(account, otp) {
       subject: String(account.id),
       issuer: JWT_ISSUER,
       audience: OTP_AUDIENCE,
-      expiresIn: "5m",
+      expiresIn: getOtpExpiry(),
       jwtid: createHash("sha256").update(`reset:${account.id}:${Date.now()}:${otp}`).digest("hex"),
     },
   );
@@ -776,7 +800,7 @@ export async function requestAuthenticatedPasswordOtp(req, res) {
       message: "A verification code was sent to your registered email address.",
       challengeToken,
       maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"),
-      cooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+      cooldownSeconds: getOtpResendCooldownSeconds(),
     });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -833,7 +857,7 @@ export async function verifyPasswordResetOtp(req, res) {
       error.field = "otp";
       throw error;
     }
-    if (attemptState.attempts >= MAX_OTP_ATTEMPTS) {
+    if (attemptState.attempts >= getOtpMaxAttempts()) {
       const error = new Error("Too many incorrect codes. Request a new verification code.");
       error.statusCode = 429;
       error.field = "otp";
@@ -845,7 +869,7 @@ export async function verifyPasswordResetOtp(req, res) {
     if (!otpMatches || !accountMatches) {
       attemptState.attempts += 1;
       passwordResetOtpAttempts.set(challenge.jti, attemptState);
-      const remaining = MAX_OTP_ATTEMPTS - attemptState.attempts;
+      const remaining = getOtpMaxAttempts() - attemptState.attempts;
       const error = new Error(remaining > 0 ? `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.` : "Too many incorrect codes. Request a new verification code.");
       error.statusCode = remaining > 0 ? 400 : 429;
       error.field = "otp";
@@ -920,6 +944,7 @@ export async function logout(req, res) {
     const { id, role } = req.user;
     const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
     await supabase.from(table).update({ device_fingerprint_hash: null }).eq("id", id);
+    await clearSessionActivity(role, id);
     if (["admin", "super-admin"].includes(role)) {
       // Logging out must also end the OTP bypass: revoke only this browser's
       // trusted device (other browsers stay trusted) and clear its cookie.

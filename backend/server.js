@@ -82,6 +82,7 @@ app.use(
       "X-Staff-Authorization",
       "X-Consumer-Password-Authorization",
       "X-Device-Fingerprint",
+      "X-User-Activity",
     ],
     credentials: true,
   }),
@@ -104,6 +105,7 @@ const ignoredChangePaths = [
   "/api/auth/consumer/change-email/verify",
   "/api/auth/admin/change-email/otp",
   "/api/auth/admin/change-email/verify",
+  "/api/auth/activity",
   "/api/notifications/push/subscriptions",
   "/api/notifications/push/subscriptions/current",
 ];

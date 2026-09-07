@@ -1,18 +1,15 @@
 import { createHash, randomBytes } from "node:crypto";
 import { supabase } from "../config/supabase.js";
+import { getTrustedDeviceDays } from "../config/auth.js";
 
 const TRUSTED_DEVICE_COOKIE = "waterwise_admin_device";
-const ROLE_TRUST_DAYS = {
-  "super-admin": 7,
-  admin: 15,
-};
 
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 
 export const getTrustedDeviceCookieName = () => TRUSTED_DEVICE_COOKIE;
 
 export const getTrustedDeviceLifetimeMs = (role) =>
-  (ROLE_TRUST_DAYS[role] ?? 0) * 24 * 60 * 60 * 1000;
+  getTrustedDeviceDays(role) * 24 * 60 * 60 * 1000;
 
 export function readCookie(req, name) {
   const header = req.get("cookie") ?? "";
