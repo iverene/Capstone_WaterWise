@@ -177,14 +177,16 @@ export default function FlaggedAccountsPage() {
         title="Flagged accounts"
       />
 
-      <section aria-label="Flagged account summary" className="grid gap-3 sm:grid-cols-2">
+      <section aria-label="Flagged account summary" className="grid gap-2 sm:grid-cols-2 sm:gap-3">
         <KPI
+          compact
           description="Residents with at least 3 outstanding bills"
           icon={AlertTriangle}
           title="For disconnection"
           value={flaggedAccounts.length}
         />
         <KPI
+          compact
           description="Combined balance of flagged accounts"
           icon={WalletCards}
           title="Outstanding balance"

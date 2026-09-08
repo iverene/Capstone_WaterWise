@@ -9,6 +9,17 @@ const configuredBaseUrl =
 function resolveApiBaseUrl(value) {
   const baseUrl = (value || "/api").trim().replace(/\/+$/, "");
 
+  // Use Vite's same-origin proxy for local backends. Mixing localhost and
+  // 127.0.0.1 makes the HTTP trust cookie cross-site and the browser drops it.
+  if (import.meta.env.DEV) {
+    try {
+      const target = new URL(baseUrl);
+      if (["localhost", "127.0.0.1", "[::1]"].includes(target.hostname)) return "/api";
+    } catch {
+      // Relative URLs already use the current origin.
+    }
+  }
+
   // Accept either the Render service root or its complete /api URL.
   if (baseUrl === "/api" || /\/api$/i.test(baseUrl)) {
     return baseUrl;
@@ -43,6 +54,9 @@ apiClient.defaults.adapter = async (config) => {
   }
 
   const requestKey = getRequestKey(config);
+  if (requestKey.split("?")[0] === "/auth/admin/trusted-devices") {
+    return networkAdapter(config);
+  }
   const account = getStoredAccount();
   const pendingKey = `${account?.role ?? "anonymous"}:${account?.id ?? "anonymous"}:${requestKey}`;
   const cached = readCachedResponse(requestKey);

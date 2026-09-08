@@ -1,8 +1,11 @@
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import {
   getAccessTokenDuration,
   getJwtSecret,
+  getLoginLockoutMinutes,
+  getLoginMaxAttempts,
   getOtpExpiry,
   getOtpMaxAttempts,
   getOtpResendCooldownSeconds,
@@ -28,7 +31,7 @@ import {
   createTrustedDevice,
   getTrustedDeviceCookieName,
   listAdminTrustedDevices,
-  readCookie,
+  readDeviceToken,
   revokeAdminTrustedDevices,
   revokeOtherTrustedDevices,
   revokeTrustedDevice,
@@ -202,6 +205,67 @@ export async function verifyStaffActionOtp(req, res) {
   }
 }
 
+export async function verifyStaffActionPassword(req, res) {
+  try {
+    const { action, targetId, password } = req.body ?? {};
+    if (req.user.role !== "super-admin" || !STAFF_ACTIONS[action]) return res.status(403).json({ success: false, message: "Only the Super Admin can authorize staff management actions." });
+    // Page-view gates (manage-staff / manage-system-settings) stay email-OTP
+    // only. Password re-auth covers single-use per-write actions.
+    if (REUSABLE_STAFF_ACTIONS.has(action)) return res.status(400).json({ success: false, message: "Use the email verification code for this action." });
+    const needsTarget = action.startsWith("update-") || action.startsWith("delete-");
+    const parsedTargetId = needsTarget ? Number(targetId) : null;
+    if (needsTarget && (!Number.isInteger(parsedTargetId) || parsedTargetId < 1)) return res.status(400).json({ success: false, message: "A valid staff account is required." });
+    if (typeof password !== "string" || !password) return res.status(400).json({ success: false, message: "Enter your Super Admin password.", field: "password" });
+
+    const { data: account, error: accountError } = await supabase
+      .from("admins")
+      .select("id, username, email, password, status, failed_login_attempts, locked_until")
+      .eq("id", req.user.id)
+      .maybeSingle();
+    if (accountError) return res.status(500).json({ success: false, message: "Unable to verify the password." });
+    if (!account || account.status !== "active") return res.status(403).json({ success: false, message: "The Super Admin account is not active." });
+
+    const maxAttempts = getLoginMaxAttempts();
+    const lockoutMinutes = getLoginLockoutMinutes();
+    if (account.locked_until && new Date(account.locked_until).getTime() > Date.now()) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((new Date(account.locked_until).getTime() - Date.now()) / 1000));
+      res.set("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({ success: false, message: `Too many incorrect attempts. Try again in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`, retryAfterSeconds });
+    }
+
+    const passwordMatches = await bcrypt.compare(password, String(account.password ?? ""));
+    if (!passwordMatches) {
+      const previousLockExpired = account.locked_until && new Date(account.locked_until).getTime() <= Date.now();
+      const attempts = previousLockExpired ? 1 : Number(account.failed_login_attempts ?? 0) + 1;
+      const lockedUntil = attempts >= maxAttempts ? new Date(Date.now() + lockoutMinutes * 60 * 1000).toISOString() : null;
+      await supabase
+        .from("admins")
+        .update({ failed_login_attempts: attempts, locked_until: lockedUntil, updated_at: new Date().toISOString() })
+        .eq("id", account.id);
+      if (lockedUntil) {
+        const retryAfterSeconds = lockoutMinutes * 60;
+        res.set("Retry-After", String(retryAfterSeconds));
+        return res.status(429).json({ success: false, message: `Too many incorrect attempts. Try again in ${lockoutMinutes} minute(s).`, retryAfterSeconds });
+      }
+      return res.status(401).json({ success: false, message: "Incorrect password.", field: "password", failedAttempts: attempts, remainingAttempts: Math.max(0, maxAttempts - attempts) });
+    }
+
+    if (account.failed_login_attempts || account.locked_until) {
+      await supabase
+        .from("admins")
+        .update({ failed_login_attempts: 0, locked_until: null, updated_at: new Date().toISOString() })
+        .eq("id", account.id);
+    }
+
+    // Same single-use 5-minute action-bound token as the OTP flow, so the
+    // authorizeStaffAction middleware needs no changes.
+    const authorizationToken = jwt.sign({ role: "super-admin", action, targetId: parsedTargetId, passwordFingerprint: passwordFingerprint(account.password), emailFingerprint: passwordFingerprint(account.email.toLowerCase()) }, getJwtSecret(), { subject: String(account.id), issuer: JWT_ISSUER, audience: STAFF_ACTION_AUDIENCE, expiresIn: "5m", jwtid: createHash("sha256").update(`authorized-password:${account.id}:${action}:${parsedTargetId ?? "new"}:${Date.now()}`).digest("hex") });
+    return res.status(200).json({ success: true, authorizationToken, authorizationExpiresAt: Date.now() + 5 * 60 * 1000 });
+  } catch (error) {
+    return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to verify the password." });
+  }
+}
+
 export const authorizeStaffAction = (expectedAction) => async (req, res, next) => {
   try {
     for (const [authId, state] of staffActionAuthorizations) {
@@ -247,7 +311,7 @@ export async function requestConsumerPasswordChangeOtp(req, res) {
       getJwtSecret(),
       { subject: String(account.id), issuer: JWT_ISSUER, audience: CONSUMER_PASSWORD_OTP_AUDIENCE, expiresIn: getOtpExpiry(), jwtid: createHash("sha256").update(`consumer-password:${account.id}:${consumerId}:${Date.now()}:${otp}`).digest("hex") },
     );
-    await sendConsumerPasswordChangeOtp({ email: account.email, otp, username: account.username, consumerName: consumer.full_name ?? consumer.username });
+    await sendConsumerPasswordChangeOtp({ email: account.email, otp, username: account.username, consumerName: [consumer.first_name, consumer.middle_name, consumer.last_name].map((part) => String(part ?? "").trim()).filter(Boolean).join(" ") || consumer.full_name || consumer.username });
     return res.status(200).json({ success: true, challengeToken, maskedEmail: account.email.replace(/^(.{1,2}).*(@.*)$/, "$1***$2"), message: "A verification code was sent to your administrator email.", cooldownSeconds: getOtpResendCooldownSeconds() });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to send the password-change code." });
@@ -315,12 +379,20 @@ export async function login(req, res) {
     const user = await authenticateAccount(identifier ?? email, password);
 
     if (["admin", "super-admin"].includes(user.role)) {
-      const deviceToken = readCookie(req, getTrustedDeviceCookieName());
+      const deviceToken = readDeviceToken(req);
       const isTrustedDevice = await verifyTrustedDevice({
         token: deviceToken,
         adminId: user.id,
         role: user.role,
       });
+      if (!isTrustedDevice) {
+        // Observability for "OTP every login" reports: distinguishes a
+        // browser that never sends the cookie (blocked/mismatched host)
+        // from a stale one (expired/revoked/unknown token).
+        console.warn(
+          `[trusted-device] OTP required for ${user.role} ${user.id}: ${deviceToken ? "trust cookie present but invalid, expired, or revoked" : "no trust cookie sent by browser"}`
+        );
+      }
       if (isTrustedDevice) {
         const dfp = req.get("x-device-fingerprint");
         if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
@@ -406,7 +478,7 @@ export async function getAdminTrustedDevices(req, res) {
     if (!["admin", "super-admin"].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: "Only administrators can manage trusted devices." });
     }
-    const currentToken = readCookie(req, getTrustedDeviceCookieName());
+    const currentToken = readDeviceToken(req);
     const devices = await listAdminTrustedDevices({ adminId: req.user.id, currentToken });
     return res.status(200).json({ success: true, devices });
   } catch (error) {
@@ -423,7 +495,7 @@ export async function removeAdminTrustedDevice(req, res) {
     if (!Number.isInteger(deviceId) || deviceId < 1) {
       return res.status(400).json({ success: false, message: "A valid trusted device is required." });
     }
-    const currentToken = readCookie(req, getTrustedDeviceCookieName());
+    const currentToken = readDeviceToken(req);
     const result = await revokeTrustedDevice({ adminId: req.user.id, deviceId, currentToken });
     if (result.revokedCurrentDevice) clearTrustedDeviceCookie(res, req.user.role, req);
     return res.status(200).json({ success: true, ...result, message: "Trusted device removed." });
@@ -437,7 +509,7 @@ export async function removeOtherAdminTrustedDevices(req, res) {
     if (!["admin", "super-admin"].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: "Only administrators can manage trusted devices." });
     }
-    const currentToken = readCookie(req, getTrustedDeviceCookieName());
+    const currentToken = readDeviceToken(req);
     const revokedCount = await revokeOtherTrustedDevices({ adminId: req.user.id, currentToken });
     return res.status(200).json({ success: true, revokedCount, message: "Other trusted devices removed." });
   } catch (error) {
@@ -496,6 +568,9 @@ export async function verifyAdminLoginOtp(req, res) {
       role: account.role,
       userAgent: req.get("user-agent"),
     });
+    // Remove legacy /api/auth cookies before issuing the current / cookie.
+    // Otherwise browsers send the older, more-specific token first forever.
+    clearTrustedDeviceCookie(res, account.role, req);
     res.cookie(
       getTrustedDeviceCookieName(),
       trustedDevice.token,

@@ -20,6 +20,9 @@ export const registerConsumer = async (req, res) => {
     const {
       username,
       password,
+      firstName,
+      middleName,
+      lastName,
       fullName,
       email,
       contactNumber,
@@ -29,7 +32,7 @@ export const registerConsumer = async (req, res) => {
     const consumer = await createConsumer(
       username,
       password,
-      fullName,
+      { firstName, middleName, lastName, fullName },
       email,
       contactNumber,
       purokNo

@@ -59,6 +59,7 @@ function DescriptionText({ children }) {
 export default function KPI({
   cardTestId,
   className = "",
+  compact = false,
   description,
   descriptionHighlight,
   descriptionHighlightTestId,
@@ -97,14 +98,14 @@ export default function KPI({
     : trendTone;
 
   return (
-    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-card sm:p-5 ${className}`.trim()} data-testid={cardTestId}>
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-card ${compact ? "p-3 sm:p-4" : "p-3 sm:p-4"} ${className}`.trim()} data-testid={cardTestId}>
+      <div className={`flex min-w-0 items-center ${compact ? "gap-2 sm:gap-2.5" : "gap-2 sm:gap-2.5"}`}>
         {Icon ? (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700 sm:h-10 sm:w-10 sm:rounded-xl">
+          <span className={`flex shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700 ${compact ? "h-8 w-8 sm:h-9 sm:w-9" : "h-8 w-8 sm:h-9 sm:w-9"}`}>
             <Icon aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
         ) : null}
-        <h2 className="min-w-0 flex-1 text-xs font-bold leading-4 text-slate-600 sm:text-sm">
+        <h2 className="min-w-0 flex-1 text-xs font-bold leading-4 text-slate-600 sm:text-[13px]">
           {title}
         </h2>
         {trend ? (
@@ -126,13 +127,13 @@ export default function KPI({
         ) : null}
       </div>
 
-      <p className="mt-2 min-w-0 overflow-hidden font-sans text-[clamp(1.125rem,5vw,1.375rem)] font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums sm:mt-5 sm:text-3xl" data-testid={valueTestId}>
+      <p className={`min-w-0 overflow-hidden font-sans font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums ${compact ? "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl" : "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl"}`} data-testid={valueTestId}>
         {value}
-        {unit ? <span className="ml-1 text-[10px] font-bold text-slate-500 sm:text-sm">{unit}</span> : null}
+        {unit ? <span className="ml-1 text-[10px] font-bold text-slate-500 sm:text-[13px]">{unit}</span> : null}
       </p>
 
       {(supportingValue || description) ? (
-        <div className="mt-auto flex min-w-0 flex-wrap items-center gap-1.5 pt-2 text-[10px] leading-4 sm:pt-4 sm:text-xs">
+        <div className={`mt-auto flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] leading-4 sm:text-xs ${compact ? "pt-2 sm:pt-2.5" : "pt-2 sm:pt-2.5"}`}>
           {supportingValue ? (
             <span className={`inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 font-bold ring-1 ring-inset sm:px-2 sm:py-1 ${supportingToneStyles[resolvedTone] ?? supportingToneStyles.water}`}>
               {SupportingIcon ? <SupportingIcon aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" /> : null}

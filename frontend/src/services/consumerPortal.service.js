@@ -37,12 +37,20 @@ async function requireConsumerAccount() {
   return user;
 }
 
+function composeProfileName(profile, fallback = "") {
+  const composed = [profile.first_name, profile.middle_name, profile.last_name]
+    .map((part) => String(part ?? "").trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .join(" ");
+  return composed || profile.full_name || fallback;
+}
+
 function normalizeBilling(record, profile, reading) {
   return {
     id: record.id,
     invoiceNumber: `INV-${record.id}`,
-    name: profile.full_name,
-    consumerName: profile.full_name,
+    name: composeProfileName(profile),
+    consumerName: composeProfileName(profile),
     billingPeriod: formatMonth(record.billing_date),
     readingDate: reading?.reading_date ?? record.billing_date,
     cubicMetersConsumed: Number(reading?.consumption ?? 0),
@@ -98,7 +106,7 @@ export async function fetchConsumerProfile(options) {
 
   return {
     accountId: consumer.id,
-    name: consumer.full_name ?? consumer.username,
+    name: composeProfileName(consumer, consumer.username),
     username: consumer.username,
     purok: consumer.purok_no != null ? `Purok ${consumer.purok_no}` : null,
     email: consumer.email,
@@ -135,7 +143,7 @@ export async function fetchConsumerHome(options) {
   return {
     account: {
       id: profile.id,
-      name: profile.full_name ?? profile.username,
+      name: composeProfileName(profile, profile.username),
       purok: profile.purok_no == null ? "Purok not assigned" : `Purok ${profile.purok_no}`,
       status: profile.status ?? "active",
     },
@@ -203,7 +211,7 @@ export async function fetchBillingLedger(options) {
       id: record.id,
       billingId: record.billing_id,
       invoiceNumber: bill?.invoiceNumber ?? `INV-${record.billing_id}`,
-      consumerName: profile.full_name,
+      consumerName: composeProfileName(profile),
       paymentDate: record.payment_date,
       paymentMethod: record.payment_method ?? "Cash",
       referenceNumber: record.reference_number ?? "",
@@ -224,7 +232,7 @@ export async function fetchBillingLedger(options) {
     historyData,
     ledgerAccount: {
       accountId: `ACC-${profile.id}`,
-      name: profile.full_name,
+      name: composeProfileName(profile),
       outstandingBalance,
       dueDate: formatDate(nextOutstandingBill?.dueDate),
     },

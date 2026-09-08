@@ -93,10 +93,10 @@ export default function AdminReadingsPage() {
       <PageHeader description="Review meter movements and recorded water use across every purok." eyebrow="Read-only records" title="Consumer consumption readings" />
 
       <section aria-label="Reading summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-        <KPI description="Matches the current filters" icon={Users} title="Visible accounts" value={visibleResidents.length} />
-        <KPI description="Across visible records" icon={Droplets} title="Total consumption" unit="m³" value={total.toLocaleString()} />
-        <KPI description="Per visible reading" icon={Gauge} title="Average usage" unit="m³" value={average.toFixed(1)} />
-        <KPI description="Highest visible record" icon={Gauge} title="Highest usage" unit="m³" value={highest.toLocaleString()} />
+        <KPI compact description="Matches the current filters" icon={Users} title="Visible accounts" value={visibleResidents.length} />
+        <KPI compact description="Across visible records" icon={Droplets} title="Total consumption" unit="m³" value={total.toLocaleString()} />
+        <KPI compact description="Per visible reading" icon={Gauge} title="Average usage" unit="m³" value={average.toFixed(1)} />
+        <KPI compact description="Highest visible record" icon={Gauge} title="Highest usage" unit="m³" value={highest.toLocaleString()} />
       </section>
 
       <div

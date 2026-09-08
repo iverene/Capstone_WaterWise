@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { composeFullName } from "./consumerModels.js";
 import { getRatePerCubicMeter } from "./systemSettingsModels.js";
 
 const BILLING_FIELDS = `
@@ -14,7 +15,9 @@ const BILLING_FIELDS = `
   updated_at,
   consumers!billing_user_id_fkey (
     id,
-    full_name,
+    first_name,
+    middle_name,
+    last_name,
     purok_no
   ),
   consumption!billing_consumption_id_fkey (
@@ -26,6 +29,22 @@ const BILLING_FIELDS = `
     consumption
   )
 `;
+
+const withComposedConsumerName = (consumer) => {
+  if (!consumer) return consumer;
+  const composed = composeFullName(consumer.first_name, consumer.middle_name, consumer.last_name);
+  return { ...consumer, full_name: composed || consumer.full_name || "Unknown resident" };
+};
+
+const attachConsumerFullName = (record) => {
+  if (!record || !record.consumers) return record;
+  return {
+    ...record,
+    consumers: Array.isArray(record.consumers)
+      ? record.consumers.map(withComposedConsumerName)
+      : withComposedConsumerName(record.consumers),
+  };
+};
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -168,7 +187,7 @@ export const createMonthlyBilling = async ({
   }
 
   return {
-    ...data,
+    ...attachConsumerFullName(data),
     monthly_consumption: Number(monthlyConsumption.toFixed(2)),
     rate_per_cubic_meter: rate,
   };
@@ -184,7 +203,7 @@ export const getBillings = async () => {
     throw createError(`Failed to retrieve billing records: ${error.message}`, 500);
   }
 
-  return data ?? [];
+  return (data ?? []).map(attachConsumerFullName);
 };
 
 export const getBillingById = async (id) => {
@@ -202,7 +221,7 @@ export const getBillingById = async (id) => {
     throw createError("Billing record not found.", 404);
   }
 
-  return data;
+  return attachConsumerFullName(data);
 };
 
 export const getBillingsByConsumer = async (consumerId) => {
@@ -220,5 +239,5 @@ export const getBillingsByConsumer = async (consumerId) => {
     );
   }
 
-  return data ?? [];
+  return (data ?? []).map(attachConsumerFullName);
 };

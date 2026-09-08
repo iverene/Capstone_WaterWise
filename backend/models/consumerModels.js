@@ -31,20 +31,68 @@ const normalizeContactNumber = (contactNumber) => {
   return normalizedNumber;
 };
 
-const validateConsumer = (username, password, fullName, email, contactNumber, purokNo) => {
+const normalizeNamePart = (value) => {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\s+/g, " ");
+};
+
+export const composeFullName = (firstName, middleName, lastName) =>
+  [firstName, middleName, lastName]
+    .map((part) => normalizeNamePart(part ?? ""))
+    .filter(Boolean)
+    .join(" ");
+
+const splitLegacyFullName = (fullName) => {
+  const parts = normalizeNamePart(fullName).split(" ").filter(Boolean);
+  if (parts.length === 0) return { firstName: "", middleName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+  if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
+};
+
+const resolveNameParts = (firstName, middleName, lastName, legacyFullName) => {
+  const hasSplitParts =
+    firstName !== undefined || middleName !== undefined || lastName !== undefined;
+  if (hasSplitParts) {
+    return {
+      firstName: normalizeNamePart(firstName ?? ""),
+      middleName: normalizeNamePart(middleName ?? ""),
+      lastName: normalizeNamePart(lastName ?? ""),
+    };
+  }
+  return splitLegacyFullName(legacyFullName ?? "");
+};
+
+const validateConsumer = (username, password, nameParts, email, contactNumber, purokNo) => {
+  const { firstName, middleName, lastName } = nameParts ?? {};
   if (
     typeof username !== "string" ||
     typeof password !== "string" ||
-    typeof fullName !== "string" ||
     typeof email !== "string" ||
     username.trim() === "" ||
     password.trim() === "" ||
-    fullName.trim() === "" ||
     email.trim() === ""
   ) {
     throw createError(
-      "Username, password, full name, email, and contact number are required fields."
+      "Username, password, first name, last name, email, and contact number are required fields."
     );
+  }
+
+  if (
+    typeof firstName !== "string" ||
+    typeof lastName !== "string" ||
+    firstName.trim() === "" ||
+    lastName.trim() === ""
+  ) {
+    throw createError("First name and last name are required fields.");
+  }
+
+  if (middleName !== undefined && middleName !== null && typeof middleName !== "string") {
+    throw createError("Middle name must be a text value.");
   }
 
   if (!validator.isEmail(email.trim())) {
@@ -74,21 +122,37 @@ const validateConsumer = (username, password, fullName, email, contactNumber, pu
 export const createConsumer = async (
   username,
   password,
-  fullName,
+  nameInput,
   email,
   contactNumber,
   purokNo = null
 ) => {
-  validateConsumer(username, password, fullName, email, contactNumber, purokNo);
+  const nameParts =
+    typeof nameInput === "string"
+      ? splitLegacyFullName(nameInput)
+      : resolveNameParts(
+          nameInput?.firstName,
+          nameInput?.middleName,
+          nameInput?.lastName,
+          nameInput?.fullName
+        );
+  validateConsumer(username, password, nameParts, email, contactNumber, purokNo);
 
   const normalizedUsername = username.trim().toLowerCase();
   const normalizedEmail = validator.normalizeEmail(email.trim()) ?? email.trim().toLowerCase();
-  const normalizedFullName = fullName.trim().replace(/\s+/g, " ");
+  const normalizedFirstName = normalizeNamePart(nameParts.firstName);
+  const normalizedMiddleName = normalizeNamePart(nameParts.middleName);
+  const normalizedLastName = normalizeNamePart(nameParts.lastName);
+  const composedFullName = composeFullName(
+    normalizedFirstName,
+    normalizedMiddleName,
+    normalizedLastName
+  );
 
   await ensureAccountIdentityIsUnique({
     username: normalizedUsername,
     email: normalizedEmail,
-    fullName: normalizedFullName,
+    fullName: composedFullName,
   });
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -96,13 +160,15 @@ export const createConsumer = async (
     .from("consumers")
     .insert({
       username: normalizedUsername,
-      full_name: normalizedFullName,
+      first_name: normalizedFirstName,
+      middle_name: normalizedMiddleName === "" ? null : normalizedMiddleName,
+      last_name: normalizedLastName,
       email: normalizedEmail,
       contact_number: normalizeContactNumber(contactNumber),
       purok_no: purokNo === null || purokNo === undefined ? null : Number(purokNo),
       password: hashedPassword,
     })
-    .select("id, username, full_name, email, contact_number, purok_no, status, created_at")
+    .select("id, username, first_name, middle_name, last_name, email, contact_number, purok_no, status, created_at")
     .single();
 
   if (error) {
@@ -116,7 +182,7 @@ export const createConsumer = async (
 };
 
 const CONSUMER_FIELDS =
-  "id, username, full_name, email, contact_number, purok_no, status, created_at, updated_at";
+  "id, username, first_name, middle_name, last_name, email, contact_number, purok_no, status, created_at, updated_at";
 
 const parseId = (id) => {
   const parsedId = Number(id);
@@ -162,6 +228,9 @@ export const updateConsumer = async (id, updates = {}) => {
   const allowedFields = [
     "username",
     "password",
+    "firstName",
+    "middleName",
+    "lastName",
     "fullName",
     "email",
     "contactNumber",
@@ -185,11 +254,32 @@ export const updateConsumer = async (id, updates = {}) => {
     updateData.username = updates.username.trim().toLowerCase();
   }
 
-  if (updates.fullName !== undefined) {
-    if (typeof updates.fullName !== "string" || updates.fullName.trim() === "") {
-      throw createError("Full name cannot be empty.");
+  if (
+    updates.firstName !== undefined ||
+    updates.middleName !== undefined ||
+    updates.lastName !== undefined ||
+    updates.fullName !== undefined
+  ) {
+    const current = await getConsumerById(consumerId);
+    const resolved = resolveNameParts(
+      updates.firstName !== undefined
+        ? updates.firstName
+        : current.first_name ?? "",
+      updates.middleName !== undefined
+        ? updates.middleName
+        : current.middle_name ?? "",
+      updates.lastName !== undefined
+        ? updates.lastName
+        : current.last_name ?? "",
+      updates.fullName
+    );
+    if (resolved.firstName.trim() === "" || resolved.lastName.trim() === "") {
+      throw createError("First name and last name cannot be empty.");
     }
-    updateData.full_name = updates.fullName.trim();
+    updateData.first_name = normalizeNamePart(resolved.firstName);
+    const normalizedMiddle = normalizeNamePart(resolved.middleName);
+    updateData.middle_name = normalizedMiddle === "" ? null : normalizedMiddle;
+    updateData.last_name = normalizeNamePart(resolved.lastName);
   }
 
   if (updates.email !== undefined) {
@@ -286,6 +376,9 @@ export const updateConsumer = async (id, updates = {}) => {
     .maybeSingle();
 
   if (error) {
+    if (error.code === "23505") {
+      throw createError(duplicateAccountIdentityMessage(error, { includeFullName: true }));
+    }
     throw createError(`Failed to update consumer account: ${error.message}`, 500);
   }
   if (!data) {

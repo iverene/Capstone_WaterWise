@@ -28,7 +28,9 @@ WHERE id = (
 CREATE TABLE IF NOT EXISTS consumers (
     id SERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
+    first_name VARCHAR(50) NOT NULL,
+    middle_name VARCHAR(50),
+    last_name VARCHAR(50) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
     contact_number VARCHAR(20),
     purok_no INTEGER,
@@ -55,7 +57,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS admins_email_ci_unique ON admins (lower(btrim(
 CREATE UNIQUE INDEX IF NOT EXISTS consumers_username_ci_unique ON consumers (lower(btrim(username)));
 CREATE UNIQUE INDEX IF NOT EXISTS consumers_email_ci_unique ON consumers (lower(btrim(email)));
 CREATE UNIQUE INDEX IF NOT EXISTS consumers_full_name_ci_unique
-ON consumers (lower(regexp_replace(btrim(full_name), '\s+', ' ', 'g')));
+ON consumers (lower(regexp_replace(btrim(coalesce(first_name, '') || ' ' || coalesce(middle_name, '') || ' ' || coalesce(last_name, '')), '\s+', ' ', 'g')));
 CREATE UNIQUE INDEX IF NOT EXISTS meter_readers_username_ci_unique ON meter_readers (lower(btrim(username)));
 CREATE UNIQUE INDEX IF NOT EXISTS meter_readers_email_ci_unique ON meter_readers (lower(btrim(email)));
 
@@ -98,6 +100,9 @@ DECLARE
     normalized_username TEXT := lower(btrim(NEW.username));
     normalized_email TEXT := lower(btrim(NEW.email));
     normalized_full_name TEXT;
+    normalized_first_name TEXT;
+    normalized_middle_name TEXT;
+    normalized_last_name TEXT;
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtext('account-username:' || normalized_username));
     PERFORM pg_advisory_xact_lock(hashtext('account-email:' || normalized_email));
@@ -123,21 +128,26 @@ BEGIN
     END IF;
 
     IF TG_TABLE_NAME = 'consumers' THEN
-        normalized_full_name := lower(regexp_replace(btrim(NEW.full_name), '\s+', ' ', 'g'));
+        normalized_first_name := regexp_replace(btrim(NEW.first_name), '\s+', ' ', 'g');
+        normalized_middle_name := NULLIF(regexp_replace(btrim(coalesce(NEW.middle_name, '')), '\s+', ' ', 'g'), '');
+        normalized_last_name := regexp_replace(btrim(NEW.last_name), '\s+', ' ', 'g');
+        normalized_full_name := lower(regexp_replace(btrim(normalized_first_name || ' ' || coalesce(normalized_middle_name, '') || ' ' || normalized_last_name), '\s+', ' ', 'g'));
         PERFORM pg_advisory_xact_lock(hashtext('consumer-name:' || normalized_full_name));
         IF EXISTS (
             SELECT 1 FROM consumers account
-            WHERE lower(regexp_replace(btrim(account.full_name), '\s+', ' ', 'g')) = normalized_full_name
+            WHERE lower(regexp_replace(btrim(coalesce(account.first_name, '') || ' ' || coalesce(account.middle_name, '') || ' ' || coalesce(account.last_name, '')), '\s+', ' ', 'g')) = normalized_full_name
               AND account.id <> NEW.id
         ) THEN
-            RAISE EXCEPTION 'The resident full name % is already in use.', NEW.full_name USING ERRCODE = '23505';
+            RAISE EXCEPTION 'The resident full name % is already in use.', normalized_full_name USING ERRCODE = '23505';
         END IF;
     END IF;
 
     NEW.username := normalized_username;
     NEW.email := normalized_email;
     IF TG_TABLE_NAME = 'consumers' THEN
-        NEW.full_name := regexp_replace(btrim(NEW.full_name), '\s+', ' ', 'g');
+        NEW.first_name := normalized_first_name;
+        NEW.middle_name := normalized_middle_name;
+        NEW.last_name := normalized_last_name;
     END IF;
     RETURN NEW;
 END;
@@ -149,7 +159,7 @@ DROP TRIGGER IF EXISTS trg_admin_account_identity ON admins;
 CREATE TRIGGER trg_admin_account_identity BEFORE INSERT OR UPDATE OF username, email ON admins
 FOR EACH ROW EXECUTE FUNCTION enforce_global_account_identity();
 DROP TRIGGER IF EXISTS trg_consumer_account_identity ON consumers;
-CREATE TRIGGER trg_consumer_account_identity BEFORE INSERT OR UPDATE OF username, email, full_name ON consumers
+CREATE TRIGGER trg_consumer_account_identity BEFORE INSERT OR UPDATE OF username, email, first_name, middle_name, last_name ON consumers
 FOR EACH ROW EXECUTE FUNCTION enforce_global_account_identity();
 DROP TRIGGER IF EXISTS trg_meter_reader_account_identity ON meter_readers;
 CREATE TRIGGER trg_meter_reader_account_identity BEFORE INSERT OR UPDATE OF username, email ON meter_readers
@@ -788,7 +798,7 @@ DECLARE
     consumer_name VARCHAR(100);
     reading_record consumption%ROWTYPE;
 BEGIN
-    SELECT full_name INTO consumer_name
+    SELECT regexp_replace(btrim(coalesce(first_name, '') || ' ' || coalesce(middle_name, '') || ' ' || coalesce(last_name, '')), '\s+', ' ', 'g') INTO consumer_name
     FROM consumers
     WHERE id = NEW.user_id;
 

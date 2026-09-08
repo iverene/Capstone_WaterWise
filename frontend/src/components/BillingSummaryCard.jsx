@@ -25,9 +25,10 @@ export default function BillingSummaryCard({ billingData = [] }) {
   );
 
   return (
-    <section aria-label="Billing summary" className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
+    <section aria-label="Billing summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
       <KPI
         cardTestId="total-billing-card"
+        compact
         description="included in the total"
         descriptionHighlight={`${totalBills} billing ${totalBills === 1 ? "record" : "records"}`}
         descriptionIcon={ReceiptText}
@@ -38,6 +39,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
       />
       <KPI
         cardTestId="outstanding-billing-card"
+        compact
         description={openBills ? "remaining to collect" : "nothing left to collect"}
         descriptionHighlight={openBills ? `${openBills} open bill${openBills === 1 ? "" : "s"}` : "No open bills"}
         descriptionIcon={openBills ? Clock3 : CheckCircle2}
@@ -49,6 +51,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
       />
       <KPI
         cardTestId="paid-bills-card"
+        compact
         description="fully settled"
         descriptionHighlight={`${paidBills} bill${paidBills === 1 ? "" : "s"}`}
         descriptionIcon={CheckCircle2}
@@ -60,6 +63,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
       />
       <KPI
         cardTestId="open-bills-card"
+        compact
         description={openBills ? `${partiallyPaidBills} partially paid` : "all bills are settled"}
         descriptionHighlight={openBills ? `${unpaidBills} unpaid` : "No open bills"}
         descriptionIcon={openBills ? Clock3 : CheckCircle2}

@@ -8,7 +8,7 @@ import {
   FiMail,
 } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router";
-import { login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
+import { fetchTrustedDevices, login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import OtpInput from "../components/OtpInput";
 import PWAInstallButton from "../components/PWAInstallButton";
@@ -144,6 +144,7 @@ export default function Login() {
       try {
         const result = await verifyAdminLoginOtp(adminChallengeToken, otp);
         toast.success("Admin verified", "Welcome to the WaterWise admin portal.");
+        confirmTrustedCookie();
         navigate(accountDestinations[result.user.role]);
       } catch (error) {
         setMessage(error.message);
@@ -191,6 +192,7 @@ export default function Login() {
         setMaskedEmail(result.maskedEmail);
         setOtp("");
         setOtpSecondsLeft(300);
+        // eslint-disable-next-line react-hooks/purity -- event handler, not render
         setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
         setPassword("");
         setMessage(result.message);
@@ -268,6 +270,26 @@ export default function Login() {
 
   const [otpSuccess, setOtpSuccess] = useState(false);
 
+  // After a successful admin OTP verification the backend sets an HttpOnly
+  // trust cookie. Confirm it stuck: if this browser won't persist/send it
+  // (blocked cookies, mismatched localhost vs 127.0.0.1 host), the next
+  // login would ask for OTP again — warn now instead of failing silently.
+  const confirmTrustedCookie = async () => {
+    try {
+      const result = await fetchTrustedDevices();
+      const devices = result.devices ?? [];
+      if (!devices.some((device) => device.isCurrent)) {
+        toast.warning(
+          "Browser not remembered",
+          "This browser did not save the trusted-device cookie, so the next sign-in will ask for a code again. Allow cookies for this site and use the same address (localhost or 127.0.0.1) every time.",
+          { dismissOnInteract: true, duration: 0 },
+        );
+      }
+    } catch {
+      // Non-fatal: the sign-in itself already succeeded.
+    }
+  };
+
   const handleAutoVerifyOtp = async (otpValue) => {
     if (!/^\d{6}$/.test(otpValue)) return;
     setIsSubmitting(true);
@@ -276,6 +298,7 @@ export default function Login() {
       const result = await verifyAdminLoginOtp(adminChallengeToken, otpValue);
       setOtpSuccess(true);
       toast.success("Admin verified", "Welcome to the WaterWise admin portal.");
+      confirmTrustedCookie();
       setTimeout(() => navigate(accountDestinations[result.user.role]), 600);
     } catch (error) {
       setMessage(error.message);

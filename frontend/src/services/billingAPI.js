@@ -15,6 +15,14 @@ function formatMonth(value) {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
+function composeConsumerName(consumer, fallback = "") {
+  const composed = [consumer.first_name, consumer.middle_name, consumer.last_name]
+    .map((part) => String(part ?? "").trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .join(" ");
+  return composed || consumer.full_name || fallback;
+}
+
 export function normalizeBillingRecord(record) {
   const consumer = Array.isArray(record.consumers)
     ? record.consumers[0]
@@ -34,8 +42,8 @@ export function normalizeBillingRecord(record) {
     id: record.id,
     invoiceNumber: `INV-${record.id}`,
     consumerName:
-      consumer.full_name ??
-      record.consumer_name ??
+      composeConsumerName(consumer) ||
+      record.consumer_name ||
       `Consumer #${record.user_id}`,
     purok:
       consumer.purok ??

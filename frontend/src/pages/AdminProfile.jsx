@@ -5,8 +5,9 @@ import Modal from "../components/Modal";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
+import StaffPasswordConfirmModal from "../components/StaffPasswordConfirmModal";
 import { useToast } from "../components/Toast";
-import { createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp } from "../services/auth.service";
+import { createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp, verifyStaffActionPassword } from "../services/auth.service";
 import { getStoredAccount } from "../services/authToken";
 
 const STAFF_PAGE_SIZE = 2;
@@ -15,6 +16,16 @@ const STAFF_OTP_CHALLENGE_KEY = "waterwise:super-admin-staff-otp";
 const SETTINGS_OTP_CHALLENGE_KEY = "waterwise:super-admin-settings-otp";
 export const SETTINGS_PERMISSION_KEY = "waterwise:super-admin-settings-permission";
 const formatOtpCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+
+const STAFF_ACTION_LABELS = {
+  "create-admin": "Create Admin account",
+  "create-meter-reader": "Create Meter Reader account",
+  "update-admin": "Update Admin account",
+  "update-meter-reader": "Update Meter Reader account",
+  "delete-admin": "Remove Admin account",
+  "delete-meter-reader": "Remove Meter Reader account",
+  "update-system-settings": "Update system settings",
+};
 
 function getStoredStaffPermission() {
   try {
@@ -111,6 +122,12 @@ export default function AdminProfile() {
   const [staffOtpError, setStaffOtpError] = useState("");
   const [isAuthorizingStaff, setIsAuthorizingStaff] = useState(false);
   const [staffOtpResendSeconds, setStaffOtpResendSeconds] = useState(0);
+  const [staffPasswordPrompt, setStaffPasswordPrompt] = useState(null);
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffPasswordError, setStaffPasswordError] = useState("");
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [isVerifyingStaffPassword, setIsVerifyingStaffPassword] = useState(false);
+  const [staffPasswordLockSeconds, setStaffPasswordLockSeconds] = useState(0);
   const [isTrustedDevicesOpen, setIsTrustedDevicesOpen] = useState(false);
   const [trustedDevices, setTrustedDevices] = useState([]);
   const [trustedDevicesError, setTrustedDevicesError] = useState("");
@@ -138,6 +155,12 @@ export default function AdminProfile() {
     const timer = window.setTimeout(() => setStaffOtpResendSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
     return () => window.clearTimeout(timer);
   }, [staffOtpResendSeconds]);
+
+  useEffect(() => {
+    if (staffPasswordLockSeconds <= 0) return undefined;
+    const timer = window.setTimeout(() => setStaffPasswordLockSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [staffPasswordLockSeconds]);
 
   useEffect(() => {
     const handleEmailChange = (event) => setAccount((current) => ({ ...current, email: event.detail?.email ?? current.email }));
@@ -195,7 +218,29 @@ export default function AdminProfile() {
     } finally { setRevokingDeviceId(null); }
   };
 
+  const closeStaffPasswordPrompt = () => {
+    setStaffPasswordPrompt(null);
+    setStaffPassword("");
+    setStaffPasswordError("");
+    setShowStaffPassword(false);
+  };
+
   const beginStaffAuthorization = async (pendingAction) => {
+    // Per-write actions (create/update/delete) use Super Admin password
+    // re-auth; page-view gates (manage-staff / manage-system-settings) and
+    // the email fallback still use the OTP flow below.
+    if (!["manage-staff", "manage-system-settings"].includes(pendingAction.action)) {
+      setStaffPasswordPrompt(pendingAction);
+      setStaffPassword("");
+      setStaffPasswordError("");
+      setShowStaffPassword(false);
+      setStaffPasswordLockSeconds(0);
+      return;
+    }
+    await beginStaffOtpAuthorization(pendingAction);
+  };
+
+  const beginStaffOtpAuthorization = async (pendingAction) => {
     if (pendingAction.action === "manage-staff") {
       const existingChallenge = getStoredStaffOtpChallenge();
       if (existingChallenge) {
@@ -251,8 +296,8 @@ export default function AdminProfile() {
     if (staffForm.password !== staffForm.confirmPassword) return setStaffError("Temporary passwords do not match.");
     setStaffError("");
     const pendingAction = { action: staffType === "admin" ? "create-admin" : "create-meter-reader", accountType: staffType, payload: { username, email, password: staffForm.password } };
-    // Staff writes require their own single-use OTP; the page-view
-    // manage-staff permission only authorizes directory reads.
+    // Staff writes require their own single-use password confirmation; the
+    // page-view manage-staff permission only authorizes directory reads.
     await beginStaffAuthorization(pendingAction);
   };
 
@@ -366,6 +411,37 @@ export default function AdminProfile() {
     finally { setIsAuthorizingStaff(false); }
   };
 
+  const verifyStaffPassword = async (event) => {
+    event.preventDefault();
+    const pendingAction = staffPasswordPrompt;
+    if (!pendingAction) return;
+    if (!staffPassword) return setStaffPasswordError("Enter your Super Admin password.");
+    setIsVerifyingStaffPassword(true); setStaffPasswordError("");
+    try {
+      const result = await verifyStaffActionPassword(pendingAction.action, pendingAction.targetId, staffPassword);
+      const confirmedAction = pendingAction;
+      // Clear the password from memory immediately after use.
+      closeStaffPasswordPrompt();
+      await completeAuthorizedAction(result.authorizationToken, confirmedAction);
+    } catch (error) {
+      if (error.retryAfterSeconds) {
+        setStaffPasswordLockSeconds(error.retryAfterSeconds);
+        toast.warning("Too many attempts", error.message);
+      } else if (error.status === 401 && Number.isFinite(error.remainingAttempts)) {
+        setStaffPasswordError(`${error.message} ${error.remainingAttempts} attempt${error.remainingAttempts === 1 ? "" : "s"} remaining.`);
+      } else {
+        setStaffPasswordError(error.message);
+      }
+      setStaffPassword("");
+    } finally { setIsVerifyingStaffPassword(false); }
+  };
+
+  const useEmailOtpForStaffAction = async () => {
+    const pendingAction = staffPasswordPrompt;
+    closeStaffPasswordPrompt();
+    if (pendingAction) await beginStaffOtpAuthorization(pendingAction);
+  };
+
   return (
     <div className="min-w-0 space-y-5 sm:space-y-6">
       {!isStaffManagementPage ? <>
@@ -437,7 +513,7 @@ export default function AdminProfile() {
           <div><label className="text-sm font-semibold" htmlFor="staff-temporary-password">Temporary password</label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="staff-temporary-password" onChange={(event) => { setStaffForm((current) => ({ ...current, password: event.target.value })); setStaffError(""); }} placeholder="e.g. Staff@2026" type={showTemporaryPassword ? "text" : "password"} value={staffForm.password} /><button aria-label={showTemporaryPassword ? "Hide temporary password" : "Show temporary password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowTemporaryPassword((visible) => !visible)} type="button">{showTemporaryPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div><p className="mt-1.5 text-xs leading-5 text-slate-500">Example: Staff@2026. Use at least 8 characters with uppercase, lowercase, a number, and a symbol.</p></div>
           <div><label className="text-sm font-semibold" htmlFor="staff-confirm-temporary-password">Confirm temporary password</label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="staff-confirm-temporary-password" onChange={(event) => { setStaffForm((current) => ({ ...current, confirmPassword: event.target.value })); setStaffError(""); }} placeholder="Re-enter temporary password" type={showConfirmTemporaryPassword ? "text" : "password"} value={staffForm.confirmPassword} /><button aria-label={showConfirmTemporaryPassword ? "Hide confirmed temporary password" : "Show confirmed temporary password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowConfirmTemporaryPassword((visible) => !visible)} type="button">{showConfirmTemporaryPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>
           {staffError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{staffError}</p>}
-          <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isCreatingStaff || isAuthorizingStaff} type="submit"><UserPlus className="h-5 w-5" />{isAuthorizingStaff ? "Sending OTP…" : isCreatingStaff ? "Creating account…" : `Create ${staffType === "admin" ? "Admin" : "Meter Reader"}`}</button>
+          <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isCreatingStaff} type="submit"><UserPlus className="h-5 w-5" />{isCreatingStaff ? "Creating account…" : `Create ${staffType === "admin" ? "Admin" : "Meter Reader"}`}</button>
         </form>
       </Modal>}
       {selectedAdmin && <Modal description={`Update ${selectedAdmin.username}'s email or assign a new temporary password.`} eyebrow="Regular administrator management" isOpen onClose={() => { setSelectedAdmin(null); setShowAdminPassword(false); setShowAdminConfirmPassword(false); }} size="sm" title="Manage administrator">
@@ -446,7 +522,7 @@ export default function AdminProfile() {
           <div><label className="text-sm font-semibold" htmlFor="managed-admin-password">New temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-admin-password" onChange={(event) => { setAdminUpdates((current) => ({ ...current, password: event.target.value })); setAdminError(""); }} placeholder="e.g. Staff@2026" type={showAdminPassword ? "text" : "password"} value={adminUpdates.password} /><button aria-label={showAdminPassword ? "Hide administrator password" : "Show administrator password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowAdminPassword((visible) => !visible)} type="button">{showAdminPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div><p className="mt-1.5 text-xs leading-5 text-slate-500">Leave blank to keep the existing password.</p></div>
           <div><label className="text-sm font-semibold" htmlFor="managed-admin-confirm-password">Confirm new temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-admin-confirm-password" onChange={(event) => { setAdminUpdates((current) => ({ ...current, confirmPassword: event.target.value })); setAdminError(""); }} placeholder="Re-enter temporary password" type={showAdminConfirmPassword ? "text" : "password"} value={adminUpdates.confirmPassword} /><button aria-label={showAdminConfirmPassword ? "Hide confirmed administrator password" : "Show confirmed administrator password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowAdminConfirmPassword((visible) => !visible)} type="button">{showAdminConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>
           {adminError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{adminError}</p>}
-          <button className="ww-primary-button min-h-12" disabled={isUpdatingAdmin || isAuthorizingStaff} type="submit">{isAuthorizingStaff ? "Sending OTP…" : isUpdatingAdmin ? "Saving changes…" : "Save changes"}</button>
+          <button className="ww-primary-button min-h-12" disabled={isUpdatingAdmin} type="submit">{isUpdatingAdmin ? "Saving changes…" : "Save changes"}</button>
         </form>
       </Modal>}
       {selectedMeterReader && <Modal description={`Update ${selectedMeterReader.username}'s email or assign a new temporary password.`} eyebrow="Meter reader management" isOpen onClose={() => { setSelectedMeterReader(null); setShowMeterReaderPassword(false); setShowMeterReaderConfirmPassword(false); }} size="sm" title="Manage meter reader">
@@ -455,7 +531,7 @@ export default function AdminProfile() {
           <div><label className="text-sm font-semibold" htmlFor="managed-reader-password">New temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-reader-password" onChange={(event) => { setMeterReaderUpdates((current) => ({ ...current, password: event.target.value })); setMeterReaderError(""); }} placeholder="e.g. Staff@2026" type={showMeterReaderPassword ? "text" : "password"} value={meterReaderUpdates.password} /><button aria-label={showMeterReaderPassword ? "Hide meter reader password" : "Show meter reader password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowMeterReaderPassword((visible) => !visible)} type="button">{showMeterReaderPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div><p className="mt-1.5 text-xs leading-5 text-slate-500">Leave blank to keep the existing password.</p></div>
           <div><label className="text-sm font-semibold" htmlFor="managed-reader-confirm-password">Confirm new temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-reader-confirm-password" onChange={(event) => { setMeterReaderUpdates((current) => ({ ...current, confirmPassword: event.target.value })); setMeterReaderError(""); }} placeholder="Re-enter temporary password" type={showMeterReaderConfirmPassword ? "text" : "password"} value={meterReaderUpdates.confirmPassword} /><button aria-label={showMeterReaderConfirmPassword ? "Hide confirmed meter reader password" : "Show confirmed meter reader password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowMeterReaderConfirmPassword((visible) => !visible)} type="button">{showMeterReaderConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>
           {meterReaderError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{meterReaderError}</p>}
-          <button className="ww-primary-button min-h-12" disabled={isUpdatingMeterReader || isAuthorizingStaff} type="submit">{isAuthorizingStaff ? "Sending OTP…" : isUpdatingMeterReader ? "Saving changes…" : "Save changes"}</button>
+          <button className="ww-primary-button min-h-12" disabled={isUpdatingMeterReader} type="submit">{isUpdatingMeterReader ? "Saving changes…" : "Save changes"}</button>
         </form>
       </Modal>}
       {staffAuthorization && <Modal description={`Enter the 6-digit code sent to ${staffAuthorization.maskedEmail}. It expires in 5 minutes and can be used only for this staff action.`} eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); setStaffOtpResendSeconds(0); }} size="sm" title="Confirm staff action">
@@ -466,6 +542,23 @@ export default function AdminProfile() {
           <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isAuthorizingStaff || staffOtpResendSeconds > 0} onClick={() => beginStaffAuthorization(staffAuthorization)} type="button">{staffOtpResendSeconds > 0 ? `Resend code in ${formatOtpCountdown(staffOtpResendSeconds)}` : "Resend code"}</button>
         </form>
       </Modal>}
+      {staffPasswordPrompt && (
+        <StaffPasswordConfirmModal
+          actionLabel={STAFF_ACTION_LABELS[staffPasswordPrompt.action] ?? "Staff management action"}
+          error={staffPasswordError}
+          isOpen
+          isVerifying={isVerifyingStaffPassword}
+          lockSeconds={staffPasswordLockSeconds}
+          onClose={closeStaffPasswordPrompt}
+          onPasswordChange={(value) => { setStaffPassword(value); setStaffPasswordError(""); }}
+          onSubmit={verifyStaffPassword}
+          onToggleShowPassword={() => setShowStaffPassword((visible) => !visible)}
+          onUseEmailOtp={useEmailOtpForStaffAction}
+          password={staffPassword}
+          showPassword={showStaffPassword}
+          username={account?.username ?? ""}
+        />
+      )}
     </div>
   );
 }

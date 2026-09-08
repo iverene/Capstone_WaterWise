@@ -43,6 +43,7 @@ export default function Modal({
   overlayClassName = "",
   overlayProps = {},
   panelProps = {},
+  panelRoundedClass = "rounded-3xl",
   showCloseButton = true,
   showHeader = true,
   size = "lg",
@@ -151,7 +152,7 @@ export default function Modal({
         aria-label={titleId ? undefined : ariaLabel}
         aria-labelledby={titleId}
         aria-modal="true"
-        className={`flex max-h-[94dvh] w-full ${sizes[size] ?? sizes.lg} flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-modal ${className} ${panelPropClass}`}
+        className={`flex max-h-[94dvh] w-full ${sizes[size] ?? sizes.lg} flex-col overflow-hidden ${panelRoundedClass} border border-slate-200 bg-white shadow-modal ${className} ${panelPropClass}`}
         onMouseDown={(event) => {
           event.stopPropagation();
           panelMouseDown?.(event);

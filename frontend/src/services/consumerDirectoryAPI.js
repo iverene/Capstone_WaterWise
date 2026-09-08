@@ -8,13 +8,41 @@ const client = {
     apiClient.patch(`/consumers${path}`, payload, options),
 };
 
+function composeDisplayName(firstName, middleName, lastName, fallback = "") {
+  return [firstName, middleName, lastName]
+    .map((part) => String(part ?? "").trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .join(" ") || fallback;
+}
+
+function splitLegacyFullName(fullName) {
+  const parts = String(fullName ?? "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
+  if (parts.length === 0) return { firstName: "", middleName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+  if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+  return { firstName: parts[0], middleName: parts.slice(1, -1).join(" "), lastName: parts[parts.length - 1] };
+}
+
 function normalizeConsumer(consumer) {
+  const split = {
+    firstName: consumer.first_name ?? "",
+    middleName: consumer.middle_name ?? "",
+    lastName: consumer.last_name ?? "",
+  };
+  const legacy = consumer.first_name === undefined ? splitLegacyFullName(consumer.full_name) : null;
+  const firstName = legacy?.firstName ?? split.firstName;
+  const middleName = legacy?.middleName ?? split.middleName;
+  const lastName = legacy?.lastName ?? split.lastName;
+  const displayName = composeDisplayName(firstName, middleName, lastName, consumer.full_name ?? "");
   return {
     ...consumer,
+    firstName,
+    middleName,
+    lastName,
     accountName: consumer.username ?? "",
-    consumerName: consumer.full_name ?? "",
+    consumerName: displayName,
     consumerNo: String(consumer.id ?? ""),
-    fullName: consumer.full_name ?? "",
+    fullName: displayName,
     contactNumber: consumer.contact_number ?? "",
     purok: consumer.purok_no != null ? `Purok ${consumer.purok_no}` : "Unassigned",
     status: consumer.status ?? "active",
@@ -23,9 +51,12 @@ function normalizeConsumer(consumer) {
 
 function toConsumerPayload(consumer, includePassword = false, includeStatus = false) {
   const purokNo = Number(String(consumer.purok ?? "").replace(/\D/g, ""));
+  const legacy = consumer.firstName === undefined ? splitLegacyFullName(consumer.fullName) : null;
   return {
     username: consumer.accountName,
-    fullName: consumer.fullName,
+    firstName: String(legacy?.firstName ?? consumer.firstName ?? "").trim(),
+    middleName: String(legacy?.middleName ?? consumer.middleName ?? "").trim(),
+    lastName: String(legacy?.lastName ?? consumer.lastName ?? "").trim(),
     email: consumer.email,
     contactNumber: consumer.contactNumber,
     purokNo: Number.isInteger(purokNo) && purokNo > 0 ? purokNo : null,
