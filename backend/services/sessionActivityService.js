@@ -1,7 +1,7 @@
 import { supabase } from "../config/supabase.js";
 import { readCache, redis, writeCache } from "../config/redis.js";
 
-const DEFAULT_INACTIVITY_TIMEOUT_MS = 1 * 60 * 1000;
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 const ACTIVITY_WRITE_THROTTLE_MS = 60 * 1000;
 const ACTIVITY_CACHE_TTL_SECONDS = 6 * 60 * 60;
 

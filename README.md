@@ -303,7 +303,7 @@ On later logins, the backend still validates the administrator password first. I
 
 The browser stores the raw random token only in an `HttpOnly` cookie. The database stores only its SHA-256 hash. Production cookies use `Secure` and `SameSite=None` for the deployed cross-origin frontend/backend configuration. Frontend API requests therefore use credentials, and backend CORS allows credentialed requests only from approved origins.
 
-Admin Profile Management contains one **Profile security** section with **Trusted devices**, **Change password**, and **Change email** controls. The device view shows the platform, browser, last-used time, expiry, and current device. Administrators can revoke one device or all other devices. A revoked or expired browser must complete OTP again on its next login. Revocation removes trusted-browser status; it does not cancel an access JWT that was already issued for the current role-based session. Changing or resetting an administrator password revokes every trusted device for that account.
+Admin Profile Management contains one **Profile security** section with **Trusted devices**, **Change password**, and **Change email** controls. The device view shows the platform, browser, last-used time, expiry, and current device. Administrators can revoke one device or all other devices. A revoked or expired browser must complete OTP again on its next login. Revocation removes trusted-browser status; it does not cancel an access JWT that was already issued for the current role-based session. Explicit sign-out ends only the JWT/session and keeps the browser trusted, so the next sign-in on the same browser can skip OTP until expiry, manual revoke, or password change. Changing or resetting an administrator password revokes every trusted device for that account.
 
 ### Forgot-password OTP flow
 
@@ -652,7 +652,7 @@ Match → allow | Mismatch → 401
 
 ### Logout fingerprint revocation
 
-When a user logs out, the `device_fingerprint_hash` is cleared from the database. This ensures the fingerprint cannot be reused after logout.
+When a user logs out, the `device_fingerprint_hash` is cleared from the database. This ensures the fingerprint cannot be reused after logout. For admins, logout does not revoke the trusted-device cookie/DB row, so the same browser can still skip OTP on its next sign-in.
 
 ```text
 Frontend calls POST /api/auth/logout

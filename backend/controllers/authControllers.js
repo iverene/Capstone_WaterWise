@@ -945,27 +945,9 @@ export async function logout(req, res) {
     const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
     await supabase.from(table).update({ device_fingerprint_hash: null }).eq("id", id);
     await clearSessionActivity(role, id);
-    if (["admin", "super-admin"].includes(role)) {
-      // Logging out must also end the OTP bypass: revoke only this browser's
-      // trusted device (other browsers stay trusted) and clear its cookie.
-      const deviceToken = readCookie(req, getTrustedDeviceCookieName());
-      if (deviceToken) {
-        try {
-          const { data } = await supabase
-            .from("admin_trusted_devices")
-            .select("id")
-            .eq("token_hash", createHash("sha256").update(deviceToken).digest("hex"))
-            .eq("admin_id", id)
-            .is("revoked_at", null)
-            .maybeSingle();
-          if (data?.id) await revokeTrustedDevice({ adminId: id, deviceId: data.id, currentToken: deviceToken });
-        } catch {
-          // Fingerprint already cleared above; a device-table failure
-          // must not turn logout itself into an error.
-        }
-      }
-      clearTrustedDeviceCookie(res, role, req);
-    }
+    // Trusted admin browsers stay trusted across explicit logout so the next
+    // sign-in on the same browser can skip OTP until expiry, manual revoke,
+    // or password change. Only the short-lived JWT/session is ended here.
     return res.status(200).json({ success: true, message: "Logged out successfully." });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Logout failed." });
