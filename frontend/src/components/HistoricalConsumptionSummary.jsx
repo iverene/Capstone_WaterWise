@@ -29,7 +29,8 @@ function HistoryKpi({ Icon, label, records, periodKey, compact }) {
 
   return (
     <KPI
-      className={compact ? "min-h-32 sm:h-48" : "min-h-40 sm:h-56"}
+      className={compact ? "min-h-32 sm:h-44" : "min-h-40 sm:h-56"}
+      compact={compact}
       description="latest recorded period"
       descriptionHighlight={latest?.[periodKey] ?? "No records"}
       descriptionIcon={CalendarDays}
@@ -46,7 +47,7 @@ function HistoryKpi({ Icon, label, records, periodKey, compact }) {
 
 function HistoryKpiSkeleton({ Icon, label, compact }) {
   return (
-    <article className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-5 ${compact ? "min-h-32 sm:h-48" : "min-h-40 sm:h-56"}`}>
+    <article className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-4 ${compact ? "min-h-32 sm:h-44" : "min-h-40 sm:h-56"}`}>
       <div className="relative flex h-full flex-col">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-water-50 text-water-700">
           <Icon aria-hidden="true" className="h-6 w-6" />

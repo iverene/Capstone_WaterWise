@@ -1,6 +1,16 @@
 // backend/models/consumption.model.js
 
 import { supabase } from "../config/supabase.js";
+import { composeFullName } from "./consumerModels.js";
+
+const consumerDisplayName = (consumer, fallback = "Unknown consumer") => {
+  if (!consumer) return fallback;
+  return (
+    composeFullName(consumer.first_name, consumer.middle_name, consumer.last_name) ||
+    consumer.full_name ||
+    fallback
+  );
+};
 
 const MONTHS = [
   "january",
@@ -44,7 +54,9 @@ const fetchConsumptionRecords =
           consumption,
           consumers!consumption_consumer_id_fkey (
             id,
-            full_name,
+            first_name,
+            middle_name,
+            last_name,
             purok_no
           )
         `)
@@ -342,7 +354,7 @@ const buildReadingContext = (consumer, records, billings, readingDate) => {
 
   return {
     consumer_id: consumer.id,
-    consumer_name: consumer.full_name,
+    consumer_name: consumerDisplayName(consumer),
     purok_no: consumer.purok_no,
     status: consumer.status,
     has_previous_record: Boolean(latest),
@@ -383,8 +395,9 @@ export const getConsumptionRecordingContexts = async () => {
     await Promise.all([
       supabase
         .from("consumers")
-        .select("id, full_name, purok_no, status")
-        .order("full_name", { ascending: true }),
+        .select("id, first_name, middle_name, last_name, purok_no, status")
+        .order("last_name", { ascending: true })
+        .order("first_name", { ascending: true }),
       supabase
         .from("consumption")
         .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, created_at")
@@ -442,7 +455,7 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     await Promise.all([
       supabase
         .from("consumers")
-        .select("id, full_name, purok_no, status")
+        .select("id, first_name, middle_name, last_name, purok_no, status")
         .eq("id", parsedConsumerId)
         .maybeSingle(),
       supabase
@@ -485,7 +498,7 @@ export const getAllConsumptionReadings = async () => {
       return {
         id: record.id,
         consumer_id: record.consumer_id,
-        consumer_name: consumer?.full_name ?? "Unknown consumer",
+        consumer_name: consumerDisplayName(consumer),
         purok_no: consumer?.purok_no ?? null,
         reading_date: record.reading_date,
         previous_reading: record.previous_reading,

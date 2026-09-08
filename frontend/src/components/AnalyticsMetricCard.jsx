@@ -29,7 +29,7 @@ export default function AnalyticsMetricCard({
   unit = "m³",
   value,
 }) {
-  const heightClass = compact ? "min-h-32 sm:min-h-48" : "min-h-40 sm:min-h-52";
+  const heightClass = compact ? "min-h-32 sm:min-h-44" : "min-h-40 sm:min-h-52";
   const refreshButton = (
     <RefreshButton label={label} loading={loading} onRefresh={onRefresh} />
   );
@@ -39,6 +39,7 @@ export default function AnalyticsMetricCard({
       <KPI
         cardTestId={testId}
         className={heightClass}
+        compact={compact}
         description={description}
         headerAction={refreshButton}
         icon={Icon}

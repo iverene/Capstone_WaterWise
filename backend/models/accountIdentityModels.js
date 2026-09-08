@@ -13,9 +13,6 @@ export async function ensureAccountIdentityIsUnique({ username, email, fullName 
     { field: "username", label: "username", table, value: username },
     { field: "email", label: "email address", table, value: email },
   ]);
-  if (fullName) {
-    checks.push({ field: "full_name", label: "resident full name", table: "consumers", value: fullName, caseInsensitive: true });
-  }
 
   const results = await Promise.all(checks.map((check) => {
     let query = supabase.from(check.table).select("id").limit(1);
@@ -35,6 +32,27 @@ export async function ensureAccountIdentityIsUnique({ username, email, fullName 
     const duplicate = checks[duplicateIndex];
     throw createError(`The ${duplicate.label} ${duplicate.value} is already in use.`);
   }
+
+  if (fullName) {
+    const normalizedFullName = String(fullName).trim().replace(/\s+/g, " ").toLowerCase();
+    const { data, error } = await supabase
+      .from("consumers")
+      .select("id, first_name, middle_name, last_name");
+    if (error) {
+      throw createError(`Failed to check account uniqueness: ${error.message}`, 500);
+    }
+    const duplicateName = (data ?? []).some((consumer) => {
+      const composed = [consumer.first_name, consumer.middle_name, consumer.last_name]
+        .map((part) => String(part ?? "").trim().replace(/\s+/g, " "))
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return composed === normalizedFullName;
+    });
+    if (duplicateName) {
+      throw createError(`The resident full name ${fullName} is already in use.`);
+    }
+  }
 }
 
 export function duplicateAccountIdentityMessage(error, { includeFullName = false } = {}) {
@@ -43,7 +61,7 @@ export function duplicateAccountIdentityMessage(error, { includeFullName = false
     .join(" ")
     .toLowerCase();
 
-  if (includeFullName && (databaseMessage.includes("full_name") || databaseMessage.includes("full name"))) {
+  if (includeFullName && (databaseMessage.includes("full_name") || databaseMessage.includes("full name") || databaseMessage.includes("first_name") || databaseMessage.includes("last_name") || databaseMessage.includes("consumer-name"))) {
     return "This resident full name is already in use.";
   }
   if (databaseMessage.includes("email")) {

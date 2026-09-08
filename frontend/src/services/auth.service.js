@@ -152,6 +152,20 @@ export async function verifyStaffActionOtp(challengeToken, otp) {
   }
 }
 
+export async function verifyStaffActionPassword(action, targetId, password) {
+  try {
+    return await apiRequest("/auth/admin/staff-action/verify-password", { method: "POST", body: JSON.stringify({ action, targetId, password }) });
+  } catch (error) {
+    const requestError = new Error(error.response?.data?.message ?? "Unable to verify the Super Admin password.", { cause: error });
+    const retryAfter = Number(error.response?.headers?.["retry-after"] ?? error.response?.data?.retryAfterSeconds);
+    if (Number.isFinite(retryAfter) && retryAfter > 0) requestError.retryAfterSeconds = Math.ceil(retryAfter);
+    const remaining = Number(error.response?.data?.remainingAttempts);
+    if (Number.isFinite(remaining)) requestError.remainingAttempts = remaining;
+    requestError.status = error.response?.status;
+    throw requestError;
+  }
+}
+
 export async function createStaffAccount(accountType, account, authorizationToken) {
   const endpoint = accountType === "admin" ? "/admins" : "/meter-readers";
   try {

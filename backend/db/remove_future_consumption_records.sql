@@ -23,7 +23,7 @@ SELECT
     (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::DATE AS cutoff_date,
     consumption_record.id AS consumption_id,
     consumption_record.consumer_id,
-    consumers.full_name AS consumer_name,
+    regexp_replace(btrim(coalesce(consumers.first_name, '') || ' ' || coalesce(consumers.middle_name, '') || ' ' || coalesce(consumers.last_name, '')), '\s+', ' ', 'g') AS consumer_name,
     consumption_record.reading_date,
     consumption_record.previous_reading,
     consumption_record.present_reading,

@@ -124,7 +124,6 @@ export default function PurokHistoricalConsumptionGraphs() {
     <section aria-labelledby="purok-consumption-title" className="space-y-5">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-water-600">Community history</p>
           <h2 className="mt-1 text-2xl font-extrabold text-slate-900" id="purok-consumption-title">Consumption Per Purok</h2>
           <p className="mt-1 text-sm text-slate-500">Latest four historical periods for each of the six puroks.</p>
         </div>

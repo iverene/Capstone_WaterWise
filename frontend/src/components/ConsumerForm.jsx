@@ -4,19 +4,34 @@ import Dropdown from "./Dropdown";
 
 const initialState = {
   accountName: "",
-  fullName: "",
+  firstName: "",
+  middleName: "",
+  lastName: "",
   purok: "",
   email: "",
   contactNumber: "",
   status: "active",
 };
 
+function splitLegacyFullName(fullName) {
+  const parts = String(fullName ?? "").trim().replace(/\s+/g, " ").split(" ").filter(Boolean);
+  if (parts.length === 0) return { firstName: "", middleName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], middleName: "", lastName: "" };
+  if (parts.length === 2) return { firstName: parts[0], middleName: "", lastName: parts[1] };
+  return { firstName: parts[0], middleName: parts.slice(1, -1).join(" "), lastName: parts[parts.length - 1] };
+}
+
 function createInitialState(initialData) {
   if (!initialData) return initialState;
+
+  const legacy = initialData.firstName === undefined ? splitLegacyFullName(initialData.fullName) : null;
 
   return {
     ...initialState,
     ...initialData,
+    firstName: String(legacy?.firstName ?? initialData.firstName ?? ""),
+    middleName: String(legacy?.middleName ?? initialData.middleName ?? ""),
+    lastName: String(legacy?.lastName ?? initialData.lastName ?? ""),
     email: String(initialData.email ?? ""),
   };
 }
@@ -51,8 +66,11 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
   const validate = () => {
     const validationErrors = {};
 
-    if (!consumer.fullName.trim()) {
-      validationErrors.fullName = "Enter the resident's name.";
+    if (!consumer.firstName.trim()) {
+      validationErrors.firstName = "Enter the resident's first name.";
+    }
+    if (!consumer.lastName.trim()) {
+      validationErrors.lastName = "Enter the resident's last name.";
     }
     if (!consumer.accountName.trim()) {
       validationErrors.accountName = "Enter a username.";
@@ -134,21 +152,53 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
         </div>
       </header>}
 
-      <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
-        <div className="sm:col-span-2">
-          <label className={labelClass} htmlFor="resident-name">Name</label>
+      <div className="grid gap-5 p-5 sm:grid-cols-3 sm:p-6">
+        <div>
+          <label className={labelClass} htmlFor="resident-first-name">First name</label>
           <input
-            aria-describedby={describedBy("fullName")}
-            aria-invalid={Boolean(errors.fullName)}
+            aria-describedby={describedBy("firstName")}
+            aria-invalid={Boolean(errors.firstName)}
             autoComplete="off"
-            className={`mt-2 ${inputClass("fullName")}`}
-            id="resident-name"
-            onChange={(event) => updateField("fullName", event.target.value)}
-            placeholder="e.g. Juan Dela Cruz"
+            className={`mt-2 ${inputClass("firstName")}`}
+            id="resident-first-name"
+            onChange={(event) => updateField("firstName", event.target.value)}
+            placeholder="e.g. Juan"
             type="text"
-            value={consumer.fullName}
+            value={consumer.firstName}
           />
-          {errors.fullName && <p className={errorClass} id="fullName-error" role="alert">{errors.fullName}</p>}
+          {errors.firstName && <p className={errorClass} id="firstName-error" role="alert">{errors.firstName}</p>}
+        </div>
+
+        <div>
+          <label className={labelClass} htmlFor="resident-middle-name">Middle name <span className="font-normal text-slate-500">(optional)</span></label>
+          <input
+            aria-describedby={describedBy("middleName")}
+            aria-invalid={Boolean(errors.middleName)}
+            autoComplete="off"
+            className={`mt-2 ${inputClass("middleName")}`}
+            id="resident-middle-name"
+            onChange={(event) => updateField("middleName", event.target.value)}
+            placeholder="e.g. Santos"
+            type="text"
+            value={consumer.middleName}
+          />
+          {errors.middleName && <p className={errorClass} id="middleName-error" role="alert">{errors.middleName}</p>}
+        </div>
+
+        <div>
+          <label className={labelClass} htmlFor="resident-last-name">Last name</label>
+          <input
+            aria-describedby={describedBy("lastName")}
+            aria-invalid={Boolean(errors.lastName)}
+            autoComplete="off"
+            className={`mt-2 ${inputClass("lastName")}`}
+            id="resident-last-name"
+            onChange={(event) => updateField("lastName", event.target.value)}
+            placeholder="e.g. Dela Cruz"
+            type="text"
+            value={consumer.lastName}
+          />
+          {errors.lastName && <p className={errorClass} id="lastName-error" role="alert">{errors.lastName}</p>}
         </div>
 
         <div>
@@ -188,7 +238,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
           {errors.purok && <p className={errorClass} id="purok-error" role="alert">{errors.purok}</p>}
         </div>
 
-        <div className="sm:col-span-2">
+        <div>
           <label className={labelClass} htmlFor="resident-contact-number">Contact number</label>
           <div className="relative mt-2">
             <Phone aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -210,7 +260,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
           {errors.contactNumber && <p className={errorClass} id="contactNumber-error" role="alert">{errors.contactNumber}</p>}
         </div>
 
-        <div className="sm:col-span-2">
+        <div>
           <label className={labelClass} htmlFor="resident-email">Email address</label>
           <input
             aria-describedby={describedBy("email", "email-helper")}
@@ -230,7 +280,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
         </div>
 
         {(requirePassword || allowPasswordChange) && (
-          <div className="sm:col-span-2">
+          <div>
             <label className={labelClass} htmlFor="resident-password">{allowPasswordChange ? "New password" : "Password"}{allowPasswordChange && <span className="font-normal text-slate-500"> (optional)</span>}</label>
             <div className="relative mt-2">
               <input
@@ -265,7 +315,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
         )}
 
         {initialData && (
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-3">
             <div className="flex min-h-20 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex min-w-0 items-start gap-3">
                 <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${consumer.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
@@ -294,13 +344,13 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
           </div>
         )}
 
-        <div className="flex flex-col-reverse gap-3 sm:col-span-2 sm:flex-row sm:justify-end">
+        <div className="flex flex-row items-start gap-2 sm:pt-8">
           {onCancel && (
-            <button className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 transition-colors hover:bg-slate-50" onClick={onCancel} type="button">
+            <button className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50" onClick={onCancel} type="button">
               Cancel
             </button>
           )}
-          <button className="min-h-12 rounded-xl bg-water-600 px-6 font-bold text-white transition-colors hover:bg-water-700 disabled:opacity-60" type="submit">
+          <button className="min-h-12 flex-1 rounded-xl bg-water-600 px-3 text-sm font-bold text-white transition-colors hover:bg-water-700 disabled:opacity-60" type="submit">
             {initialData ? "Update resident" : "Add resident"}
           </button>
         </div>

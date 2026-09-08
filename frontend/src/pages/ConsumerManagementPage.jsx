@@ -12,10 +12,20 @@ import { useToast } from "../components/Toast";
 import { createConsumer, fetchConsumerDirectory, requestConsumerPasswordOtp, updateConsumer, verifyConsumerPasswordOtp } from "../services/consumerDirectoryAPI";
 
 function toManagementConsumer(consumer) {
+  const firstName = consumer.firstName ?? consumer.first_name ?? "";
+  const middleName = consumer.middleName ?? consumer.middle_name ?? "";
+  const lastName = consumer.lastName ?? consumer.last_name ?? "";
+  const composedName = [firstName, middleName, lastName]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
   return {
     id: consumer.id,
     accountName: consumer.username ?? consumer.consumerNo ?? "",
-    fullName: consumer.full_name ?? consumer.consumerName ?? consumer.name ?? "",
+    firstName,
+    middleName,
+    lastName,
+    fullName: composedName || consumer.full_name || consumer.consumerName || consumer.name || "",
     purok: consumer.purok ?? (consumer.purok_no == null ? "Unassigned" : `Purok ${consumer.purok_no}`),
     email: consumer.email ?? "Not available",
     contactNumber: consumer.contactNumber ?? consumer.contact_number ?? "",
@@ -150,7 +160,7 @@ function ConsumerManagementPage() {
   const visibleConsumers = useMemo(() => {
     const term = query.trim().toLowerCase();
     return consumers.filter((consumer) =>
-      (!term || [consumer.accountName, consumer.fullName]
+      (!term || [consumer.accountName, consumer.fullName, consumer.firstName, consumer.middleName, consumer.lastName]
         .some((value) => String(value).toLowerCase().includes(term))) &&
       (purok === "all" || consumer.purok === purok),
     );
@@ -200,8 +210,8 @@ function ConsumerManagementPage() {
       </div>
 
       <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3">
-        <KPI description="Registered community accounts" icon={FiUsers} title="Total residents" value={consumers.length} />
-        <KPI description="Accounts ready for service" icon={FiCheckCircle} title="Active accounts" value={consumers.filter((item) => item.status?.toLowerCase() === "active").length} />
+        <KPI compact description="Registered community accounts" icon={FiUsers} title="Total residents" value={consumers.length} />
+        <KPI compact description="Accounts ready for service" icon={FiCheckCircle} title="Active accounts" value={consumers.filter((item) => item.status?.toLowerCase() === "active").length} />
       </section>
 
       <Modal
@@ -210,8 +220,9 @@ function ConsumerManagementPage() {
         eyebrow="Resident account"
         isOpen={Boolean(formMode)}
         onClose={closeForm}
+        panelRoundedClass="rounded-xl"
         showCloseButton={false}
-        size="md"
+        size="xl"
         title={formMode === "edit" ? "Edit resident" : "Add resident"}
       >
             {error && (

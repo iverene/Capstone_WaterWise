@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { supabase } from "../config/supabase.js";
+import { composeFullName } from "../models/consumerModels.js";
 import { insertGeneratedReport } from "../models/reportModels.js";
 
 const REPORT_TYPES = {
@@ -49,12 +50,21 @@ const number = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 const round = (value) => Number(number(value).toFixed(2));
 const purok = (value) => (value == null ? "Unassigned" : `Purok ${value}`);
 
+const consumerDisplayName = (consumer, fallback = "Unknown resident") => {
+  if (!consumer) return fallback;
+  return (
+    composeFullName(consumer.first_name, consumer.middle_name, consumer.last_name) ||
+    consumer.full_name ||
+    fallback
+  );
+};
+
 async function consumptionRecords(startDate, endDate) {
   const { data, error } = await supabase
     .from("consumption")
     .select(`
       id, consumer_id, reading_date, previous_reading, present_reading, consumption,
-      consumers!consumption_consumer_id_fkey (id, username, full_name, purok_no)
+      consumers!consumption_consumer_id_fkey (id, username, first_name, middle_name, last_name, purok_no)
     `)
     .gte("reading_date", startDate)
     .lte("reading_date", endDate)
@@ -63,7 +73,7 @@ async function consumptionRecords(startDate, endDate) {
   return (data ?? []).map((record) => ({
     id: record.id,
     consumerId: record.consumer_id,
-    consumerName: record.consumers?.full_name ?? "Unknown resident",
+    consumerName: consumerDisplayName(record.consumers),
     username: record.consumers?.username ?? "Unavailable",
     purok: purok(record.consumers?.purok_no),
     readingDate: record.reading_date,
@@ -78,7 +88,7 @@ async function billingRecords(startDate, endDate) {
     .from("billing")
     .select(`
       id, billing_date, due_date, total_bill, remaining_balance, status,
-      consumers!billing_user_id_fkey (id, username, full_name, purok_no)
+      consumers!billing_user_id_fkey (id, username, first_name, middle_name, last_name, purok_no)
     `)
     .gte("billing_date", startDate)
     .lte("billing_date", endDate)
@@ -87,7 +97,7 @@ async function billingRecords(startDate, endDate) {
   return (data ?? []).map((record) => ({
     id: record.id,
     billingDate: record.billing_date,
-    consumerName: record.consumers?.full_name ?? "Unknown resident",
+    consumerName: consumerDisplayName(record.consumers),
     dueDate: record.due_date,
     purok: purok(record.consumers?.purok_no),
     remainingBalance: number(record.remaining_balance),
@@ -100,7 +110,7 @@ async function billingRecords(startDate, endDate) {
 async function residentRecords(startDate, endDate) {
   const { data, error } = await supabase
     .from("consumers")
-    .select("id, username, full_name, email, purok_no, status, created_at")
+    .select("id, username, first_name, middle_name, last_name, email, purok_no, status, created_at")
     .gte("created_at", `${startDate}T00:00:00Z`)
     .lte("created_at", `${endDate}T23:59:59.999Z`)
     .order("created_at", { ascending: true });
@@ -109,7 +119,7 @@ async function residentRecords(startDate, endDate) {
     id: record.id,
     createdAt: record.created_at,
     email: record.email,
-    name: record.full_name,
+    name: consumerDisplayName(record, "Unknown resident"),
     purok: purok(record.purok_no),
     status: record.status ?? "inactive",
     username: record.username,

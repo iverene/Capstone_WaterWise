@@ -17,9 +17,24 @@ export function readCookie(req, name) {
     const separator = part.indexOf("=");
     if (separator < 0) continue;
     const key = part.slice(0, separator).trim();
-    if (key === name) return decodeURIComponent(part.slice(separator + 1).trim());
+    if (key === name) {
+      try {
+        return decodeURIComponent(part.slice(separator + 1).trim());
+      } catch {
+        // A damaged cookie should require OTP, not fail the login request.
+        return "";
+      }
+    }
   }
   return "";
+}
+
+// Primary trust signal is the HttpOnly cookie; the X-Trusted-Device header
+// is a fallback for browsers that refuse to persist cookies (blocked
+// third-party/first-party cookies, aggressive extensions). Both carry the
+// same opaque random token verified against the same hash column.
+export function readDeviceToken(req) {
+  return readCookie(req, getTrustedDeviceCookieName()) || req.get("x-trusted-device") || "";
 }
 
 export function isSecureRequest(req) {
