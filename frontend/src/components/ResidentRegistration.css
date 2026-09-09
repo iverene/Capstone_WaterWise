@@ -1,0 +1,42 @@
+﻿.resident-registration-modal { max-width: 1000px; max-height: 90dvh; border-radius: 20px; }
+.resident-registration-layout { display: grid; grid-template-columns: 28% minmax(0, 1fr); }
+.resident-registration-sidebar { position: relative; overflow: hidden; display: flex; flex-direction: column; padding: 28px 24px 24px; color: white; background: radial-gradient(ellipse at 125% 24%, #248cdf 0, transparent 60%), linear-gradient(150deg, #0562ab, #0871c9 45%, #044578); }
+.resident-registration-sidebar::before { content: ''; position: absolute; width: 460px; height: 460px; border: 65px solid #ffffff06; border-radius: 50%; top: -275px; left: -180px; pointer-events: none; }
+.resident-brand { display: flex; align-items: center; gap: 15px; position: relative; }
+.resident-brand > span { display: grid; place-items: center; width: 46px; height: 46px; background: white; border-radius: 14px; color: #0072d6; flex-shrink: 0; box-shadow: 0 4px 12px #003e7020; }
+.resident-brand strong { font-size: 19px; letter-spacing: -.6px; }
+.resident-brand p { font-size: 13px; margin-top: 2px; }
+.resident-registration-sidebar h2 { font-size: 32px; line-height: 1.08; font-weight: 800; letter-spacing: -1.2px; margin: 28px 0 14px; }
+.resident-intro { font-size: 14px; line-height: 1.5; position: relative; z-index: 1; }
+.resident-neighborhood { width: calc(100% + 48px); max-width: none; margin: 12px -24px 0; flex: 1; min-height: 170px; }
+.resident-registration-sidebar blockquote { margin-top: 16px; font-size: 16px; line-height: 1.4; font-style: italic; }
+.resident-sidebar-mark { display: flex; gap: 7px; margin-top: 24px; }
+.resident-sidebar-mark i { width: 29px; height: 4px; border-radius: 9px; background: #3697cd; }
+.resident-sidebar-mark i:first-child { width: 51px; background: white; }
+.resident-registration-content { min-width: 0; padding: 28px 26px 20px; }
+.resident-registration-heading { position: relative; display: flex; gap: 14px; align-items: center; padding-right: 22px; margin-bottom: 20px; }
+.resident-heading-icon { display: grid; place-items: center; flex-shrink: 0; width: 58px; height: 58px; border-radius: 50%; background: #edf5ff; color: #0075df; }
+.resident-registration-heading h2 { color: #102346; font-size: 21px; font-weight: 800; letter-spacing: -.6px; }
+.resident-registration-heading p { color: #7086aa; font-size: 14px; line-height: 1.6; margin-top: 4px; }
+.resident-registration-close { position: absolute; top: -19px; right: -15px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; background: #f7f9fc; color: #52698b; }
+.resident-registration-close:hover { background: #eaf2fc; }
+.resident-registration-close:focus-visible { outline: 2px solid #0075df; outline-offset: 3px; }
+.resident-registration-form .resident-fields { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px 14px; padding: 0; }
+.resident-registration-form .resident-fields > div { grid-column: span 3; min-width: 0; }
+.resident-registration-form .resident-fields > div:nth-child(-n+3) { grid-column: span 2; }
+.resident-registration-form .resident-fields > div:nth-child(6) { grid-column: 1 / span 3; }
+.resident-registration-form .resident-fields > div:nth-child(7) { grid-column: 1 / span 3; }
+.resident-registration-form input, .resident-registration-form button[aria-haspopup] { min-height: 46px; border-color: #d0dced; font-size: 14px; }
+.resident-registration-form input[aria-invalid="true"], .resident-registration-form button[aria-invalid="true"] { border-color: #dc2626; }
+.resident-registration-form input::placeholder { color: #8399ba; }
+.resident-registration-form label { color: #294267; }
+.resident-input-icon { position: absolute; left: 17px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: #5674a0; pointer-events: none; }
+.resident-registration-form .resident-security { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 12px; background: #edf5ff; color: #7086aa; font-size: 12px; line-height: 1.6; }
+.resident-security > span { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; background: #d2e8ff; color: #0075df; }
+.resident-registration-form .resident-form-actions { grid-column: 1 / -1; justify-content: flex-end; gap: 14px; padding-top: 0; margin-top: -9px; }
+.resident-registration-form .resident-form-actions button { flex: none; min-height: 46px; min-width: 125px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
+.resident-registration-form .resident-form-actions button[type="submit"] { background: #0071d8; min-width: 165px; }
+.resident-registration-form .resident-form-actions button[type="submit"]:hover { background: #005eb7; }
+@media (max-width: 1000px) { .resident-registration-sidebar { padding-left: 24px; padding-right: 24px; } .resident-registration-sidebar h2 { font-size: 32px; } .resident-brand { gap: 10px; } .resident-brand strong { font-size: 18px; } .resident-neighborhood { width: calc(100% + 48px); margin-left: -24px; margin-right: -24px; } .resident-registration-content { padding: 28px 24px 20px; } .resident-heading-icon { width: 58px; height: 58px; } }
+@media (max-width: 767px) { .resident-registration-layout { grid-template-columns: minmax(0, 1fr); } .resident-registration-sidebar { padding: 22px 24px; } .resident-registration-sidebar h2 { margin: 20px 0 0; font-size: 28px; } .resident-registration-sidebar h2 br { display: none; } .resident-intro, .resident-neighborhood, .resident-registration-sidebar blockquote, .resident-sidebar-mark { display: none; } .resident-registration-content { padding: 26px 20px 20px; } .resident-registration-heading { gap: 12px; padding-right: 20px; } .resident-registration-heading h2 { font-size: 20px; } .resident-registration-close { top: -15px; right: -9px; } .resident-registration-form .resident-fields { gap: 20px 14px; } }
+@media (max-width: 480px) { .resident-registration-form .resident-fields > div:nth-child(n) { grid-column: 1 / -1; } .resident-heading-icon { display: none; } .resident-registration-form .resident-form-actions button { min-width: 0; padding: 0 15px; flex: 1; } .resident-registration-form .resident-form-actions button[type="submit"] { min-width: 0; } }

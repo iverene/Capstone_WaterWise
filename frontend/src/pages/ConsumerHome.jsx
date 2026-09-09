@@ -155,6 +155,7 @@ export default function ConsumerHome() {
           descriptionHighlight={usageDifference == null ? "First reading" : undefined}
           descriptionIcon={usageDifference == null ? Droplets : undefined}
           icon={Droplets}
+          showTrendBadge={false}
           title="Latest consumption"
           trend={usageDifference == null
             ? undefined

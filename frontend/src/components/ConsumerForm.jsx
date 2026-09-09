@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck } from "lucide-react";
+import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, UserRoundPlus } from "lucide-react";
 import Dropdown from "./Dropdown";
 
 const initialState = {
@@ -51,7 +51,7 @@ function isValidContactNumber(contactNumber) {
   return /^(?:09\d{9}|\+639\d{9})$/.test(compactNumber);
 }
 
-function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit = () => {}, requirePassword = false, initialData = null, onCancel }) {
+function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onCancel }) {
   const formRef = useRef(null);
   const [consumer, setConsumer] = useState(() => createInitialState(initialData));
   const [password, setPassword] = useState("");
@@ -136,7 +136,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
   const describedBy = (field, helperId) => [errors[field] ? `${field}-error` : "", helperId].filter(Boolean).join(" ") || undefined;
 
   return (
-    <form autoComplete="off" className={embedded ? "bg-white" : "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card"} onSubmit={handleSubmit} ref={formRef}>
+    <form autoComplete="off" className={registrationDesign ? "resident-registration-form bg-white" : embedded ? "bg-white" : "overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card"} onSubmit={handleSubmit} ref={formRef}>
       {!embedded && <header className="bg-navy-950 p-5 text-white sm:p-6">
         <div className="flex items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-900 text-water-300">
@@ -152,62 +152,73 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
         </div>
       </header>}
 
-      <div className="grid gap-5 p-5 sm:grid-cols-3 sm:p-6">
+      <div className="resident-fields grid gap-5 p-5 sm:grid-cols-3 sm:p-6">
         <div>
-          <label className={labelClass} htmlFor="resident-first-name">First name</label>
+          <label className={labelClass} htmlFor="resident-first-name">First name{registrationDesign && <span className="text-red-500"> *</span>}</label>
+          <div className="relative mt-2">
+{registrationDesign && <UserRound aria-hidden="true" className="resident-input-icon" />}
           <input
             aria-describedby={describedBy("firstName")}
             aria-invalid={Boolean(errors.firstName)}
             autoComplete="off"
-            className={`mt-2 ${inputClass("firstName")}`}
+            className={inputClass("firstName", registrationDesign ? "pl-12" : "")}
             id="resident-first-name"
             onChange={(event) => updateField("firstName", event.target.value)}
             placeholder="e.g. Juan"
             type="text"
             value={consumer.firstName}
           />
+</div>
           {errors.firstName && <p className={errorClass} id="firstName-error" role="alert">{errors.firstName}</p>}
         </div>
 
         <div>
           <label className={labelClass} htmlFor="resident-middle-name">Middle name <span className="font-normal text-slate-500">(optional)</span></label>
+          <div className="relative mt-2">
+{registrationDesign && <UserRound aria-hidden="true" className="resident-input-icon" />}
           <input
             aria-describedby={describedBy("middleName")}
             aria-invalid={Boolean(errors.middleName)}
             autoComplete="off"
-            className={`mt-2 ${inputClass("middleName")}`}
+            className={inputClass("middleName", registrationDesign ? "pl-12" : "")}
             id="resident-middle-name"
             onChange={(event) => updateField("middleName", event.target.value)}
             placeholder="e.g. Santos"
             type="text"
             value={consumer.middleName}
           />
+</div>
           {errors.middleName && <p className={errorClass} id="middleName-error" role="alert">{errors.middleName}</p>}
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="resident-last-name">Last name</label>
+          <label className={labelClass} htmlFor="resident-last-name">Last name{registrationDesign && <span className="text-red-500"> *</span>}</label>
+          <div className="relative mt-2">
+{registrationDesign && <UserRound aria-hidden="true" className="resident-input-icon" />}
           <input
             aria-describedby={describedBy("lastName")}
             aria-invalid={Boolean(errors.lastName)}
             autoComplete="off"
-            className={`mt-2 ${inputClass("lastName")}`}
+            className={inputClass("lastName", registrationDesign ? "pl-12" : "")}
             id="resident-last-name"
             onChange={(event) => updateField("lastName", event.target.value)}
             placeholder="e.g. Dela Cruz"
             type="text"
             value={consumer.lastName}
           />
+</div>
           {errors.lastName && <p className={errorClass} id="lastName-error" role="alert">{errors.lastName}</p>}
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="resident-username">Username</label>
+          <label className={labelClass} htmlFor="resident-username">Username{registrationDesign && <span className="text-red-500"> *</span>}</label>
+          <div className="relative mt-2">
+{registrationDesign && <UserRound aria-hidden="true" className="resident-input-icon" />}
           <input
             aria-describedby={describedBy("accountName")}
             aria-invalid={Boolean(errors.accountName)}
             autoComplete="off"
-            className={`mt-2 ${inputClass("accountName")}`}
+            className={inputClass("accountName", registrationDesign ? "pl-12" : "")}
             id="resident-username"
             onChange={(event) => updateField("accountName", event.target.value)}
             placeholder="e.g. juandelacruz"
@@ -215,16 +226,18 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
             type="text"
             value={consumer.accountName}
           />
+</div>
           {errors.accountName && <p className={errorClass} id="accountName-error" role="alert">{errors.accountName}</p>}
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="purok">Purok</label>
+          <label className={labelClass} htmlFor="purok">Purok{registrationDesign && <span className="text-red-500"> *</span>}</label>
           <Dropdown
             ariaDescribedBy={describedBy("purok")}
             ariaInvalid={Boolean(errors.purok)}
             ariaLabel="Select resident purok"
             className="mt-2"
+            icon={registrationDesign ? UsersRound : undefined}
             id="purok"
             name="purok"
             onValueChange={(value) => updateField("purok", value)}
@@ -239,7 +252,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="resident-contact-number">Contact number</label>
+          <label className={labelClass} htmlFor="resident-contact-number">Contact number{registrationDesign && <span className="text-red-500"> *</span>}</label>
           <div className="relative mt-2">
             <Phone aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
@@ -261,12 +274,14 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
         </div>
 
         <div>
-          <label className={labelClass} htmlFor="resident-email">Email address</label>
+          <label className={labelClass} htmlFor="resident-email">Email address{registrationDesign && <span className="text-red-500"> *</span>}</label>
+          <div className="relative mt-2">
+{registrationDesign && <Mail aria-hidden="true" className="resident-input-icon" />}
           <input
             aria-describedby={describedBy("email", "email-helper")}
             aria-invalid={Boolean(errors.email)}
             autoComplete="email"
-            className={`mt-2 ${inputClass("email")}`}
+            className={inputClass("email", registrationDesign ? "pl-12" : "")}
             id="resident-email"
             inputMode="email"
             onChange={(event) => updateField("email", event.target.value)}
@@ -275,19 +290,21 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
             type="email"
             value={consumer.email}
           />
+</div>
           <p className="mt-1.5 text-xs text-slate-500" id="email-helper">Enter the complete email address, including its domain.</p>
           {errors.email && <p className={errorClass} id="email-error" role="alert">{errors.email}</p>}
         </div>
 
         {(requirePassword || allowPasswordChange) && (
           <div>
-            <label className={labelClass} htmlFor="resident-password">{allowPasswordChange ? "New password" : "Password"}{allowPasswordChange && <span className="font-normal text-slate-500"> (optional)</span>}</label>
+            <label className={labelClass} htmlFor="resident-password">{allowPasswordChange ? "New password" : "Password"}{registrationDesign && <span className="text-red-500"> *</span>}{allowPasswordChange && <span className="font-normal text-slate-500"> (optional)</span>}</label>
             <div className="relative mt-2">
+              {registrationDesign && <LockKeyhole aria-hidden="true" className="resident-input-icon" />}
               <input
                 aria-describedby={describedBy("password", "password-helper")}
                 aria-invalid={Boolean(errors.password)}
                 autoComplete="new-password"
-                className={inputClass("password", "pr-12")}
+                className={inputClass("password", registrationDesign ? "pl-12 pr-12" : "pr-12")}
                 id="resident-password"
                 onChange={(event) => {
                   setPassword(event.target.value);
@@ -344,13 +361,15 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, onSubmit 
           </div>
         )}
 
-        <div className="flex flex-row items-start gap-2 sm:pt-8">
+        {registrationDesign && <div className="resident-security"><span><ShieldCheck aria-hidden="true" size={24} /></span><div><p className="font-bold text-navy-900">Account Security</p><p>The resident will use this username and password to sign in to their account.</p></div></div>}
+        <div className="resident-form-actions flex flex-row items-start gap-2 sm:pt-8">
           {onCancel && (
             <button className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50" onClick={onCancel} type="button">
               Cancel
             </button>
           )}
           <button className="min-h-12 flex-1 rounded-xl bg-water-600 px-3 text-sm font-bold text-white transition-colors hover:bg-water-700 disabled:opacity-60" type="submit">
+            {registrationDesign && <UserRoundPlus aria-hidden="true" size={20} />}
             {initialData ? "Update resident" : "Add resident"}
           </button>
         </div>

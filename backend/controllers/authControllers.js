@@ -562,7 +562,7 @@ export async function verifyAdminLoginOtp(req, res) {
     }
 
     adminOtpAttempts.set(challenge.jti, { ...attemptState, used: true });
-    const user = { id: account.id, username: account.username, email: account.email, name: account.username, role: account.role };
+    const user = { id: account.id, username: account.username, email: account.email, name: account.username, role: account.role, status: account.status };
     const trustedDevice = await createTrustedDevice({
       adminId: account.id,
       role: account.role,

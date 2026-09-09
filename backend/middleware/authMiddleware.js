@@ -57,7 +57,7 @@ export async function authenticate(req, res, next) {
     const table = payload.role === "consumer" ? "consumers" : payload.role === "meter-reader" ? "meter_readers" : "admins";
     const { data, error: accountError } = await supabase
       .from(table)
-      .select("device_fingerprint_hash, password, status")
+      .select("device_fingerprint_hash, password, status, created_at")
       .eq("id", userId)
       .maybeSingle();
     if (accountError) {
@@ -116,6 +116,8 @@ export async function authenticate(req, res, next) {
     req.user = {
       id: userId,
       role: payload.role,
+      status: data.status,
+      created_at: data.created_at,
     };
 
     if (shouldTouchSessionActivity(req)) {
