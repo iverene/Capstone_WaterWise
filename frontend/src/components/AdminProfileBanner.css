@@ -1,0 +1,24 @@
+﻿.admin-profile-banner { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 24px; min-height: 154px; padding: 24px 28px; border: 2px solid white; border-radius: 17px; background: linear-gradient(110deg,#fff 0%,#f4faff 45%,#dff2ff 100%); box-shadow: 0 4px 20px #3b82b808; }
+.admin-banner-landscape { position: absolute; right: 0; bottom: 0; height: 100%; width: 60%; z-index: -1; }
+.admin-banner-avatar { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 84px; height: 84px; border-radius: 50%; background: linear-gradient(140deg,#3079c7,#398bd4); box-shadow: 0 5px 12px #1674b933; color: white; font-size: 39px; font-weight: 500; }
+.admin-banner-avatar i { position: absolute; right: 0; bottom: 1px; width: 22px; height: 22px; border: 3px solid white; border-radius: 50%; background: #13b877; }
+.admin-banner-identity { min-width: 0; }
+.admin-banner-identity > p { color: #0077eb; font-size: 10px; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; }
+.admin-banner-identity h2 { margin-top: 4px; font-size: 23px; font-weight: 800; letter-spacing: -.6px; color: #102142; overflow-wrap: anywhere; }
+.admin-banner-identity > span { color: #55749d; font-size: 12px; }
+.admin-banner-email { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: #526f98; font-size: 11px; overflow-wrap: anywhere; }
+.admin-banner-email svg { flex-shrink: 0; }
+.admin-banner-art { margin-left: auto; align-self: flex-start; color: #67bff3; }
+.admin-banner-art svg { fill: #93d8ff; stroke-width: 1.5; filter: drop-shadow(0 4px 2px #2383bc20); }
+.admin-profile-banner blockquote { flex-shrink: 0; padding: 20px 45px 0 0; color: #205b9d; font-size: 16px; font-weight: 700; font-style: italic; line-height: 1.4; }
+.admin-banner-status { position: static; display: flex; width: fit-content; margin: 6px 0; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid #d4e3f0; border-radius: 20px; background: #f2f7fc; color: #526d90; font-size: 10px; font-weight: 700; }
+.admin-banner-status.is-active { color: #087b4b; border-color: #b4edd7; background: #e4faf0; }
+@media(max-width:1100px) { .admin-profile-banner blockquote { font-size: 13px; padding-right: 15px; } .admin-profile-banner { gap: 18px; } .admin-banner-art { display: none; } .admin-profile-banner blockquote { margin-left: auto; } }
+@media(max-width:640px) { .admin-profile-banner { padding: 40px 18px 20px; gap: 14px; } .admin-banner-avatar { width: 64px; height: 64px; font-size: 31px; } .admin-banner-identity h2 { font-size: 20px; } .admin-profile-banner blockquote { display: none; } .admin-banner-landscape { width: 100%; opacity: .35; } }
+.admin-profile-banner.has-details { flex-wrap: wrap; }
+.profile-banner-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 24px; flex-basis: 100%; margin-top: 2px; padding: 18px 20px; border: 1px solid #ffffff; border-radius: 12px; background: #ffffffdc; }
+.profile-banner-details > div { min-width: 0; }
+.profile-banner-details dt { color: #607d9f; font-size: 11px; }
+.profile-banner-details dd { margin-top: 4px; color: #18365c; font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .profile-banner-details { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 14px; } }
+@media (max-width: 380px) { .profile-banner-details { grid-template-columns: minmax(0, 1fr); } }

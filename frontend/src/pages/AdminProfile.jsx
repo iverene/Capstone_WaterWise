@@ -1,13 +1,14 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, KeyRound, LoaderCircle, Mail, Monitor, Settings, ShieldCheck, Smartphone, Trash2, UserPlus, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
+import AdminProfileBanner from "../components/AdminProfileBanner";
 import Modal from "../components/Modal";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
 import StaffPasswordConfirmModal from "../components/StaffPasswordConfirmModal";
 import { useToast } from "../components/Toast";
-import { createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp, verifyStaffActionPassword } from "../services/auth.service";
+import { getCurrentAccount, createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp, verifyStaffActionPassword } from "../services/auth.service";
 import { getStoredAccount } from "../services/authToken";
 
 const STAFF_PAGE_SIZE = 2;
@@ -92,6 +93,15 @@ export default function AdminProfile() {
   const isStaffManagementPage = location.pathname === "/admin/staff-management";
   const toast = useToast();
   const [account, setAccount] = useState(getStoredAccount);
+  useEffect(() => {
+    const controller = new AbortController();
+    getCurrentAccount({ signal: controller.signal })
+      .then(({ user }) => { if (!controller.signal.aborted) setAccount(user); })
+      .catch((error) => {
+        if (!controller.signal.aborted) toast.error("Profile unavailable", error.message || "Unable to refresh account details.");
+      });
+    return () => controller.abort();
+  }, [toast]);
   const [staffType, setStaffType] = useState("");
   const [staffForm, setStaffForm] = useState({ username: "", email: "", password: "", confirmPassword: "" });
   const [staffError, setStaffError] = useState("");
@@ -446,14 +456,8 @@ export default function AdminProfile() {
     <div className="min-w-0 space-y-5 sm:space-y-6">
       {!isStaffManagementPage ? <>
       <PageHeader compact description="Review your administrator identity and manage secure account credentials." eyebrow="Administrator profile" title="Administrator account" />
-      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-card sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-center gap-3"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><UserRound className="h-6 w-6" /></span><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-water-700">{account?.role === "super-admin" ? "Super Administrator" : "Administrator"}</p><h2 className="mt-1 break-words text-lg font-extrabold text-navy-900 sm:text-xl">{account?.username ?? account?.name ?? "Administrator"}</h2></div></div><span className="inline-flex min-h-7 w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />Active account</span></div>
-      </section>
-      <section aria-labelledby="admin-account-center-heading">
-        <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="admin-account-center-heading">Account center</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-600">Review the information registered to your administrator account.</p>
-        <button className="mt-5 flex min-h-16 w-full items-center gap-3 rounded-xl bg-slate-50 px-4 py-1 text-left transition hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/admin/account-information")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound className="h-5 w-5" /></span><span><span className="block text-sm font-extrabold text-navy-900">Administrator account information</span><span className="mt-1 block text-xs leading-5 text-slate-500">View admin username, email address, and  role.</span></span></button>
-      </section>
+      <AdminProfileBanner account={account} />
+
       <section aria-labelledby="admin-account-settings-heading">
         <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="admin-account-settings-heading">Account settings</h2><p className="mt-1 text-sm leading-6 text-slate-600">Manage your password, email address, and trusted devices.</p>
         <div className="mt-5 grid gap-3"><button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50" onClick={() => window.dispatchEvent(new CustomEvent("waterwise:open-change-password", { detail: { emailOnly: true } }))} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><KeyRound className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Change password</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify using email OTP.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50" onClick={() => window.dispatchEvent(new Event("waterwise:open-change-email"))} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Mail className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify your current registered email first.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50" onClick={openTrustedDevices} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><ShieldCheck className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Trusted devices</span><span className="mt-1 block text-xs leading-5 text-slate-500">Review browsers that can skip email OTP.</span></span></button></div>

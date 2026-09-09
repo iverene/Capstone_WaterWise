@@ -1,0 +1,58 @@
+﻿.admin-profile-overview { color: #14264a; display: grid; gap: 16px; background: radial-gradient(ellipse at 90% 20%, #e6f4ff99, transparent 70%); }
+.admin-profile-overview h2 { font-size: 21px; font-weight: 800; letter-spacing: -.6px; }
+.admin-profile-overview h3 { font-size: 17px; font-weight: 800; }
+.admin-profile-overview p { color: #627da6; font-size: 13px; line-height: 1.6; }
+.ap-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 28px; min-height: 172px; padding: 26px 30px; border: 2px solid white; border-radius: 20px; background: linear-gradient(110deg,#fff,#f6fbff 45%,#def1ff); }
+.ap-landscape { position: absolute; right: 0; bottom: 0; width: 58%; height: 100%; z-index: -1; opacity: .8; }
+.ap-avatar { position: relative; display: grid; place-items: center; flex-shrink: 0; width: 96px; height: 96px; border-radius: 50%; background: linear-gradient(145deg,#2c74c7,#398bd3); box-shadow: 0 5px 12px #1674b936; color: white; font-size: 46px; }
+.ap-avatar i { position: absolute; bottom: 2px; right: 2px; width: 24px; height: 24px; border: 4px solid white; border-radius: 50%; background: #15b873; }
+.ap-identity { min-width: 0; }
+.admin-profile-overview .ap-eyebrow { color: #0077ec; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; }
+.ap-identity h2 { font-size: 26px; margin: 4px 0; overflow-wrap: anywhere; }
+.ap-meta { display: flex; flex-wrap: wrap; gap: 12px 22px; margin-top: 14px; color: #506d9a; font-size: 12px; }
+.ap-meta span { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.ap-meta svg { flex-shrink: 0; }
+.ap-hero-message { margin-left: auto; flex-shrink: 0; color: #007bdc; text-align: right; }
+.ap-hero-message svg { margin: 0 auto 4px; fill: #86d4ff; stroke-width: 1.3; }
+.ap-hero-message blockquote { font-size: 16px; font-weight: 650; font-style: italic; color: #205b9c; }
+.ap-navigation { display: flex; gap: 8px; padding: 5px; border: 1px solid white; border-radius: 17px; background: #ffffffd9; overflow-x: auto; }
+.ap-navigation > * { display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 22px; border-radius: 12px; font-weight: 650; font-size: 13px; white-space: nowrap; color: #365785; }
+.ap-navigation > *:hover { background: #e9f4ff; }
+.ap-navigation .ap-selected { background: #007beb; color: white; }
+.ap-columns { display: grid; grid-template-columns: minmax(0,2.1fr) minmax(250px,1fr); gap: 16px; align-items: start; }
+.ap-card { min-width: 0; padding: 22px; border: 1px solid white; border-radius: 19px; background: #ffffffdf; box-shadow: 0 6px 22px #4688bc06; }
+.ap-details { overflow: hidden; margin: 16px 0; border: 1px solid #e0eeff; border-radius: 14px; }
+.ap-details > div { display: grid; grid-template-columns: 40% minmax(0,1fr); gap: 12px; align-items: center; padding: 10px 16px; font-size: 13px; }
+.ap-details > div:nth-child(odd) { background: #edf6ffb3; }
+.ap-details dt { display: flex; gap: 14px; align-items: center; }
+.ap-details dt svg { color: #5479aa; flex-shrink: 0; }
+.ap-details dd { overflow-wrap: anywhere; }
+.ap-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border: 1px solid #a8ebd0; border-radius: 20px; background: #e1f9ee; color: #08784b; font-size: 12px; font-weight: 700; }
+.ap-settings { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 15px; }
+.ap-settings button { display: flex; align-items: center; gap: 12px; padding: 15px; text-align: left; border: 1px solid #dbeaff; border-radius: 15px; background: #fff; }
+.ap-settings button:hover { background: #f0f8ff; border-color: #91c9ff; }
+.ap-action-icon { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 13px; background: #e5f3ff; color: #0082ee; }
+.ap-settings strong { display: block; font-size: 13px; }
+.ap-settings small { display: block; margin-top: 3px; font-size: 12px; color: #6b82a6; line-height: 1.4; }
+.ap-settings button > svg { margin-left: auto; flex-shrink: 0; color: #5e7fa7; }
+.ap-aside { display: grid; gap: 14px; }
+.ap-card-heading { display: flex; align-items: flex-start; gap: 12px; }
+.ap-card-heading p { margin-top: 4px; font-size: 12px; }
+.ap-green { background: #4bc38c; color: white; }
+.ap-yellow { background: #ffedb3; color: #c28b08; }
+.ap-status-panel { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding: 14px; border: 1px solid #adebd4; background: #effbf7; border-radius: 12px; color: #078148; font-size: 14px; }
+.ap-status-panel p { font-size: 12px; }
+.ap-neutral { background: #f2f7fc; border-color: #dce8f5; color: #526d90; }
+.ap-tips ul { display: grid; gap: 13px; margin-top: 20px; }
+.ap-tips li { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.ap-tips li svg { border-radius: 50%; padding: 3px; width: 22px; height: 22px; background: #0083e9; color: white; flex-shrink: 0; }
+.ap-restricted { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; padding: 20px 22px; border: 1px solid #c8e5ff; border-radius: 17px; background: linear-gradient(110deg,#e5f3ff,#f2f9ff); }
+.ap-restricted > div:nth-child(2) { flex: 1; }
+.ap-restricted-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ap-restricted-actions button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; border-radius: 10px; background: #007deb; color: white; font-size: 12px; font-weight: 700; }
+.ap-restricted-actions button:hover { background: #0064c6; }
+.ap-restricted-actions button + button { background: #fff; color: #2266a5; border: 1px solid #c7e2fa; }
+.admin-profile-overview .ap-error { flex-basis: 100%; color: #b91c1c; }
+.admin-profile-overview button:focus-visible, .admin-profile-overview a:focus-visible { outline: 2px solid #007deb; outline-offset: 3px; }
+@media(max-width:1200px) { .ap-hero-message { display: none; } .ap-settings { grid-template-columns: 1fr; } .ap-navigation > * { padding: 12px 16px; } }
+@media(max-width:767px) { .ap-columns { grid-template-columns: 1fr; } .ap-hero { padding: 20px; gap: 16px; } .ap-avatar { width: 66px; height: 66px; font-size: 32px; } .ap-identity h2 { font-size: 21px; } .ap-meta { gap: 8px; } .ap-card { padding: 18px; } .ap-details > div { padding: 10px; grid-template-columns: 43% minmax(0,1fr); } .ap-details dt { gap: 7px; } .ap-hero-message { display: none; } .ap-restricted { padding: 18px; } }

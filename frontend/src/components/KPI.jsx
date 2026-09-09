@@ -70,6 +70,7 @@ export default function KPI({
   menuLabel,
   onMenu,
   title,
+  showTrendBadge = true,
   trend,
   trendDirection = "neutral",
   trendTone = "neutral",
@@ -108,7 +109,7 @@ export default function KPI({
         <h2 className="min-w-0 flex-1 text-xs font-bold leading-4 text-slate-600 sm:text-[13px]">
           {title}
         </h2>
-        {trend ? (
+        {showTrendBadge && trend ? (
           <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset sm:px-2 sm:py-1 sm:text-xs ${supportingToneStyles[trendBadgeTone] ?? supportingToneStyles.water}`}>
             {trendDirection === "up" ? <TrendingUp aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" /> : trendDirection === "down" ? <TrendingDown aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" /> : null}
             <span className="truncate">{trend}</span>

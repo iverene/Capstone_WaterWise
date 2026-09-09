@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiCheckCircle, FiPlus, FiUsers } from "react-icons/fi";
+import ResidentRegistrationIntro from "../components/ResidentRegistrationIntro";
+import { UserRound, X } from "lucide-react";
+import "../components/ResidentRegistration.css";
 import ConsumerForm from "../components/ConsumerForm";
 import ConsumerListTable from "../components/ConsumerListTable";
 import Filter from "../components/Filter";
@@ -215,6 +218,9 @@ function ConsumerManagementPage() {
       </section>
 
       <Modal
+        ariaLabel="Add a new resident"
+        className={formMode === "add" ? "resident-registration-modal" : ""}
+        showHeader={formMode !== "add"}
         closeLabel="Close resident form"
         description={formMode === "edit" ? "Update the resident's service information." : "Enter the resident's details and create secure sign-in credentials."}
         eyebrow="Resident account"
@@ -225,6 +231,10 @@ function ConsumerManagementPage() {
         size="xl"
         title={formMode === "edit" ? "Edit resident" : "Add resident"}
       >
+        <div className={formMode === "add" ? "resident-registration-layout" : ""}>
+          {formMode === "add" && <ResidentRegistrationIntro />}
+          <div className={formMode === "add" ? "resident-registration-content" : ""}>
+            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident?s details and create secure sign-in credentials.</p></div><button aria-label="Close resident form" className="resident-registration-close" onClick={closeForm} type="button"><X size={21} /></button></header>}
             {error && (
               <p
                 className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 sm:mx-6"
@@ -236,12 +246,15 @@ function ConsumerManagementPage() {
             <ConsumerForm
               allowPasswordChange={formMode === "edit"}
               embedded
+              registrationDesign={formMode === "add"}
               initialData={formMode === "edit" ? selectedConsumer : null}
               key={`${formMode}-${selectedConsumer?.id ?? "new"}`}
               onCancel={closeForm}
               onSubmit={formMode === "edit" ? editConsumer : addConsumer}
               requirePassword={formMode === "add"}
             />
+          </div>
+        </div>
       </Modal>
 
       <Modal description={passwordChallenge ? `Enter the code sent to ${passwordChallenge.maskedEmail}. It expires in 5 minutes.` : undefined} eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); } }} size="sm" title="Verify resident password change">

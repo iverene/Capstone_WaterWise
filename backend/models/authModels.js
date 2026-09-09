@@ -168,6 +168,7 @@ export async function authenticateAccount(identifier, password) {
       username: account.username,
       email: account.email,
       name: account.username,
+      status: account.status,
       role: source.role === "admin" && account.role === "super-admin" ? "super-admin" : source.role,
     };
   }
