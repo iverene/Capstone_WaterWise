@@ -16,7 +16,7 @@ const STAFF_PERMISSION_KEY = "waterwise:super-admin-staff-permission";
 const STAFF_OTP_CHALLENGE_KEY = "waterwise:super-admin-staff-otp";
 const SETTINGS_OTP_CHALLENGE_KEY = "waterwise:super-admin-settings-otp";
 export const SETTINGS_PERMISSION_KEY = "waterwise:super-admin-settings-permission";
-const formatOtpCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 
 const STAFF_ACTION_LABELS = {
   "create-admin": "Create Admin account",
@@ -28,10 +28,25 @@ const STAFF_ACTION_LABELS = {
   "update-system-settings": "Update system settings",
 };
 
+function getCurrentStoredAccountId() {
+  try {
+    return getStoredAccount()?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// Saved OTP challenges and permissions belong to the super-admin account that
+// requested them. Never restore another account's entry (same-tab switching).
+function isOwnedByCurrentAccount(entry) {
+  const currentAccountId = getCurrentStoredAccountId();
+  return entry?.accountId != null && currentAccountId != null && String(entry.accountId) === String(currentAccountId);
+}
+
 function getStoredStaffPermission() {
   try {
     const permission = JSON.parse(window.sessionStorage.getItem(STAFF_PERMISSION_KEY) ?? "null");
-    if (permission?.token && Number(permission.expiresAt) > Date.now()) return permission;
+    if (permission?.token && Number(permission.expiresAt) > Date.now() && isOwnedByCurrentAccount(permission)) return permission;
     window.sessionStorage.removeItem(STAFF_PERMISSION_KEY);
   } catch { window.sessionStorage.removeItem(STAFF_PERMISSION_KEY); }
   return null;
@@ -40,7 +55,7 @@ function getStoredStaffPermission() {
 function getStoredStaffOtpChallenge() {
   try {
     const challenge = JSON.parse(window.sessionStorage.getItem(STAFF_OTP_CHALLENGE_KEY) ?? "null");
-    if (challenge?.action === "manage-staff" && challenge?.challengeToken && Number(challenge.expiresAt) > Date.now()) return challenge;
+    if (challenge?.action === "manage-staff" && challenge?.challengeToken && Number(challenge.expiresAt) > Date.now() && isOwnedByCurrentAccount(challenge)) return challenge;
     window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
   } catch { window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY); }
   return null;
@@ -49,7 +64,7 @@ function getStoredStaffOtpChallenge() {
 function getStoredSettingsOtpChallenge() {
   try {
     const challenge = JSON.parse(window.sessionStorage.getItem(SETTINGS_OTP_CHALLENGE_KEY) ?? "null");
-    if (challenge?.action === "manage-system-settings" && challenge?.challengeToken && Number(challenge.expiresAt) > Date.now()) return challenge;
+    if (challenge?.action === "manage-system-settings" && challenge?.challengeToken && Number(challenge.expiresAt) > Date.now() && isOwnedByCurrentAccount(challenge)) return challenge;
     window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY);
   } catch { window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY); }
   return null;
@@ -274,7 +289,7 @@ export default function AdminProfile() {
     setIsAuthorizingStaff(true); setStaffOtpError("");
     try {
       const result = await requestStaffActionOtp(pendingAction.action, pendingAction.targetId);
-      const authorization = { ...pendingAction, challengeToken: result.challengeToken, maskedEmail: result.maskedEmail };
+      const authorization = { ...pendingAction, challengeToken: result.challengeToken, maskedEmail: result.maskedEmail, message: result.message, accountId: getCurrentStoredAccountId() };
       if (pendingAction.action === "manage-staff") {
         authorization.expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
         window.sessionStorage.setItem(STAFF_OTP_CHALLENGE_KEY, JSON.stringify(authorization));
@@ -401,7 +416,7 @@ export default function AdminProfile() {
       setStaffAuthorization(null); setStaffOtp("");
       if (pendingAction.action === "manage-staff") {
         window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
-        const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) };
+        const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() };
         window.sessionStorage.setItem(STAFF_PERMISSION_KEY, JSON.stringify(permission));
         setStaffManagementPermission(permission);
         navigate("/admin/staff-management");
@@ -411,7 +426,7 @@ export default function AdminProfile() {
         window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY);
         // Page-view permission authorizes GET /system-settings reads for
         // 15 minutes; saving still requires its own update-system-settings OTP.
-        const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) };
+        const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() };
         window.sessionStorage.setItem(SETTINGS_PERMISSION_KEY, JSON.stringify(permission));
         navigate("/admin/settings");
         return;
@@ -538,12 +553,14 @@ export default function AdminProfile() {
           <button className="ww-primary-button min-h-12" disabled={isUpdatingMeterReader} type="submit">{isUpdatingMeterReader ? "Saving changes…" : "Save changes"}</button>
         </form>
       </Modal>}
-      {staffAuthorization && <Modal description={`Enter the 6-digit code sent to ${staffAuthorization.maskedEmail}. It expires in 5 minutes and can be used only for this staff action.`} eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); setStaffOtpResendSeconds(0); }} size="sm" title="Confirm staff action">
-        <form className="grid gap-4 p-5 sm:p-6" onSubmit={verifyStaffAuthorization}>
+      {staffAuthorization && <Modal description="This code can be used only for this staff action." eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); setStaffOtpResendSeconds(0); }} size="sm" title="Confirm staff action">
+        <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={verifyStaffAuthorization}>
+          <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{staffAuthorization.maskedEmail}</strong>. It expires in 5 minutes.</p>
           <div className="rounded-xl border border-water-200 bg-water-50 p-4 text-sm leading-6 text-water-900"><ShieldCheck className="mr-2 inline h-5 w-5" />For extra security, this action requires approval through the Super Admin’s registered email.</div>
-          <div><label className="text-sm font-semibold" htmlFor="staff-action-otp">Verification code</label><div className="mt-3"><OtpInput disabled={isAuthorizingStaff} id="staff-action-otp" invalid={Boolean(staffOtpError)} onChange={(nextOtp) => { setStaffOtp(nextOtp); setStaffOtpError(""); setStaffOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsAuthorizingStaff(true); setStaffOtpError(""); verifyStaffActionOtp(staffAuthorization.challengeToken, otpValue).then(result => { const pendingAction = staffAuthorization; setStaffOtpSuccess(true); setTimeout(() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpSuccess(false); if (pendingAction.action === "manage-staff") { window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) }; window.sessionStorage.setItem(STAFF_PERMISSION_KEY, JSON.stringify(permission)); setStaffManagementPermission(permission); navigate("/admin/staff-management"); return; } if (pendingAction.action === "manage-system-settings") { window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) }; window.sessionStorage.setItem(SETTINGS_PERMISSION_KEY, JSON.stringify(permission)); navigate("/admin/settings"); return; } return completeAuthorizedAction(result.authorizationToken, pendingAction); }, 600); }).catch(e => { setStaffOtpError(e.message); setStaffOtp(""); }).finally(() => setIsAuthorizingStaff(false)); } }} success={staffOtpSuccess} value={staffOtp} /></div></div>
+          <div><label className="text-xs font-semibold sm:text-sm" htmlFor="staff-action-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isAuthorizingStaff} id="staff-action-otp" invalid={Boolean(staffOtpError)} onChange={(nextOtp) => { setStaffOtp(nextOtp); setStaffOtpError(""); setStaffOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsAuthorizingStaff(true); setStaffOtpError(""); verifyStaffActionOtp(staffAuthorization.challengeToken, otpValue).then(result => { const pendingAction = staffAuthorization; setStaffOtpSuccess(true); setTimeout(() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpSuccess(false); if (pendingAction.action === "manage-staff") { window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) }; window.sessionStorage.setItem(STAFF_PERMISSION_KEY, JSON.stringify(permission)); setStaffManagementPermission(permission); navigate("/admin/staff-management"); return; } if (pendingAction.action === "manage-system-settings") { window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000) }; window.sessionStorage.setItem(SETTINGS_PERMISSION_KEY, JSON.stringify(permission)); navigate("/admin/settings"); return; } return completeAuthorizedAction(result.authorizationToken, pendingAction); }, 600); }).catch(e => { setStaffOtpError(e.message); setStaffOtp(""); }).finally(() => setIsAuthorizingStaff(false)); } }} success={staffOtpSuccess} value={staffOtp} /></div></div>
+          {staffAuthorization.message && !staffOtpError && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 sm:text-sm">{staffAuthorization.message}</p>}
           {staffOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{staffOtpError}</p>}
-          <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isAuthorizingStaff || staffOtpResendSeconds > 0} onClick={() => beginStaffAuthorization(staffAuthorization)} type="button">{staffOtpResendSeconds > 0 ? `Resend code in ${formatOtpCountdown(staffOtpResendSeconds)}` : "Resend code"}</button>
+          <button className="w-full text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm" disabled={isAuthorizingStaff || staffOtpResendSeconds > 0} onClick={() => beginStaffAuthorization(staffAuthorization)} type="button">{staffOtpResendSeconds > 0 ? `Resend code in ${formatOtpCountdown(staffOtpResendSeconds)}` : "Resend code"}</button>
         </form>
       </Modal>}
       {staffPasswordPrompt && (

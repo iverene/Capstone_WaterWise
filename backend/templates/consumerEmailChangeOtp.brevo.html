@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>{{ params.heading }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f8fc;font-family:Arial,Helvetica,sans-serif;color:#0f2747;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">
+    Your WaterWise {{ params.code_label }} is {{ params.otp_code }} — expires in 5 minutes.&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f8fc;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:620px;background:#ffffff;border:1px solid #dce8f3;border-radius:18px;overflow:hidden;">
+
+          <tr>
+            <td style="padding:24px 28px;background:#ffffff;border-bottom:1px solid #e7eef6;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td>
+                    <div style="font-size:26px;line-height:1;font-weight:800;color:#0e2a55;">
+                      Water<span style="color:#1492ff;">Wise</span>
+                    </div>
+                    <div style="font-size:13px;color:#6c7f96;margin-top:5px;">Sucol Water System</div>
+                  </td>
+                  <td align="right" style="font-size:12px;color:#67809f;">
+                    Cleaner Water.<br>Stronger Communities.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:34px 32px 10px;">
+              <div style="font-size:12px;letter-spacing:2px;font-weight:700;color:#0b84d8;text-transform:uppercase;margin-bottom:12px;">
+                {{ params.eyebrow }}
+              </div>
+
+              <h1 style="margin:0 0 18px;font-size:28px;line-height:1.25;color:#0d2b57;">
+                {{ params.heading }}
+              </h1>
+
+              <p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#334d6d;">
+                Hello <strong>{{ params.username }}</strong>,
+              </p>
+
+              <p style="margin:0 0 24px;font-size:15px;line-height:1.7;color:#334d6d;">
+                {{ params.intro }}
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:0 32px 28px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="background:#eef7ff;border:1px solid #d4eaff;border-radius:14px;padding:22px 28px;">
+                    <div style="font-size:13px;font-weight:700;letter-spacing:1px;color:#5d7695;text-transform:uppercase;text-align:center;margin-bottom:10px;">
+                      Verification Code
+                    </div>
+                    <div style="font-family:'Courier New',monospace;font-size:38px;line-height:1;font-weight:700;letter-spacing:10px;color:#075e92;text-align:center;">
+                      {{ params.otp_code }}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 28px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f6faff;border:1px solid #dceafa;border-radius:12px;">
+                <tr>
+                  <td style="padding:18px 20px;">
+                    <div style="font-size:14px;font-weight:700;color:#0e2f5e;margin-bottom:6px;">
+                      For your security
+                    </div>
+                    <div style="font-size:14px;line-height:1.6;color:#536d8d;">
+                      {{ params.security_note }}
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 32px 32px;">
+              <p style="margin:0;font-size:13px;line-height:1.6;color:#7a8da6;">
+                Never share this code with anyone. WaterWise staff will never ask for your OTP by email, phone, or chat.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:24px 28px;background:#f8fbfe;border-top:1px solid #e4edf6;">
+              <div style="font-size:14px;color:#4c6483;margin-bottom:6px;">Thank you,</div>
+              <div style="font-size:16px;font-weight:700;color:#0d2b57;">WaterWise Sucol Water System</div>
+              <div style="font-size:12px;color:#7890aa;margin-top:14px;">This is an automated message. Please do not reply.</div>
+            </td>
+          </tr>
+
+        </table>
+
+        <div style="max-width:620px;margin-top:14px;font-size:11px;line-height:1.5;color:#8ea0b4;text-align:center;">
+          © {{ params.year }} WaterWise · Sucol Water System
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

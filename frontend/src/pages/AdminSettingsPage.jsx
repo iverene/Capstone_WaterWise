@@ -7,14 +7,29 @@ import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
 import { useToast } from "../components/Toast";
 import { requestSettingsChangeOtp, verifySettingsChangeOtp, updateSystemSetting, fetchSystemSettings } from "../services/systemSettingsService";
+import { getStoredAccount } from "../services/authToken";
 import { SETTINGS_PERMISSION_KEY } from "./AdminProfile";
 
-const formatOtpCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, "0")}`;
+const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 
 function getStoredSettingsPermission() {
   try {
     const permission = JSON.parse(window.sessionStorage.getItem(SETTINGS_PERMISSION_KEY) ?? "null");
-    if (permission?.token && Number(permission.expiresAt) > Date.now()) return permission;
+    // The permission belongs to the super-admin that verified it. Never
+    // restore another account's entry (same-tab login switching).
+    let currentAccountId = null;
+    try {
+      currentAccountId = getStoredAccount()?.id ?? null;
+    } catch {
+      currentAccountId = null;
+    }
+    if (
+      permission?.token &&
+      Number(permission.expiresAt) > Date.now() &&
+      permission.accountId != null &&
+      currentAccountId != null &&
+      String(permission.accountId) === String(currentAccountId)
+    ) return permission;
     window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY);
   } catch { window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY); }
   return null;
@@ -245,10 +260,12 @@ export default function AdminSettingsPage() {
 
           {otpChallenge && (
             <>
+              <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{otpChallenge.maskedEmail}</strong>. It expires in 5 minutes.</p>
               <div>
                 <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="settings-otp">Verification code</label>
-                <div className="mt-2">
+                <div className="mt-2 sm:mt-3">
                   <OtpInput
+                    compact
                     disabled={verifying || cooldownSeconds === 0}
                     id="settings-otp"
                     invalid={Boolean(otpError)}
@@ -259,9 +276,7 @@ export default function AdminSettingsPage() {
                   />
                 </div>
               </div>
-              <p aria-live="polite" className={`text-sm font-semibold ${cooldownSeconds > 0 ? "text-slate-500" : "text-red-600"}`}>
-                {cooldownSeconds > 0 ? `Time remaining: ${formatOtpCountdown(cooldownSeconds)}` : "This code has expired. Request a new code below."}
-              </p>
+              {cooldownSeconds === 0 && <p aria-live="polite" className="text-center text-xs font-semibold text-red-600 sm:text-sm">This code has expired. Request a new code below.</p>}
               {otpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{otpError}</p>}
             </>
           )}
@@ -277,16 +292,14 @@ export default function AdminSettingsPage() {
                 >
                   Cancel
                 </button>
-                {cooldownSeconds === 0 && (
-                  <button
-                    className="text-sm font-bold text-water-700 disabled:text-slate-400"
-                    disabled={saving}
-                    onClick={handleRequestOtp}
-                    type="button"
-                  >
-                    Resend code
-                  </button>
-                )}
+                <button
+                  className="text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm"
+                  disabled={saving || verifying || cooldownSeconds > 0}
+                  onClick={handleRequestOtp}
+                  type="button"
+                >
+                  {cooldownSeconds > 0 ? `Resend code in ${formatOtpCountdown(cooldownSeconds)}` : "Resend code"}
+                </button>
               </>
             ) : (
               <>

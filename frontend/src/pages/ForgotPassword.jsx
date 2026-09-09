@@ -94,7 +94,7 @@ export default function ForgotPassword() {
       <section className="ww-glass-strong w-full max-w-lg rounded-2xl bg-white p-6 sm:p-10">
         <p className="ww-eyebrow text-[10px] sm:text-xs !text-water-700">Account recovery</p>
         <h1 className="mt-2 text-2xl font-extrabold tracking-[-0.04em] sm:text-3xl">{challengeToken ? "Verify your email" : "Forgot your password?"}</h1>
-        <p className="mt-3 text-xs leading-5 sm:text-sm sm:leading-6 text-slate-500">{challengeToken ? `Enter the 6-digit code sent to ${email.trim()}. The code expires in 5 minutes.` : "Enter the email address registered to your WaterWise account. We’ll send you a verification code."}</p>
+        <p className="mt-3 text-xs leading-5 sm:text-sm sm:leading-6 text-slate-500">{challengeToken ? <>Enter the code sent to <strong>{normalizedEmail.replace(/^(.{1,2}).*(@.*)$/, "$1***$2")}</strong>. It expires in 5 minutes.</> : "Enter the email address registered to your WaterWise account. We’ll send you a verification code."}</p>
 
         <form className="mt-7 space-y-5" onSubmit={handleSubmit}>
           {!challengeToken ? <div>

@@ -201,6 +201,11 @@ Run migrations from `db/` folder in Supabase SQL Editor:
 | `BREVO_API_KEY` | Yes | Brevo email API key |
 | `BREVO_FROM_EMAIL` | Yes | Verified sender email |
 | `BREVO_FROM_NAME` | No | Sender name |
+| `BREVO_TEMPLATE_PASSWORD_RESET` | No | Brevo hosted template ID for password reset OTP (falls back to local `templates/passwordResetOtp.html` when unset) |
+| `BREVO_TEMPLATE_ADMIN_LOGIN` | No | Brevo hosted template ID for admin sign-in OTP (falls back to inline HTML when unset) |
+| `BREVO_TEMPLATE_STAFF_ACTION` | No | Brevo hosted template ID for staff action OTP (falls back to inline HTML when unset) |
+| `BREVO_TEMPLATE_CONSUMER_PASSWORD` | No | Brevo hosted template ID for resident password-change OTP (falls back to inline HTML when unset) |
+| `BREVO_TEMPLATE_EMAIL_CHANGE` | No | Brevo hosted template ID for email-change OTP (falls back to inline HTML when unset) |
 | `UPSTASH_REDIS_REST_URL` | No | Redis cache URL |
 | `UPSTASH_REDIS_REST_TOKEN` | No | Redis cache token |
 | `VAPID_PUBLIC_KEY` | No | Web push public key |

@@ -41,6 +41,8 @@ function getConsumerRequestError(requestError, fallback) {
   return fieldErrors.length ? fieldErrors.join(" ") : requestError.response?.data?.message ?? fallback;
 }
 
+const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
+
 function ConsumerManagementPage() {
   const toast = useToast();
   const [consumers, setConsumers] = useState([]);
@@ -56,6 +58,15 @@ function ConsumerManagementPage() {
   const [passwordOtpSuccess, setPasswordOtpSuccess] = useState(false);
   const [passwordOtpError, setPasswordOtpError] = useState("");
   const [isPasswordVerifying, setIsPasswordVerifying] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = window.setInterval(() => {
+      setResendSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendSeconds]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -139,12 +150,25 @@ function ConsumerManagementPage() {
       setPendingConsumerUpdate(consumer);
       setPasswordChallenge(result);
       setPasswordOtp("");
+      setResendSeconds(Number(result.cooldownSeconds ?? 300));
     } catch (requestError) {
       const message = getConsumerRequestError(requestError, "Unable to send the verification code.");
       setError(message);
       toast.error("Verification unavailable", message);
     } finally { setIsPasswordVerifying(false); }
     return false;
+  };
+
+  const resendPasswordOtp = async () => {
+    if (!selectedConsumer?.id || !passwordChallenge) return;
+    setIsPasswordVerifying(true); setPasswordOtpError("");
+    try {
+      const result = await requestConsumerPasswordOtp(selectedConsumer.id);
+      setPasswordChallenge(result); setPasswordOtp(""); setPasswordOtpSuccess(false);
+      setResendSeconds(Number(result.cooldownSeconds ?? 300));
+    } catch (requestError) {
+      setPasswordOtpError(getConsumerRequestError(requestError, "Unable to send the verification code."));
+    } finally { setIsPasswordVerifying(false); }
   };
 
   const confirmPasswordChange = async (event) => {
@@ -154,7 +178,7 @@ function ConsumerManagementPage() {
     try {
       const result = await verifyConsumerPasswordOtp(passwordChallenge.challengeToken, passwordOtp);
       const saved = await saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken);
-      if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); }
+      if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setResendSeconds(0); }
     } catch (requestError) {
       setPasswordOtpError(getConsumerRequestError(requestError, "Unable to verify the code."));
     } finally { setIsPasswordVerifying(false); }
@@ -257,10 +281,12 @@ function ConsumerManagementPage() {
         </div>
       </Modal>
 
-      <Modal description={passwordChallenge ? `Enter the code sent to ${passwordChallenge.maskedEmail}. It expires in 5 minutes.` : undefined} eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); } }} size="sm" title="Verify resident password change">
-        <form className="grid gap-4 p-5 sm:p-6" onSubmit={confirmPasswordChange}>
-          <div><label className="text-sm font-semibold text-slate-900" htmlFor="resident-password-otp">Verification code</label><div className="mt-3"><OtpInput disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
+      <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify resident password change">
+        <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={confirmPasswordChange}>
+          <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{passwordChallenge.maskedEmail}</strong>. It expires in 5 minutes.</p>
+          <div><label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="resident-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
           {passwordOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{passwordOtpError}</p>}
+          <button className="w-full text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm" disabled={isPasswordVerifying || resendSeconds > 0} onClick={resendPasswordOtp} type="button">{resendSeconds > 0 ? `Resend code in ${formatOtpCountdown(resendSeconds)}` : "Resend code"}</button>
         </form>
       </Modal>
 

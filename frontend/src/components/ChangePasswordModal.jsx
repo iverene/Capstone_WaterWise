@@ -6,6 +6,7 @@ import {
   resetPassword,
   verifyPasswordResetOtp,
 } from "../services/auth.service";
+import { getStoredAccount } from "../services/authToken";
 import Modal from "./Modal";
 import OtpInput from "./OtpInput";
 import { useToast } from "./Toast";
@@ -16,7 +17,16 @@ const PASSWORD_OTP_SESSION_KEY = "waterwise:password-otp-challenge";
 function getSavedPasswordOtpChallenge() {
   try {
     const savedChallenge = JSON.parse(window.sessionStorage.getItem(PASSWORD_OTP_SESSION_KEY) ?? "null");
-    if (savedChallenge?.challengeToken && Number(savedChallenge.expiresAt) > Date.now()) return savedChallenge;
+    // A saved challenge belongs to the account that requested it. Never
+    // restore another account's challenge (same-tab login switching).
+    const currentAccountId = getStoredAccount()?.id ?? null;
+    if (
+      savedChallenge?.challengeToken &&
+      Number(savedChallenge.expiresAt) > Date.now() &&
+      savedChallenge.accountId != null &&
+      currentAccountId != null &&
+      String(savedChallenge.accountId) === String(currentAccountId)
+    ) return savedChallenge;
     window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY);
   } catch {
     window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY);
@@ -40,7 +50,7 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
   const [resetToken, setResetToken] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSuccess, setOtpSuccess] = useState(false);
-  const [maskedEmail, setMaskedEmail] = useState(savedChallenge?.maskedEmail ?? ""); // eslint-disable-line no-unused-vars
+  const [maskedEmail, setMaskedEmail] = useState(savedChallenge?.maskedEmail ?? "");
   const [message, setMessage] = useState(savedChallenge ? "Enter the verification code sent to your registered email." : "");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,6 +111,7 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
         challengeToken: result.challengeToken,
         maskedEmail: result.maskedEmail,
         expiresAt,
+        accountId: getStoredAccount()?.id ?? null,
       }));
     } catch (requestError) {
       setError(requestError.message);
@@ -170,11 +181,13 @@ export default function ChangePasswordModal({ emailOnly = false, isOpen, onClose
         )}
 
         {method === "email" && challengeToken && !resetToken && (
-          <form className="mt-5 space-y-4" onSubmit={verifyOtp}>
-            <div><label className="text-sm font-semibold" htmlFor="account-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isSubmitting || cooldownSeconds === 0} id="account-password-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); setOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsSubmitting(true); setError(""); verifyPasswordResetOtp(challengeToken, otpValue).then(result => { setOtpSuccess(true); setTimeout(() => { setResetToken(result.resetToken); window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY); setMessage("Email verified. You can now create your new password."); }, 600); }).catch(e => { setError(e.message); setOtp(""); }).finally(() => setIsSubmitting(false)); } }} success={otpSuccess} value={otp} /></div></div>
-            <p aria-live="polite" className={`text-sm font-semibold ${cooldownSeconds > 0 ? "text-slate-500" : "text-red-600"}`}>{cooldownSeconds > 0 ? `Time remaining: ${formatCountdown(cooldownSeconds)}` : "This verification code has expired. Request a new code below."}</p>
+          <form className="mt-5 space-y-3 sm:space-y-4" onSubmit={verifyOtp}>
+            <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</p>
+            <div><label className="text-xs font-semibold sm:text-sm" htmlFor="account-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isSubmitting || cooldownSeconds === 0} id="account-password-otp" invalid={Boolean(error)} onChange={(nextOtp) => { setOtp(nextOtp); setError(""); setOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsSubmitting(true); setError(""); verifyPasswordResetOtp(challengeToken, otpValue).then(result => { setOtpSuccess(true); setTimeout(() => { setResetToken(result.resetToken); window.sessionStorage.removeItem(PASSWORD_OTP_SESSION_KEY); setMessage("Email verified. You can now create your new password."); }, 600); }).catch(e => { setError(e.message); setOtp(""); }).finally(() => setIsSubmitting(false)); } }} success={otpSuccess} value={otp} /></div></div>
+            {cooldownSeconds === 0 && <p aria-live="polite" className="text-center text-xs font-semibold text-red-600 sm:text-sm">This verification code has expired. Request a new code below.</p>}
+            {message && !error && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 sm:text-sm">{message}</p>}
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
-            {cooldownSeconds === 0 && <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isSubmitting} onClick={sendOtp} type="button">Resend code</button>}
+            <button className="w-full text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm" disabled={isSubmitting || cooldownSeconds > 0} onClick={sendOtp} type="button">{cooldownSeconds > 0 ? `Resend code in ${formatCountdown(cooldownSeconds)}` : "Resend code"}</button>
           </form>
         )}
 

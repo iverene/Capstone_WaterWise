@@ -869,7 +869,7 @@ export async function requestAuthenticatedPasswordOtp(req, res) {
     }
     const otp = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const challengeToken = createOtpChallenge(account, otp);
-    await sendPasswordResetOtp({ email: account.email, otp, username: account.username });
+    await sendPasswordResetOtp({ email: account.email, otp, username: account.username, purpose: "change" });
     return res.status(200).json({
       success: true,
       message: "A verification code was sent to your registered email address.",
