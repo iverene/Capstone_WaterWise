@@ -47,6 +47,9 @@ export function storeSession({ token, user }) {
   const previousUser = getStoredAccount();
   if (previousUser && (previousUser.id !== user?.id || previousUser.role !== user?.role)) {
     clearStoredApiCache();
+    // A different account must never inherit the previous account's pending
+    // OTP challenges or staff permissions (same-tab login switching).
+    clearStoredOtpState();
   }
   window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
   window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
@@ -91,6 +94,10 @@ export function clearSession() {
     window.localStorage.getItem(PERSISTENT_CONSUMER_KEY),
   );
   clearStoredApiCache();
+  // Pending OTP challenges and staff permissions are bound to the signed-in
+  // account. They must not survive logout, otherwise the next login on the
+  // same tab restores the previous account's OTP modal state.
+  clearStoredOtpState();
   window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
   window.sessionStorage.removeItem(ACCOUNT_STORAGE_KEY);
   try {
@@ -111,6 +118,27 @@ function clearStoredApiCache() {
   for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
     const key = window.sessionStorage.key(index);
     if (key?.startsWith("waterwise-api-cache:")) window.sessionStorage.removeItem(key);
+  }
+}
+
+// OTP challenges and staff permissions persisted for page reloads. Every key
+// listed here is bound to the account that requested it.
+const OTP_SESSION_KEYS = [
+  "waterwise:password-otp-challenge",
+  "waterwise:email-change-otp-challenge",
+  "waterwise:super-admin-staff-otp",
+  "waterwise:super-admin-settings-otp",
+  "waterwise:super-admin-staff-permission",
+  "waterwise:super-admin-settings-permission",
+];
+
+export function clearStoredOtpState() {
+  for (const key of OTP_SESSION_KEYS) {
+    try {
+      window.sessionStorage.removeItem(key);
+    } catch {
+      // Storage failures must not block logout or account switching.
+    }
   }
 }
 

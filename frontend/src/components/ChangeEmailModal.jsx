@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Building2, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import { completeConsumerEmailChange, requestConsumerEmailChangeOtp, verifyConsumerEmailChangeOtp } from "../services/auth.service";
+import { getStoredAccount } from "../services/authToken";
 import Modal from "./Modal";
 import OtpInput from "./OtpInput";
 
@@ -10,7 +11,16 @@ const EMAIL_OTP_SESSION_KEY = "waterwise:email-change-otp-challenge";
 function getSavedEmailOtpChallenge() {
   try {
     const savedChallenge = JSON.parse(window.sessionStorage.getItem(EMAIL_OTP_SESSION_KEY) ?? "null");
-    if (savedChallenge?.challengeToken && Number(savedChallenge.expiresAt) > Date.now()) return savedChallenge;
+    // A saved challenge belongs to the account that requested it. Never
+    // restore another account's challenge (same-tab login switching).
+    const currentAccountId = getStoredAccount()?.id ?? null;
+    if (
+      savedChallenge?.challengeToken &&
+      Number(savedChallenge.expiresAt) > Date.now() &&
+      savedChallenge.accountId != null &&
+      currentAccountId != null &&
+      String(savedChallenge.accountId) === String(currentAccountId)
+    ) return savedChallenge;
     window.sessionStorage.removeItem(EMAIL_OTP_SESSION_KEY);
   } catch {
     window.sessionStorage.removeItem(EMAIL_OTP_SESSION_KEY);
@@ -49,7 +59,7 @@ export default function ChangeEmailModal({ accountRole = "consumer", isOpen, onC
       const result = await requestConsumerEmailChangeOtp();
       const expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
       setChallengeToken(result.challengeToken); setMaskedEmail(result.maskedEmail); setMessage(result.message); setOtp(""); setClock(Date.now()); setCooldownUntil(expiresAt);
-      window.sessionStorage.setItem(EMAIL_OTP_SESSION_KEY, JSON.stringify({ challengeToken: result.challengeToken, maskedEmail: result.maskedEmail, expiresAt }));
+      window.sessionStorage.setItem(EMAIL_OTP_SESSION_KEY, JSON.stringify({ challengeToken: result.challengeToken, maskedEmail: result.maskedEmail, expiresAt, accountId: getStoredAccount()?.id ?? null }));
     } catch (requestError) { setError(requestError.message); if (requestError.retryAfterSeconds) { setClock(Date.now()); setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000); } }
     finally { setIsSubmitting(false); }
   };
