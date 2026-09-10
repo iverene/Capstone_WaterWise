@@ -53,22 +53,44 @@ export default function AdminSettingsPage() {
   const [otpSuccess, setOtpSuccess] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [needsReverify, setNeedsReverify] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
       setLoadError("");
+      if (mountedRef.current) setNeedsReverify(false);
       const permission = getStoredSettingsPermission();
       if (!permission?.token) {
         if (mountedRef.current) {
           setLoadError("Your settings-view permission has expired. Return to your profile and verify again.");
           setSettings([]);
+          setNeedsReverify(true);
         }
         return;
       }
       const result = await fetchSystemSettings(permission.token);
       if (mountedRef.current) setSettings(result.data ?? []);
     } catch (error) {
-      if (mountedRef.current) setLoadError(error.message);
+      const status = error.cause?.response?.status;
+      const message = error.message ?? "";
+      const isAuthError =
+        status === 401 ||
+        status === 403 ||
+        /verify.*otp|expired|authorization|permission/i.test(message);
+      if (isAuthError) {
+        try {
+          window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY);
+        } catch {
+          // Storage may be unavailable; the reverify screen still works.
+        }
+      }
+      if (mountedRef.current) {
+        setLoadError(message || "Unable to load system settings.");
+        if (isAuthError) {
+          setSettings([]);
+          setNeedsReverify(true);
+        }
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -187,9 +209,30 @@ export default function AdminSettingsPage() {
       />
 
       {loadError && (
-        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
+        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between" role="alert">
           <span>{loadError}</span>
-          <button className="font-bold underline" onClick={loadSettings} type="button">Try again</button>
+          <div className="flex shrink-0 items-center gap-3">
+            {needsReverify ? (
+              <button
+                className="min-h-10 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700"
+                onClick={() => navigate("/admin/profile")}
+                type="button"
+              >
+                Return to profile to verify
+              </button>
+            ) : (
+              <button
+                className="font-bold underline"
+                onClick={() => {
+                  setLoading(true);
+                  loadSettings();
+                }}
+                type="button"
+              >
+                Try again
+              </button>
+            )}
+          </div>
         </div>
       )}
 

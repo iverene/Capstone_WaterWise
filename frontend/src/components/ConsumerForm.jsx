@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, UserRoundPlus } from "lucide-react";
+import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, UserRoundPlus, LoaderCircle } from "lucide-react";
 import Dropdown from "./Dropdown";
 
 const initialState = {
@@ -29,10 +29,14 @@ function createInitialState(initialData) {
   return {
     ...initialState,
     ...initialData,
+    accountName: String(initialData.accountName ?? initialData.username ?? ""),
     firstName: String(legacy?.firstName ?? initialData.firstName ?? ""),
     middleName: String(legacy?.middleName ?? initialData.middleName ?? ""),
     lastName: String(legacy?.lastName ?? initialData.lastName ?? ""),
+    purok: String(initialData.purok ?? ""),
     email: String(initialData.email ?? ""),
+    contactNumber: String(initialData.contactNumber ?? initialData.contact_number ?? ""),
+    status: String(initialData.status ?? "active"),
   };
 }
 
@@ -47,12 +51,14 @@ function isStrongPassword(password) {
 }
 
 function isValidContactNumber(contactNumber) {
-  const compactNumber = contactNumber.trim().replace(/[\s()-]/g, "");
+  const compactNumber = String(contactNumber ?? "").trim().replace(/[\s()-]/g, "");
   return /^(?:09\d{9}|\+639\d{9})$/.test(compactNumber);
 }
 
 function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onCancel }) {
   const formRef = useRef(null);
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const [consumer, setConsumer] = useState(() => createInitialState(initialData));
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -66,24 +72,24 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
   const validate = () => {
     const validationErrors = {};
 
-    if (!consumer.firstName.trim()) {
+    if (!String(consumer.firstName ?? "").trim()) {
       validationErrors.firstName = "Enter the resident's first name.";
     }
-    if (!consumer.lastName.trim()) {
+    if (!String(consumer.lastName ?? "").trim()) {
       validationErrors.lastName = "Enter the resident's last name.";
     }
-    if (!consumer.accountName.trim()) {
+    if (!String(consumer.accountName ?? "").trim()) {
       validationErrors.accountName = "Enter a username.";
     }
     if (!consumer.purok) {
       validationErrors.purok = "Select the resident's purok.";
     }
-    if (!consumer.email.trim()) {
+    if (!String(consumer.email ?? "").trim()) {
       validationErrors.email = "Enter the resident's email address.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(consumer.email.trim())) {
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(consumer.email ?? "").trim())) {
       validationErrors.email = "Enter a valid email address with a domain, such as name@example.com.";
     }
-    if (!consumer.contactNumber.trim()) {
+    if (!String(consumer.contactNumber ?? "").trim()) {
       validationErrors.contactNumber = "Enter the resident's contact number.";
     } else if (!isValidContactNumber(consumer.contactNumber)) {
       validationErrors.contactNumber = "Enter a valid Philippine mobile number, such as 09171234567.";
@@ -109,19 +115,27 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submittingRef.current) return;
     if (!validate()) return;
 
-    const saved = await onSubmit({
-      ...consumer,
-      ...((requirePassword || allowPasswordChange) && password ? { password } : {}),
-    });
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const saved = await onSubmit({
+        ...consumer,
+        ...((requirePassword || allowPasswordChange) && password ? { password } : {}),
+      });
 
-    if (saved === false) return;
+      if (saved === false) return;
 
-    setConsumer(initialState);
-    setPassword("");
-    setShowPassword(false);
-    setErrors({});
+      setConsumer(initialState);
+      setPassword("");
+      setShowPassword(false);
+      setErrors({});
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   const inputClass = (field, extraClasses = "") => [
@@ -368,9 +382,9 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
               Cancel
             </button>
           )}
-          <button className="min-h-12 flex-1 rounded-xl bg-water-600 px-3 text-sm font-bold text-white transition-colors hover:bg-water-700 disabled:opacity-60" type="submit">
-            {registrationDesign && <UserRoundPlus aria-hidden="true" size={20} />}
-            {initialData ? "Update resident" : "Add resident"}
+          <button aria-busy={submitting} disabled={submitting} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-water-600 px-3 text-sm font-bold text-white transition-colors hover:bg-water-700 disabled:cursor-wait disabled:opacity-60" type="submit">
+            {submitting ? <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" /> : registrationDesign && <UserRoundPlus aria-hidden="true" size={20} />}
+            {submitting ? (initialData ? "Updating resident…" : "Adding resident…") : initialData ? "Update resident" : "Add resident"}
           </button>
         </div>
       </div>

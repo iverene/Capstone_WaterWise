@@ -24,6 +24,7 @@ function splitLegacyFullName(fullName) {
 }
 
 function normalizeConsumer(consumer) {
+  if (!consumer) return null;
   const split = {
     firstName: consumer.first_name ?? "",
     middleName: consumer.middle_name ?? "",
@@ -67,9 +68,12 @@ function toConsumerPayload(consumer, includePassword = false, includeStatus = fa
 
 export async function fetchConsumerDirectory(options = {}) {
   const response = await client.get("/", options);
-  return Array.isArray(response.data?.data)
-    ? response.data.data.map(normalizeConsumer)
-    : [];
+  const records = Array.isArray(response.data?.data)
+    ? response.data.data
+    : Array.isArray(response.data)
+      ? response.data
+      : [];
+  return records.map(normalizeConsumer).filter(Boolean);
 }
 
 export async function createConsumer(consumer, options = {}) {

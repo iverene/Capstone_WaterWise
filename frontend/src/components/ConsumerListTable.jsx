@@ -34,6 +34,7 @@ function AccountStatus({ status }) {
 }
 
 function ConsumerListTable({ consumers = [], isLoading = false, onEdit = () => {} }) {
+  const safeConsumers = (Array.isArray(consumers) ? consumers : []).filter(Boolean);
   if (isLoading) {
     return (
       <LoadingSkeleton
@@ -55,27 +56,27 @@ function ConsumerListTable({ consumers = [], isLoading = false, onEdit = () => {
         { key: "status", label: "Status" },
         { key: "action", label: "Action", className: "text-right" },
       ]}
-      data={consumers}
+      data={safeConsumers}
       emptyDescription="Adjust the search or purok filter, or add a resident to the directory."
       emptyTitle="No residents found"
-      getRowKey={(consumer) => consumer.id}
+      getRowKey={(consumer) => consumer?.id ?? consumer?.accountName ?? Math.random().toString(36)}
       rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-3 transition-colors hover:bg-slate-50 md:table-row md:p-0"
       renderRow={(consumer) => (
         <>
                   <td className="text-slate-600 md:px-4 md:py-4">
-                    {consumer.purok || "Unassigned"}
+                    {consumer?.purok || "Unassigned"}
                   </td>
                   <td className="font-mono font-bold text-navy-900 md:px-4 md:py-4">
-                    {consumer.accountName}
+                    {consumer?.accountName || "-"}
                   </td>
                   <td className="font-semibold leading-5 text-navy-900 md:px-4 md:py-4">
-                    {consumer.fullName}
+                    {consumer?.fullName || "-"}
                   </td>
                   <td className="min-w-0 break-all text-slate-600 md:px-4 md:py-4">
-                    {consumer.email || "No email provided"}
+                    {consumer?.email || "No email provided"}
                   </td>
                   <td className="md:px-4 md:py-4">
-                    <AccountStatus status={consumer.status} />
+                    <AccountStatus status={consumer?.status} />
                   </td>
                   <td className="md:px-4 md:py-4 md:text-right">
                     <button
@@ -84,7 +85,7 @@ function ConsumerListTable({ consumers = [], isLoading = false, onEdit = () => {
                       type="button"
                     >
                       <Pencil aria-hidden="true" className="h-4 w-4" />
-                      Edit resident
+                      Edit
                     </button>
                   </td>
         </>

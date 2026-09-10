@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => {
       injectRegister: false,
       registerType: 'autoUpdate',
       // Keep the application shell available while testing offline on `npm run dev`.
+      // Navigation fallback for SPA routes (e.g. /admin/settings) is handled
+      // in src/sw.js, which always resolves to a cached Response or a 503
+      // instead of rejecting the FetchEvent.
       devOptions: {
         enabled: true,
         type: 'module',

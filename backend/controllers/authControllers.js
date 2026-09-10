@@ -82,6 +82,11 @@ const STAFF_ACTIONS = {
 // Page-view permissions are reusable within their lifetime (directory
 // pagination, settings viewing). All other staff actions are single-use.
 const REUSABLE_STAFF_ACTIONS = new Set(["manage-staff", "manage-system-settings"]);
+// Only mutations of an existing staff account require a numeric target ID.
+// System settings are addressed by setting key, not by staff account ID.
+const STAFF_ACCOUNT_TARGET_ACTIONS = new Set([
+  "update-admin", "update-meter-reader", "delete-admin", "delete-meter-reader",
+]);
 
 function passwordFingerprint(passwordHash) {
   return createHash("sha256").update(String(passwordHash)).digest("hex");
@@ -156,7 +161,7 @@ export async function requestStaffActionOtp(req, res) {
   try {
     const { action, targetId } = req.body ?? {};
     if (req.user.role !== "super-admin" || !STAFF_ACTIONS[action]) return res.status(403).json({ success: false, message: "Only the Super Admin can authorize staff management actions." });
-    const needsTarget = action.startsWith("update-") || action.startsWith("delete-");
+    const needsTarget = STAFF_ACCOUNT_TARGET_ACTIONS.has(action);
     const parsedTargetId = needsTarget ? Number(targetId) : null;
     if (needsTarget && (!Number.isInteger(parsedTargetId) || parsedTargetId < 1)) return res.status(400).json({ success: false, message: "A valid staff account is required." });
     const account = await getPasswordResetAccountById(req.user.id, "super-admin");
@@ -212,7 +217,7 @@ export async function verifyStaffActionPassword(req, res) {
     // Page-view gates (manage-staff / manage-system-settings) stay email-OTP
     // only. Password re-auth covers single-use per-write actions.
     if (REUSABLE_STAFF_ACTIONS.has(action)) return res.status(400).json({ success: false, message: "Use the email verification code for this action." });
-    const needsTarget = action.startsWith("update-") || action.startsWith("delete-");
+    const needsTarget = STAFF_ACCOUNT_TARGET_ACTIONS.has(action);
     const parsedTargetId = needsTarget ? Number(targetId) : null;
     if (needsTarget && (!Number.isInteger(parsedTargetId) || parsedTargetId < 1)) return res.status(400).json({ success: false, message: "A valid staff account is required." });
     if (typeof password !== "string" || !password) return res.status(400).json({ success: false, message: "Enter your Super Admin password.", field: "password" });
@@ -277,7 +282,7 @@ export const authorizeStaffAction = (expectedAction) => async (req, res, next) =
     // manage-system-settings) never authorizes a write, and vice versa.
     const isReusableGate = REUSABLE_STAFF_ACTIONS.has(expectedAction);
     if (req.user.role !== "super-admin" || payload.sub !== String(req.user.id) || payload.action !== expectedAction || !payload.jti) throw new jwt.JsonWebTokenError("Invalid staff authorization.");
-    if ((expectedAction.startsWith("update-") || expectedAction.startsWith("delete-")) && Number(payload.targetId) !== Number(req.params.id)) throw new jwt.JsonWebTokenError("Authorization does not match this staff account.");
+    if (STAFF_ACCOUNT_TARGET_ACTIONS.has(expectedAction) && Number(payload.targetId) !== Number(req.params.id)) throw new jwt.JsonWebTokenError("Authorization does not match this staff account.");
     const state = staffActionAuthorizations.get(payload.jti);
     if (!isReusableGate && state?.used) return res.status(403).json({ success: false, message: "This staff authorization has already been used." });
     const account = await getPasswordResetAccountById(req.user.id, "super-admin");
