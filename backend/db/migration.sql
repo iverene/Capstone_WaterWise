@@ -365,6 +365,7 @@ DECLARE
     v_reading consumption%ROWTYPE;
     v_billing billing%ROWTYPE;
     v_previous NUMERIC(10,2);
+    v_rate NUMERIC(12,2);
     v_total NUMERIC(10,2);
     v_reading_date DATE := (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::DATE;
 BEGIN
@@ -443,11 +444,21 @@ BEGIN
         RAISE EXCEPTION 'Present reading cannot be lower than the previous reading.';
     END IF;
 
+    -- Requires system_settings_migration.sql before recording new readings.
+    -- Use the configured rate only for this new bill; existing bills retain their totals.
+    SELECT setting_value INTO v_rate
+    FROM public.system_settings
+    WHERE setting_key = 'rate_per_cubic_meter';
+
+    IF v_rate IS NULL OR v_rate < 0 OR v_rate = 'NaN'::NUMERIC THEN
+        RAISE EXCEPTION 'A valid non-negative water rate is required in system settings.';
+    END IF;
+
     INSERT INTO consumption (consumer_id, reading_date, previous_reading, present_reading, idempotency_key)
     VALUES (p_consumer_id, v_reading_date, v_previous, p_present_reading, p_idempotency_key)
     RETURNING * INTO v_reading;
 
-    v_total := ROUND(v_reading.consumption * 15, 2);
+    v_total := ROUND(v_reading.consumption * v_rate, 2);
     INSERT INTO billing (
         consumption_id, user_id, billing_date, due_date, total_bill,
         remaining_balance, status

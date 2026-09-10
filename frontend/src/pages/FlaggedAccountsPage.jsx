@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, WalletCards } from "lucide-react";
-import { useNavigate } from "react-router";
 import KPI from "../components/KPI";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
@@ -61,7 +60,6 @@ function groupFlaggedAccounts(billingRecords) {
 }
 
 export default function FlaggedAccountsPage() {
-  const navigate = useNavigate();
   const toast = useToast();
   const [billingRecords, setBillingRecords] = useState([]);
   const [consumers, setConsumers] = useState([]);
@@ -262,15 +260,7 @@ export default function FlaggedAccountsPage() {
                 </span>
               </td>
               <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
-                <div className="grid gap-2 sm:grid-cols-2 md:flex md:justify-end">
-                  <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100"
-                    onClick={() => navigate(`/admin/payments?billingId=${account.oldestBill.id}`)}
-                    type="button"
-                  >
-                    <WalletCards aria-hidden="true" className="h-4 w-4" />
-                    Pay bill
-                  </button>
+                <div className="grid gap-2 md:flex md:justify-end">
                   <button
                     className="min-h-11 rounded-xl bg-red-600 px-3 font-bold text-white hover:bg-red-700 disabled:cursor-default disabled:bg-slate-200 disabled:text-slate-500"
                     disabled={account.accountStatus === "inactive"}

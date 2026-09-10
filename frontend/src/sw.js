@@ -1,11 +1,21 @@
-const CACHE_NAME = "waterwise-app-shell-v1";
-const PRECACHE = self.__WB_MANIFEST;
+const CACHE_NAME = "waterwise-app-shell-v2";
+const PRECACHE = self.__WB_MANIFEST ?? [];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE.map((entry) => entry.url)))
-      .then(() => self.skipWaiting()),
+    (async () => {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        const urls = PRECACHE.map((entry) => (typeof entry === "string" ? entry : entry.url)).filter(Boolean);
+        if (urls.length > 0) {
+          await cache.addAll(urls.map((url) => new Request(url, { cache: "reload" })));
+        }
+      } catch {
+        // Precaching is best-effort (e.g. dev mode with an empty manifest).
+        // The fetch fallback below still serves navigations from cache/network.
+      }
+      await self.skipWaiting();
+    })(),
   );
 });
 
@@ -18,12 +28,49 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET" || new URL(event.request.url).pathname.startsWith("/api/")) return;
+  let requestUrl;
+  try {
+    requestUrl = new URL(event.request.url);
+  } catch {
+    return;
+  }
+  // Only handle same-origin http(s) GET requests. Leave API, POST, and
+  // cross-origin requests to the network so auth cookies/CORS stay intact.
+  if (event.request.method !== "GET") return;
+  if (!["http:", "https:"].includes(requestUrl.protocol)) return;
+  if (requestUrl.origin !== self.location.origin) return;
+  if (requestUrl.pathname.startsWith("/api/")) return;
+
   event.respondWith(
-    fetch(event.request).catch(async () => {
-      const cached = await caches.match(event.request);
-      return cached || caches.match("/index.html");
-    }),
+    (async () => {
+      try {
+        return await fetch(event.request);
+      } catch {
+        // Network failed (offline/dev restart): fall back to cache.
+        try {
+          const isNavigation =
+            event.request.mode === "navigate" ||
+            (event.request.headers.get("accept") ?? "").includes("text/html");
+          if (isNavigation) {
+            const shell = await caches.match("/index.html");
+            if (shell) return shell;
+          } else {
+            const cached = await caches.match(event.request);
+            if (cached) return cached;
+            // Navigation-style URLs without mode=navigate still get the shell.
+            const shell = await caches.match("/index.html");
+            if (shell) return shell;
+          }
+        } catch {
+          // Ignore cache errors and fall through to the offline response.
+        }
+        return new Response("WaterWise is offline. Reconnect and try again.", {
+          status: 503,
+          statusText: "Service Unavailable",
+          headers: { "Content-Type": "text/plain" },
+        });
+      }
+    })(),
   );
 });
 

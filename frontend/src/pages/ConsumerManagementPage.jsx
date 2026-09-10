@@ -15,6 +15,7 @@ import { useToast } from "../components/Toast";
 import { createConsumer, fetchConsumerDirectory, requestConsumerPasswordOtp, updateConsumer, verifyConsumerPasswordOtp } from "../services/consumerDirectoryAPI";
 
 function toManagementConsumer(consumer) {
+  if (!consumer) return null;
   const firstName = consumer.firstName ?? consumer.first_name ?? "";
   const middleName = consumer.middleName ?? consumer.middle_name ?? "";
   const lastName = consumer.lastName ?? consumer.last_name ?? "";
@@ -75,7 +76,7 @@ function ConsumerManagementPage() {
     fetchConsumerDirectory({ signal: controller.signal })
       .then((records) => {
         if (isActive) {
-          setConsumers(records.map(toManagementConsumer));
+          setConsumers(records.map(toManagementConsumer).filter(Boolean));
         }
       })
       .catch((requestError) => {
@@ -93,7 +94,7 @@ function ConsumerManagementPage() {
       fetchConsumerDirectory()
         .then((records) => {
           if (isActive) {
-            setConsumers(records.map(toManagementConsumer));
+            setConsumers(records.map(toManagementConsumer).filter(Boolean));
           }
         })
         .catch(() => {});
@@ -111,6 +112,7 @@ function ConsumerManagementPage() {
       setError("");
       const created = await createConsumer(consumer);
       const savedConsumer = toManagementConsumer(created);
+      if (!savedConsumer) throw new Error("The server did not return the created resident.");
       setConsumers((current) => [savedConsumer, ...current]);
       setSelectedConsumer(null);
       setFormMode("");
@@ -129,6 +131,7 @@ function ConsumerManagementPage() {
       setError("");
       const updated = await updateConsumer(selectedConsumer.id, consumer, { passwordAuthorization });
       const savedConsumer = toManagementConsumer(updated);
+      if (!savedConsumer) throw new Error("The server did not return the updated resident.");
       setConsumers((current) => current.map((item) => item.id === savedConsumer.id ? savedConsumer : item));
       setSelectedConsumer(null);
       setFormMode("");
@@ -173,6 +176,7 @@ function ConsumerManagementPage() {
 
   const confirmPasswordChange = async (event) => {
     event.preventDefault();
+    if (!passwordChallenge?.challengeToken) return setPasswordOtpError("This verification session is invalid. Request a new code.");
     if (!/^\d{6}$/.test(passwordOtp)) return setPasswordOtpError("Enter the 6-digit verification code.");
     setIsPasswordVerifying(true); setPasswordOtpError("");
     try {
@@ -194,7 +198,7 @@ function ConsumerManagementPage() {
   }, [consumers, purok, query]);
 
   const purokOptions = useMemo(() => {
-    const values = [...new Set(consumers.map((consumer) => consumer.purok).filter(Boolean))]
+    const values = [...new Set(consumers.map((consumer) => String(consumer?.purok ?? "").trim()).filter(Boolean))]
       .sort((first, second) => first.localeCompare(second, undefined, { numeric: true }));
     return [
       { label: "All puroks", value: "all" },
@@ -282,12 +286,14 @@ function ConsumerManagementPage() {
       </Modal>
 
       <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify resident password change">
+        {passwordChallenge && (
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={confirmPasswordChange}>
-          <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{passwordChallenge.maskedEmail}</strong>. It expires in 5 minutes.</p>
-          <div><label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="resident-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
+          <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{passwordChallenge?.maskedEmail ?? "your email"}</strong>. It expires in 5 minutes.</p>
+          <div><label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="resident-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue) && passwordChallenge?.challengeToken) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
           {passwordOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{passwordOtpError}</p>}
           <button className="w-full text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm" disabled={isPasswordVerifying || resendSeconds > 0} onClick={resendPasswordOtp} type="button">{resendSeconds > 0 ? `Resend code in ${formatOtpCountdown(resendSeconds)}` : "Resend code"}</button>
         </form>
+        )}
       </Modal>
 
       {error && !formMode && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700" role="alert">{error}</p>}

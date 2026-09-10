@@ -115,7 +115,6 @@ export default function AdminReadingsPage() {
         <Table
           ariaLabel="Resident reading accounts"
           columns={[
-            { key: "account", label: "Account" },
             { key: "resident", label: "Name" },
             { key: "purok", label: "Purok" },
             { key: "action", label: "Action", className: "text-right" },
@@ -128,7 +127,6 @@ export default function AdminReadingsPage() {
           tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
-              <td className="font-mono text-navy-900 md:px-4 md:py-4">{resident.consumerNo}</td>
               <td className="font-extrabold leading-5 text-navy-900 md:px-4 md:py-4">
                 {resident.consumerName}
               </td>

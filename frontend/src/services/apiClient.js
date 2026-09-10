@@ -97,7 +97,18 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status;
-    if (status === 401 && window.location.pathname !== "/login") {
+    const requestUrl = error.config?.url ?? "";
+    const isPublicAuthRequest =
+      requestUrl.startsWith("/auth/login") ||
+      requestUrl.startsWith("/auth/forgot-password") ||
+      requestUrl.startsWith("/auth/verify-reset-otp") ||
+      requestUrl.startsWith("/auth/reset-password") ||
+      requestUrl.startsWith("/auth/admin/verify-login-otp") ||
+      requestUrl.startsWith("/auth/admin/resend-login-otp");
+    const isPublicAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(
+      window.location.pathname,
+    );
+    if (status === 401 && !isPublicAuthPage && !isPublicAuthRequest) {
       // Expired, idle-timed-out, revoked (password change), deactivated, or
       // device-mismatch sessions must end here instead of leaving the user
       // stuck: the stored token is no longer valid server-side. The flag lets

@@ -37,12 +37,12 @@ export default function PaymentProcessingPage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedBillingId = Number(searchParams.get("billingId"));
+  // Data-change events can remount this page while a payment is in flight.
+  // Keep visibility in the URL so the completing request closes the current modal too.
+  const isPaymentModalOpen = Boolean(searchParams.get("billingId"));
   const [payments, setPayments] = useState([]);
   const [billingRecords, setBillingRecords] = useState([]);
   const [selectedPayment, setSelectedPayment] = useState(null);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(
-    Boolean(searchParams.get("billingId")),
-  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [paymentQuery, setPaymentQuery] = useState("");
@@ -106,7 +106,6 @@ export default function PaymentProcessingPage() {
   }, []);
 
   const closePaymentModal = useCallback(() => {
-    setIsPaymentModalOpen(false);
     setError("");
     setSearchParams({}, { replace: true });
   }, [setSearchParams]);
@@ -119,7 +118,6 @@ export default function PaymentProcessingPage() {
   const openPaymentModal = (billing) => {
     setError("");
     setSearchParams({ billingId: String(billing.id) }, { replace: true });
-    setIsPaymentModalOpen(true);
   };
 
   const recordPayment = async (payment) => {
@@ -189,7 +187,14 @@ export default function PaymentProcessingPage() {
             !savedPayments.some((savedPayment) => existingPayment.id === savedPayment.id),
         ),
       ]);
-      setBillingRecords(await fetchBillingHistory());
+      // Close from the page that owns the modal before refreshing billings.
+      // A paid bill disappears from preselectedBilling and remounts the form.
+      closePaymentModal();
+      try {
+        setBillingRecords(await fetchBillingHistory());
+      } catch {
+        toast.warning("Payment saved", "The billing list could not refresh. Reload the page to see the updated balances.");
+      }
       const totalSaved = savedPayments.reduce(
         (total, savedPayment) => total + Number(savedPayment.amountPaid || 0),
         0,
