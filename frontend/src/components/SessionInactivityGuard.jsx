@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useToast } from "./Toast";
-import { clearSession, getAccessToken } from "../services/authToken";
+import { clearSession, getAccessToken, getStoredAccount } from "../services/authToken";
 import {
   clearLocalActivity,
   getIdleMs,
@@ -30,6 +30,11 @@ export default function SessionInactivityGuard() {
     toastRef.current = toast;
     if (!getAccessToken()) return undefined;
     if (PUBLIC_ROUTES.includes(location.pathname)) return undefined;
+    // Meter readers work long stretches in the field without touching the
+    // screen (walking between houses, reading meters). Inactivity logout
+    // would sign them out mid-route, so this role is exempt. Their sessions
+    // remain bounded by the absolute JWT expiry and device binding.
+    if (getStoredAccount()?.role === "meter-reader") return undefined;
 
     let cancelled = false;
     let warningToastId = null;

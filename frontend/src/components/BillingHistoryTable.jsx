@@ -16,6 +16,13 @@ function getStatusConfig(status) {
     };
   }
 
+  if (status === "Overdue") {
+    return {
+      Icon: AlertCircle,
+      className: "border-red-200 bg-red-50 text-red-700",
+    };
+  }
+
   return {
     Icon: AlertCircle,
     className: "border-red-200 bg-red-50 text-red-700",
@@ -119,7 +126,9 @@ export default function BillingHistoryTable({
                 data-testid="row-status"
               >
                 <StatusIcon aria-hidden="true" className="h-3.5 w-3.5" />
-                {row.status}
+                {row.status === "Overdue" && Number(row.overdueDays) > 0
+                  ? `Overdue ${row.overdueDays}d`
+                  : row.status}
               </span>
             </td>
             <td className="hidden font-mono font-bold tabular-nums text-slate-700 md:table-cell md:px-4 md:py-4 md:text-right">

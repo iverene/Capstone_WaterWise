@@ -1,5 +1,6 @@
 import {
   deleteCache,
+  deleteCacheByPrefix,
   readCache,
   writeCache,
 } from "../config/redis.js";
@@ -42,5 +43,10 @@ export const invalidateConsumptionCache = async ({ purok }) => {
     );
   }
 
-  return deleteCache(...keys.map(consumptionCacheKey));
+  await deleteCache(...keys.map(consumptionCacheKey));
+  // Year-filtered dashboard keys (history:monthly:year:*, history:overall:year:*,
+  // per-purok year keys) share the history prefix. Remove them as well so a
+  // newly recorded reading is visible immediately in every selected year.
+  await deleteCacheByPrefix(`${CACHE_PREFIX}:history:`);
+  return true;
 };

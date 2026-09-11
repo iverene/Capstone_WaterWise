@@ -205,6 +205,7 @@ export default function BillingLedger({
                   { label: "Paid", value: "Paid" },
                   { label: "Partially paid", value: "Partially Paid" },
                   { label: "Unpaid", value: "Unpaid" },
+                  { label: "Overdue", value: "Overdue" },
                 ],
                 value: statusFilter,
               },

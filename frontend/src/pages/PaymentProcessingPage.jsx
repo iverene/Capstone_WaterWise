@@ -47,6 +47,7 @@ export default function PaymentProcessingPage() {
   const [error, setError] = useState("");
   const [paymentQuery, setPaymentQuery] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("all");
+  const [paymentCountFilter, setPaymentCountFilter] = useState("all");
 
   const preselectedBilling = billingRecords.find(
     (record) => record.id === requestedBillingId && record.outstandingBalance > 0,
@@ -263,8 +264,11 @@ export default function PaymentProcessingPage() {
       String(resident.consumerName ?? "").toLowerCase().includes(paymentSearchTerm);
     const matchesStatus =
       paymentStatus === "all" || resident.statuses.includes(paymentStatus);
+    const matchesCount =
+      paymentCountFilter === "all" ||
+      (paymentCountFilter === "1" ? resident.outstandingBillCount === 1 : resident.outstandingBillCount >= 2);
 
-    return matchesName && matchesStatus;
+    return matchesName && matchesStatus && matchesCount;
   });
 
   return (
@@ -312,6 +316,17 @@ export default function PaymentProcessingPage() {
           ]}
           value={paymentStatus}
         />
+        <Filter
+          ariaLabel="Filter residents by outstanding bill count"
+          className="w-full sm:w-56"
+          onValueChange={setPaymentCountFilter}
+          options={[
+            { label: "All bill counts", value: "all" },
+            { label: "1 outstanding bill", value: "1" },
+            { label: "2+ outstanding bills", value: "2+" },
+          ]}
+          value={paymentCountFilter}
+        />
       </div>
 
       <section aria-labelledby="outstanding-payments-heading" className="space-y-3">
@@ -355,7 +370,7 @@ export default function PaymentProcessingPage() {
                   <p className="font-bold text-slate-900">{resident.consumerName}</p>
                   <p className="mt-1 text-xs text-slate-500">{resident.purok}</p>
                 </td>
-                <td className="px-4 py-4 font-mono font-extrabold text-navy-900">
+                <td className={`px-4 py-4 font-mono font-extrabold ${resident.outstandingBillCount >= 2 ? "text-red-700" : "text-navy-900"}`}>
                   {resident.outstandingBillCount}
                 </td>
                 <td className="px-4 py-4">
