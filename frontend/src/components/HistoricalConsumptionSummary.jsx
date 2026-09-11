@@ -59,7 +59,7 @@ function HistoryKpiSkeleton({ Icon, label, compact }) {
   );
 }
 
-export default function HistoricalConsumptionSummary({ className = "grid gap-5 md:grid-cols-2", compact = false }) {
+export default function HistoricalConsumptionSummary({ className = "grid gap-5 md:grid-cols-2", compact = false, selectedMonth = "all", selectedYear = "" }) {
   const [monthly, setMonthly] = useState([]);
   const [yearly, setYearly] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,12 +67,18 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
 
   useEffect(() => {
     let active = true;
-    Promise.all([fetchMonthlyHistory(), fetchYearlyHistory()])
+    Promise.all([fetchMonthlyHistory(selectedYear || undefined), fetchYearlyHistory()])
       .then(([monthlyResponse, yearlyResponse]) => {
         if (!active) return;
-        const monthlyData = unwrap(monthlyResponse);
+        let monthlyData = unwrap(monthlyResponse);
         const yearlyData = unwrap(yearlyResponse);
-        setMonthly(Array.isArray(monthlyData) ? monthlyData : []);
+        monthlyData = Array.isArray(monthlyData) ? monthlyData : [];
+        if (selectedMonth && selectedMonth !== "all") {
+          monthlyData = monthlyData.filter(
+            (record) => String(record?.month ?? "").toLowerCase() === String(selectedMonth).toLowerCase(),
+          );
+        }
+        setMonthly(monthlyData);
         setYearly(Array.isArray(yearlyData) ? yearlyData : []);
       })
       .catch((requestError) => {
@@ -82,7 +88,7 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   if (loading) {
     return (
@@ -94,10 +100,14 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
   }
   if (error) return <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"><AlertCircle className="h-5 w-5" />{error}</div>;
 
+  const yearlyRecords = selectedYear
+    ? yearly.filter((record) => String(record?.year ?? "") === String(selectedYear))
+    : yearly;
+
   return (
     <div className={className}>
       <HistoryKpi compact={compact} Icon={Droplets} label="Monthly consumption" periodKey="month" records={monthly} />
-      <HistoryKpi compact={compact} Icon={CalendarDays} label="Yearly consumption" periodKey="year" records={yearly} />
+      <HistoryKpi compact={compact} Icon={CalendarDays} label="Yearly consumption" periodKey="year" records={yearlyRecords.length > 0 ? yearlyRecords : yearly} />
     </div>
   );
 }

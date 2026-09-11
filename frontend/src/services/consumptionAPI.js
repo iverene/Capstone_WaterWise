@@ -12,9 +12,11 @@ export const fetchConsumptionRanking = async () => {
 
 //History API
 
-//Get Monthly Consumption History
-export const fetchMonthlyHistory = async () => {
-  const response = await consumptionAPI.get("/history/monthly");
+//Get Monthly Consumption History (optionally filtered by year, e.g. 2026)
+export const fetchMonthlyHistory = async (year) => {
+  const response = await consumptionAPI.get("/history/monthly", {
+    params: year ? { year } : undefined,
+  });
   return response.data;
 };
 
@@ -24,10 +26,11 @@ export const fetchYearlyHistory = async () => {
   return response.data;
 };
 
-//Get Purok Monthly History
-export const fetchPurokMonthlyHistory = async (purok) => {
+//Get Purok Monthly History (optionally filtered by year)
+export const fetchPurokMonthlyHistory = async (purok, year) => {
   const response = await consumptionAPI.get(
-    `/history/monthly/purok/${purok}`
+    `/history/monthly/purok/${purok}`,
+    { params: year ? { year } : undefined },
   );
 
   return response.data;
@@ -42,10 +45,11 @@ export const fetchPurokYearlyHistory = async (purok) => {
   return response.data;
 };
 
-//Get All Puroks Monthly History
-export const fetchAllPuroksMonthlyHistory = async () => {
+//Get All Puroks Monthly History (optionally filtered by year)
+export const fetchAllPuroksMonthlyHistory = async (year) => {
   const response = await consumptionAPI.get(
-    "/history/monthly/all-puroks"
+    "/history/monthly/all-puroks",
+    { params: year ? { year } : undefined },
   );
 
   return response.data;
@@ -60,19 +64,21 @@ export const fetchAllPuroksYearlyHistory = async () => {
   return response.data;
 };
 
-//Generate All History Consumption
-export const generateAllHistoryConsumption = async () => {
+//Generate All History Consumption (optionally filtered by year)
+export const generateAllHistoryConsumption = async (year) => {
   const response = await consumptionAPI.get(
-    "/history/overall"
+    "/history/overall",
+    { params: year ? { year } : undefined },
   );
 
   return response.data;
 };
 
 export const fetchOverallConsumptionHistory =
-  async () => {
+  async (year) => {
     const response = await consumptionAPI.get(
-      "/history/overall"
+      "/history/overall",
+      { params: year ? { year } : undefined },
     );
 
     return response.data;

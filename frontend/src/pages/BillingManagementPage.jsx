@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Eye } from "lucide-react";
 import BillingSummaryCard from "../components/BillingSummaryCard";
-import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
@@ -30,7 +29,6 @@ function StatusBadge({ status }) {
 export default function BillingManagementPage() {
   const [billingHistory, setBillingHistory] = useState([]);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedResident, setSelectedResident] = useState(null);
@@ -105,7 +103,6 @@ export default function BillingManagementPage() {
         0,
       ),
       purok: billings[0].purok,
-      statuses: billings.map((billing) => billing.status),
     }));
   }, [billingHistory]);
 
@@ -119,9 +116,9 @@ export default function BillingManagementPage() {
           String(value).toLowerCase().includes(term),
         );
 
-      return matchesQuery && (status === "all" || resident.statuses.includes(status));
+      return matchesQuery;
     });
-  }, [query, residentRows, status]);
+  }, [query, residentRows]);
 
   return (
     <main className="min-w-0 space-y-5 sm:space-y-6">
@@ -144,18 +141,6 @@ export default function BillingManagementPage() {
           onValueChange={setQuery}
           placeholder="Search resident name or purok"
           value={query}
-        />
-        <Filter
-          ariaLabel="Filter billing status"
-          className="w-full sm:w-48"
-          onValueChange={setStatus}
-          options={[
-            { label: "All statuses", value: "all" },
-            { label: "Paid", value: "Paid" },
-            { label: "Partially paid", value: "Partially Paid" },
-            { label: "Unpaid", value: "Unpaid" },
-          ]}
-          value={status}
         />
       </div>
 
@@ -185,7 +170,7 @@ export default function BillingManagementPage() {
           data={visibleResidents}
           emptyDescription={
             residentRows.length
-              ? "No resident matches the current search and status filter."
+              ? "No resident matches the current search."
               : "Residents will appear here when billing records are generated."
           }
           emptyTitle={residentRows.length ? "No matching residents" : "No billing records"}

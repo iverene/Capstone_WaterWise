@@ -40,16 +40,30 @@ export const getConsumptionRanking = async () => {
     }));
 };
 
-export const getOverallMonthlyHistory = async () => {
+const resolveTargetYear = (records, requestedYear) => {
+  if (records.length === 0) return null;
+  if (requestedYear !== undefined && requestedYear !== null && requestedYear !== "") {
+    const parsed = Number(requestedYear);
+    if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
+      const error = new TypeError("Year filter must be a valid year (1900-2100).");
+      error.statusCode = 400;
+      throw error;
+    }
+    return parsed;
+  }
+  return Math.max(...records.map((record) => toNumber(record.year)));
+};
+
+export const getOverallMonthlyHistory = async (requestedYear) => {
   const records = await getPurokPredictionData();
   if (records.length === 0) return [];
 
-  const latestYear = Math.max(...records.map((record) => toNumber(record.year)));
+  const targetYear = resolveTargetYear(records, requestedYear);
   const totals = {};
   const recordedMonths = new Set();
 
   records
-    .filter((record) => toNumber(record.year) === latestYear)
+    .filter((record) => toNumber(record.year) === targetYear)
     .forEach((record) => {
       (record.recordedMonths ?? []).forEach((month) =>
         recordedMonths.add(month)
@@ -81,14 +95,14 @@ export const getOverallYearlyHistory = async () => {
     }));
 };
 
-export const getPerPurokMonthlyHistory = async (purok) => {
+export const getPerPurokMonthlyHistory = async (purok, requestedYear) => {
   const records = (await getPurokPredictionData())
     .filter((record) => record.purok === purok);
 
   if (records.length === 0) return [];
 
-  const latestYear = Math.max(...records.map((record) => toNumber(record.year)));
-  const record = records.find((item) => toNumber(item.year) === latestYear);
+  const targetYear = resolveTargetYear(records, requestedYear);
+  const record = records.find((item) => toNumber(item.year) === targetYear);
 
   return record
     ? consumptionFields(record)
@@ -112,17 +126,17 @@ export const getPerPurokYearlyHistory = async (purok) => {
     }));
 };
 
-export const getAllPuroksMonthlyHistory = async () => {
+export const getAllPuroksMonthlyHistory = async (requestedYear) => {
   const records = await getPurokPredictionData();
   if (records.length === 0) return [];
 
-  const latestYear = Math.max(...records.map((record) => toNumber(record.year)));
+  const targetYear = resolveTargetYear(records, requestedYear);
 
   return records
-    .filter((record) => toNumber(record.year) === latestYear)
+    .filter((record) => toNumber(record.year) === targetYear)
     .map((record) => ({
       purok: record.purok,
-      latestYear,
+      latestYear: targetYear,
       historical: consumptionFields(record)
         .filter((month) => (record.recordedMonths ?? []).includes(month))
         .map((month) => ({

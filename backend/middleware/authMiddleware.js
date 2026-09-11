@@ -104,8 +104,11 @@ export async function authenticate(req, res, next) {
     // Background polls (plain GETs, SSE) intentionally do not refresh the
     // timestamp — only explicit activity pings, user-flagged requests, and
     // state-changing requests do (see shouldTouchSessionActivity).
+    // Meter readers are exempt: long idle stretches are normal field work
+    // (walking between houses, reading meters). Their sessions remain
+    // bounded by the absolute JWT expiry and device binding.
     const idleCheck = await isSessionIdle(payload.role, userId);
-    if (idleCheck.idle) {
+    if (idleCheck.idle && payload.role !== "meter-reader") {
       return res.status(401).json({
         success: false,
         code: "SESSION_INACTIVE",

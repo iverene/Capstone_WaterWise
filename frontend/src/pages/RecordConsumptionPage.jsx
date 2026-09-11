@@ -57,6 +57,7 @@ export default function RecordConsumptionPage() {
   const [selectedConsumer, setSelectedConsumer] = useState(null);
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
+  const [recordStatus, setRecordStatus] = useState("all");
   const [searchFocused, setSearchFocused] = useState(false);
   const searchWrapperRef = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -174,9 +175,14 @@ export default function RecordConsumptionPage() {
       const matchesSearch = !term || [consumer.consumerName, consumer.consumerNo]
         .some((value) => String(value).toLowerCase().includes(term));
       const matchesPurok = purok === "all" || consumer.purok === purok;
-      return matchesSearch && matchesPurok;
+      const matchesRecordStatus =
+        recordStatus === "all" ||
+        (recordStatus === "recorded"
+          ? consumer.hasReadingInSelectedMonth
+          : !consumer.hasReadingInSelectedMonth);
+      return matchesSearch && matchesPurok && matchesRecordStatus;
     });
-  }, [consumers, purok, query]);
+  }, [consumers, purok, query, recordStatus]);
 
   const purokOptions = useMemo(() => [
     { label: "All puroks", value: "all" },
@@ -299,11 +305,44 @@ export default function RecordConsumptionPage() {
       {loadError && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{loadError}</span><button className="font-bold underline" onClick={loadData} type="button">Try again</button></div>}
       <div aria-label="Resident directory controls" className="flex items-center gap-2" ref={searchWrapperRef} role="search">
         <Search ariaLabel="Search residents by name or account number" className={`min-w-0 transition-all duration-300 ease-in-out [&_input]:min-h-11 [&_input]:py-2 sm:[&_input]:min-h-12 sm:[&_input]:py-3 ${searchFocused ? "flex-1" : "w-1/2 sm:flex-1"}`} onBlur={() => setSearchFocused(false)} onFocus={() => setSearchFocused(true)} onValueChange={setQuery} placeholder="Search name or account number" value={query} />
-        <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${searchFocused ? "w-0 opacity-0" : "w-1/2 opacity-100 sm:w-48 sm:opacity-100"}`}>
-          <Filter ariaLabel="Filter residents by purok" className="w-full" disabled={loading} onValueChange={setPurok} options={purokOptions} value={purok} />
+        <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${searchFocused ? "w-0 opacity-0" : "w-1/2 opacity-100 sm:w-auto sm:opacity-100"}`}>
+          <Filter
+            ariaLabel="Filter residents"
+            buttonLabel="Filters"
+            className="w-full"
+            description="Choose which residents should be shown in this list."
+            disabled={loading}
+            filters={[
+              {
+                ariaLabel: "Filter residents by purok",
+                className: "w-40",
+                id: "resident-purok-filter",
+                label: "Purok",
+                name: "residentPurok",
+                onValueChange: setPurok,
+                options: purokOptions,
+                value: purok,
+              },
+              {
+                ariaLabel: "Filter residents by recording status",
+                className: "w-52",
+                id: "resident-recording-status-filter",
+                label: "Recording status",
+                name: "residentRecordingStatus",
+                onValueChange: setRecordStatus,
+                options: [
+                  { label: "All residents", value: "all" },
+                  { label: "Not yet recorded", value: "unrecorded" },
+                  { label: "Recorded this month", value: "recorded" },
+                ],
+                value: recordStatus,
+              },
+            ]}
+            title="Resident filters"
+          />
         </div>
       </div>
-      {loading ? <LoadingSkeleton label="Loading residents and reading status" variant="list" /> : <ConsumerSelectionList consumers={visibleConsumers} emptyDescription={consumers.length ? "Try a different search or choose another purok." : undefined} emptyTitle={consumers.length ? "No matching residents" : undefined} onSelect={selectConsumer} selectedId={selectedConsumer?.id} selectingId={selectingId} />}
+      {loading ? <LoadingSkeleton label="Loading residents and reading status" variant="list" /> : <ConsumerSelectionList consumers={visibleConsumers} emptyDescription={consumers.length ? "Try a different search, purok, or recording status." : undefined} emptyTitle={consumers.length ? "No matching residents" : undefined} onSelect={selectConsumer} selectedId={selectedConsumer?.id} selectingId={selectingId} />}
 
       <Modal closeLabel="Close meter reading form" description={selectedConsumer ? `${selectedConsumer.consumerName} · ${selectedConsumer.purok}` : undefined} dismissible={!saving} eyebrow="Field operations" isOpen={Boolean(selectedConsumer)} onClose={closeEntry} showCloseButton={false} size="md" title="Record meter reading">
         {saveError && <div className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mx-6" role="alert">{saveError}</div>}

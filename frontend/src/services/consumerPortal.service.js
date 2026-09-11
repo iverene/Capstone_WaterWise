@@ -29,6 +29,24 @@ function isCurrentMonth(value) {
   return String(value ?? "").slice(0, 7) === currentMonth;
 }
 
+function currentManilaDateString(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Manila",
+    year: "numeric",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function overdueDaysFor(dueDate, today) {
+  if (!dueDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(dueDate))) return 0;
+  const elapsed = Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dueDate}T00:00:00Z`);
+  if (!Number.isFinite(elapsed)) return 0;
+  return Math.max(0, Math.floor(elapsed / 86_400_000));
+}
+
 async function requireConsumerAccount() {
   const user = getStoredAccount();
   if (!user || user.role !== "consumer") {
@@ -45,7 +63,12 @@ function composeProfileName(profile, fallback = "") {
   return composed || profile.full_name || fallback;
 }
 
-function normalizeBilling(record, profile, reading) {
+function normalizeBilling(record, profile, reading, today = currentManilaDateString()) {
+  const remainingBalance = Number(record.remaining_balance ?? 0);
+  const storedStatus = record.status ?? "Unpaid";
+  const overdueDays = remainingBalance > 0 && storedStatus !== "Paid"
+    ? overdueDaysFor(record.due_date, today)
+    : 0;
   return {
     id: record.id,
     invoiceNumber: `INV-${record.id}`,
@@ -55,9 +78,11 @@ function normalizeBilling(record, profile, reading) {
     readingDate: reading?.reading_date ?? record.billing_date,
     cubicMetersConsumed: Number(reading?.consumption ?? 0),
     amountDue: Number(record.total_bill ?? 0),
-    remainingBalance: Number(record.remaining_balance ?? 0),
-    outstandingBalance: Number(record.remaining_balance ?? 0),
-    status: record.status ?? "Unpaid",
+    remainingBalance,
+    outstandingBalance: remainingBalance,
+    status: overdueDays > 0 ? "Overdue" : storedStatus,
+    previousStatus: storedStatus,
+    overdueDays,
     address: profile.purok_no != null ? `Purok ${profile.purok_no}` : "",
     previousReading: Number(reading?.previous_reading ?? 0),
     currentReading: Number(reading?.present_reading ?? 0),

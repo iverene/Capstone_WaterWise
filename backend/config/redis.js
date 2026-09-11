@@ -55,3 +55,28 @@ export const deleteCache = async (...keys) => {
     return false;
   }
 };
+
+export const deleteCacheByPrefix = async (prefix) => {
+  if (!redis || !prefix) return false;
+
+  try {
+    let cursor = 0;
+    const matchedKeys = [];
+    do {
+      const [nextCursor, keys] = await redis.scan(cursor, {
+        match: `${prefix}*`,
+        count: 100,
+      });
+      cursor = Number(nextCursor);
+      if (Array.isArray(keys) && keys.length > 0) matchedKeys.push(...keys);
+    } while (cursor !== 0);
+
+    const uniqueKeys = [...new Set(matchedKeys)];
+    if (uniqueKeys.length === 0) return true;
+    await redis.del(...uniqueKeys);
+    return true;
+  } catch (error) {
+    reportRedisError("prefix-invalidation", error);
+    return false;
+  }
+};

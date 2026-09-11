@@ -133,14 +133,30 @@ export const getConsumptionRankingData = async (req, res) =>
     "Failed to retrieve purok consumption ranking."
   );
 
-export const getMonthlyHistory = async (req, res) =>
-  sendServiceResult(
+const parseYearQuery = (value) => {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
+    return { error: "Year filter must be a valid year (1900-2100)." };
+  }
+  return { year: parsed };
+};
+
+const yearCacheSuffix = (year) => (year === undefined ? "" : `:year:${year}`);
+
+export const getMonthlyHistory = async (req, res) => {
+  const parsed = parseYearQuery(req.query?.year);
+  if (parsed?.error) {
+    return res.status(400).json({ success: false, message: parsed.error });
+  }
+  return sendServiceResult(
     res,
-    "history:monthly",
-    getOverallMonthlyHistory,
+    `history:monthly${yearCacheSuffix(parsed?.year)}`,
+    () => getOverallMonthlyHistory(parsed?.year),
     "Monthly history error",
-    "Failed to retrieve monthly consumption history."
+    "Failed to retrieve monthly consumption history.",
   );
+};
 
 export const getYearlyHistory = async (req, res) =>
   sendServiceResult(
@@ -159,11 +175,15 @@ export const getPurokMonthlyHistory = async (req, res) => {
       message: "Purok parameter is required.",
     });
   }
+  const parsed = parseYearQuery(req.query?.year);
+  if (parsed?.error) {
+    return res.status(400).json({ success: false, message: parsed.error });
+  }
 
   return sendServiceResult(
     res,
-    `history:monthly:purok:${encodeURIComponent(purok)}`,
-    () => getPerPurokMonthlyHistory(purok),
+    `history:monthly:purok:${encodeURIComponent(purok)}${yearCacheSuffix(parsed?.year)}`,
+    () => getPerPurokMonthlyHistory(purok, parsed?.year),
     "Purok monthly history error",
     "Failed to retrieve purok monthly consumption history."
   );
@@ -187,14 +207,19 @@ export const getPurokYearlyHistory = async (req, res) => {
   );
 };
 
-export const getAllPuroksMonthlyHistory = async (req, res) =>
-  sendServiceResult(
+export const getAllPuroksMonthlyHistory = async (req, res) => {
+  const parsed = parseYearQuery(req.query?.year);
+  if (parsed?.error) {
+    return res.status(400).json({ success: false, message: parsed.error });
+  }
+  return sendServiceResult(
     res,
-    "history:monthly:all-puroks",
-    getAllPuroksMonthlyHistoryService,
+    `history:monthly:all-puroks${yearCacheSuffix(parsed?.year)}`,
+    () => getAllPuroksMonthlyHistoryService(parsed?.year),
     "All puroks monthly history error",
-    "Failed to retrieve all puroks monthly consumption history."
+    "Failed to retrieve all puroks monthly consumption history.",
   );
+};
 
 export const getAllPuroksYearlyHistory = async (req, res) =>
   sendServiceResult(
@@ -207,6 +232,30 @@ export const getAllPuroksYearlyHistory = async (req, res) =>
 
 export const generateAllHistoryConsumption = async (req, res) => {
   try {
+    const parsed = parseYearQuery(req.query?.year);
+    if (parsed?.error) {
+      return res.status(400).json({ success: false, message: parsed.error });
+    }
+    if (parsed?.year !== undefined) {
+      const monthly = await getCachedConsumption(
+        `history:monthly:year:${parsed.year}`,
+        () => getOverallMonthlyHistory(parsed.year),
+      );
+      const monthlyHistory = Array.isArray(monthly) ? monthly : [];
+      const overallConsumption = monthlyHistory.reduce((total, item) => {
+        const consumption = Number(item?.consumption ?? 0);
+        return total + (Number.isFinite(consumption) ? consumption : 0);
+      }, 0);
+      return res.status(200).json({
+        success: true,
+        data: {
+          overallConsumption: Number(overallConsumption.toFixed(2)),
+          recordCount: monthlyHistory.length,
+          yearlyHistory: monthlyHistory,
+          year: parsed.year,
+        },
+      });
+    }
     const history = await getCachedConsumption(
       "history:yearly",
       getOverallYearlyHistory,
