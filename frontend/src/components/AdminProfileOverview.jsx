@@ -11,7 +11,7 @@ export default function AdminProfileOverview({ account, onTrustedDevices, onMana
   const status = account?.status ? String(account.status) : "Not available";
   const active = status.toLowerCase() === "active";
   const changePassword = () => navigate("/account/change-password");
-  const changeEmail = () => window.dispatchEvent(new Event("waterwise:open-change-email"));
+  const changeEmail = () => navigate("/account/change-email");
   const actions = [
     { Icon: KeyRound, title: "Change password", description: "Update your password with email OTP verification.", onClick: changePassword },
     { Icon: Mail, title: "Change email", description: "Verify your current registered email address.", onClick: changeEmail },

@@ -19,6 +19,7 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
+import ChangeEmailPage from "./pages/ChangeEmailPage";
 import UsageMetrics from "./pages/UsageMetrics";
 import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
@@ -236,6 +237,14 @@ export function AppRoutes() {
           </AnyRoleRouteGuard>
         }
         path="/account/change-password"
+      />
+      <Route
+        element={
+          <AnyRoleRouteGuard>
+            <AppLayout><ChangeEmailPage /></AppLayout>
+          </AnyRoleRouteGuard>
+        }
+        path="/account/change-email"
       />
       <Route
         element={
