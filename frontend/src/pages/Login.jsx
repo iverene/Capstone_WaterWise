@@ -445,53 +445,53 @@ export default function Login() {
               {isSubmitting ? (adminChallengeToken ? "Verifying admin code. Please wait." : "Signing in. Please wait.") : ""}
             </span>
 
-                {adminChallengeToken && (
-                  <div>
-                    <label className="text-xs sm:text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
-                    <div className="mt-3">
-                      <OtpInput
-                        disabled={isSubmitting || otpSecondsLeft === 0}
-                        id="admin-login-otp"
-                        invalid={Boolean(message)}
-                        onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
-                        onAutoVerify={handleAutoVerifyOtp}
-                        success={otpSuccess}
-                        value={otp}
-                      />
-                    </div>
-                    <p aria-live="polite" className={`mt-3 text-xs sm:text-sm font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
-                      {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
-                    </p>
-                    {otpSecondsLeft === 0 && (
-                      <button
-                        className="mt-3 text-xs sm:text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
-                        disabled={isSubmitting || isResending}
-                        onClick={handleResendOtp}
-                        type="button"
-                      >
-                        {isResending ? "Sending new code…" : "Resend code"}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {lockMessage && (
-                  <p className="rounded-xl bg-red-50 px-4 py-3 text-xs sm:text-sm font-semibold text-red-700" role="alert">
-                    {lockMessage}
-                  </p>
-                )}
-
-                {message && (
-                  <p
-                    className="rounded-xl bg-white px-4 py-3 text-xs sm:text-sm font-medium text-slate-900"
-                    role="status"
+            {adminChallengeToken && (
+              <div>
+                <label className="text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
+                <div className="mt-3">
+                  <OtpInput
+                    disabled={isSubmitting || otpSecondsLeft === 0}
+                    id="admin-login-otp"
+                    invalid={Boolean(message)}
+                    onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
+                    onAutoVerify={handleAutoVerifyOtp}
+                    success={otpSuccess}
+                    value={otp}
+                  />
+                </div>
+                <p aria-live="polite" className={`mt-3 text-[13px] font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
+                  {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
+                </p>
+                {otpSecondsLeft === 0 && (
+                  <button
+                    className="mt-3 text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
+                    disabled={isSubmitting || isResending}
+                    onClick={handleResendOtp}
+                    type="button"
                   >
-                    {message}
-                  </p>
+                    {isResending ? "Sending new code…" : "Resend code"}
+                  </button>
                 )}
-                {adminChallengeToken && (
-                  <button className="w-full text-xs sm:text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
-                )}
+              </div>
+            )}
+
+            {lockMessage && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                {lockMessage}
+              </p>
+            )}
+
+            {message && (
+              <p
+                className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                role="status"
+              >
+                {message}
+              </p>
+            )}
+            {adminChallengeToken && (
+              <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
+            )}
           </form>
         </div>
       </section>
