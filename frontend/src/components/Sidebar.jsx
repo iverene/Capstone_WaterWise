@@ -180,6 +180,21 @@ export default function Sidebar({
     }
   };
 
+  // Tab switches (Alt+Tab, clicking another tab) never fire mouseleave, so a
+  // visible tooltip/edge would get stuck. Reset both when the pointer leaves
+  // the document or the window loses focus.
+  useEffect(() => {
+    const handlePointerExit = () => {
+      resetEdgeIndicator();
+    };
+    window.addEventListener("blur", handlePointerExit);
+    document.documentElement.addEventListener("mouseleave", handlePointerExit);
+    return () => {
+      window.removeEventListener("blur", handlePointerExit);
+      document.documentElement.removeEventListener("mouseleave", handlePointerExit);
+    };
+  }, [resetEdgeIndicator]);
+
   return (
     <>
       {isMoreOpen && (
