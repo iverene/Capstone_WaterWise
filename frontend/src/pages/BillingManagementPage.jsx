@@ -125,7 +125,7 @@ export default function BillingManagementPage() {
       <PageHeader
         description="Review billing periods, water usage, account balances, and collection status."
         eyebrow="Billing administration"
-        title="Billing management"
+        title="Billing Management"
       />
 
       <BillingSummaryCard billingData={billingHistory} />

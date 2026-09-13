@@ -62,7 +62,7 @@ export default function ConsumerAccountInformation() {
   return (
     <div className="space-y-5 sm:space-y-6">
       <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50 hover:text-water-900" onClick={() => navigate("/consumer/profile-details")} type="button"><ArrowLeft className="h-4 w-4" />Back to household profile</button>
-      <PageHeader compact description="Review the account, contact, and service details registered to your household." eyebrow="Household profile" title="Account and household information" />
+      <PageHeader compact description="Review the account, contact, and service details registered to your household." eyebrow="Household profile" title="Account and Household Information" />
       {error && <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between" role="alert"><span>{error}</span><button className="min-h-11 rounded-xl bg-red-700 px-4 font-bold text-white" onClick={retry} type="button">Try again</button></div>}
       {!consumer && !error && <LoadingSkeleton label="Loading account and household information" variant="profile" />}
       {consumer && <div className="grid items-start gap-4"><InformationSection description="Identifiers stored with your resident account." eyebrow="Account" items={accountItems} title="Account information" /><InformationSection description="Contact details and the service area registered by the barangay office." eyebrow="Household" items={householdItems} title="Contact and location" /></div>}

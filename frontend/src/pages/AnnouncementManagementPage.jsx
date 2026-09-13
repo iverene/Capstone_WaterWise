@@ -110,7 +110,7 @@ export default function AnnouncementManagementPage() {
         <PageHeader
           description="Publish clear service notices and keep residents informed about water-system updates."
           eyebrow="Community communication"
-          title="Announcement management"
+          title="Announcement Management"
         />
         <div className="hidden pt-8 lg:block">
           <button

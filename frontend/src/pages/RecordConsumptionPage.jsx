@@ -296,7 +296,7 @@ export default function RecordConsumptionPage() {
 
   return (
     <main className="space-y-4 sm:space-y-6">
-      <PageHeader description="Select a resident and type the cumulative meter value." eyebrow="Field workspace" mobileCompact title="Record a meter reading" />
+      <PageHeader description="Select a resident and type the cumulative meter value." eyebrow="Field workspace" mobileCompact title="Record a Meter Reading" />
       {(syncing || pendingCount > 0 || showSynced) && (
         <div className="rounded-xl border p-3 text-[13px] font-semibold sm:p-4 sm:text-sm border-water-200 bg-water-50 text-water-800" role="status">
           {syncing ? "Online · Syncing saved readings…" : pendingCount > 0 ? `${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync` : "All readings synced"}

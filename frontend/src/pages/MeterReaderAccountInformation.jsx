@@ -60,7 +60,7 @@ export default function MeterReaderAccountInformation() {
   return (
     <div className="space-y-5 sm:space-y-6">
       <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50 hover:text-water-900" onClick={() => navigate("/meter-reader/profile")} type="button"><ArrowLeft className="h-4 w-4" />Back to profile</button>
-      <PageHeader compact description="Review the account and contact details registered to your meter reader account." eyebrow="Meter reader profile" title="Account information" />
+      <PageHeader compact description="Review the account and contact details registered to your meter reader account." eyebrow="Meter reader profile" title="Account Information" />
       {error && <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between" role="alert"><span>{error}</span><button className="min-h-11 rounded-xl bg-red-700 px-4 font-bold text-white" onClick={retry} type="button">Try again</button></div>}
       {!reader && !error && <LoadingSkeleton label="Loading account information" variant="profile" />}
       {reader && <div className="grid items-start gap-4"><InformationSection description="Identifiers stored with your meter reader account." eyebrow="Account" items={accountItems} title="Account information" /><InformationSection description="Contact details registered with your account." eyebrow="Contact" items={contactItems} title="Contact information" /></div>}
