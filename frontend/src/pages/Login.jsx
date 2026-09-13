@@ -347,86 +347,103 @@ export default function Login() {
         <p className="mt-3 text-center text-sm leading-6 text-slate-500">
           {adminChallengeToken ? <>Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</> : "Use the credentials assigned to your WaterWise account."}
         </p>
-              <form aria-busy={isSubmitting} className="space-y-5 lg:space-y-6" onSubmit={handleSubmit}>
-                {!adminChallengeToken && <div>
-                  <label
-                    className="text-sm sm:text-sm font-semibold text-slate-900"
-                    htmlFor="login-identifier"
-                  >
-                    Email or username
-                  </label>
-                  <div className="relative mt-2">
-                    <FiMail aria-hidden="true" className={`pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 ${identifierError ? "text-red-500" : "text-slate-400"}`} />
-                    <input
-                      aria-describedby={identifierError ? "login-identifier-error" : undefined}
-                      aria-invalid={Boolean(identifierError)}
-                      autoComplete="username"
-                      className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-4 text-sm sm:text-base"
-                      disabled={isSubmitting}
-                      id="login-identifier"
-                      onChange={(event) => {
-                        setIdentifier(event.target.value);
-                        if (identifierError) setIdentifierError("");
-                        if (message) setMessage("");
-                      }}
-                      placeholder="name@sucolwater.gov"
-                      ref={identifierRef}
-                      type="text"
-                      value={identifier}
-                    />
-                  </div>
-                  {identifierError && (
-                    <p className="mt-2 text-xs sm:text-sm font-semibold text-red-700" id="login-identifier-error">
-                      {identifierError}
-                    </p>
-                  )}
-                </div>}
+        <div className="ww-glass-strong mt-8 w-full rounded-2xl bg-white p-6 sm:p-8">
+          <form aria-busy={isSubmitting} className="space-y-5" onSubmit={handleSubmit}>
+            {!adminChallengeToken && <div>
+              <label
+                className="text-sm font-semibold text-slate-900"
+                htmlFor="login-identifier"
+              >
+                Email or username
+              </label>
+              <div className="relative mt-2">
+                <FiMail aria-hidden="true" className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${identifierError ? "text-red-500" : "text-slate-400"}`} />
+                <input
+                  aria-describedby={identifierError ? "login-identifier-error" : undefined}
+                  aria-invalid={Boolean(identifierError)}
+                  autoComplete="username"
+                  className="ww-field py-3 pl-12 pr-4 text-base"
+                  disabled={isSubmitting}
+                  id="login-identifier"
+                  onChange={(event) => {
+                    setIdentifier(event.target.value);
+                    if (identifierError) setIdentifierError("");
+                    if (message) setMessage("");
+                  }}
+                  placeholder="name@sucolwater.gov"
+                  ref={identifierRef}
+                  type="text"
+                  value={identifier}
+                />
+              </div>
+              {identifierError && (
+                <p className="mt-2 text-[13px] font-semibold text-red-700" id="login-identifier-error">
+                  {identifierError}
+                </p>
+              )}
+            </div>}
 
-                {!adminChallengeToken && <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm sm:text-sm font-semibold text-slate-900" htmlFor="login-password">Password</label>
-                    <Link className="text-sm sm:text-sm font-bold text-water-700 hover:text-water-900" to="/forgot-password">Forgot password?</Link>
-                  </div>
-                  <div className="relative mt-2">
-                    <FiLock aria-hidden="true" className={`pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-slate-400"}`} />
-                    <input
-                      aria-describedby={passwordError ? "login-password-error" : undefined}
-                      aria-invalid={Boolean(passwordError)}
-                      autoComplete="current-password"
-                      className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-12 text-sm sm:text-base"
-                      disabled={isSubmitting}
-                      id="login-password"
-                      onChange={(event) => {
-                        setPassword(event.target.value);
-                        if (passwordError) setPasswordError("");
-                        if (message) setMessage("");
-                      }}
-                      placeholder="Enter password"
-                      ref={passwordRef}
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                    />
-                    <button
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      aria-pressed={showPassword}
-                      className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
-                      disabled={isSubmitting}
-                      onClick={() => setShowPassword((visible) => !visible)}
-                      type="button"
-                    >
-                      {showPassword ? (
-                        <FiEyeOff aria-hidden="true" className="h-5 w-5" />
-                      ) : (
-                        <FiEye aria-hidden="true" className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                  {passwordError && (
-                    <p className="mt-2 text-xs sm:text-sm font-semibold text-red-700" id="login-password-error">
-                      {passwordError}
-                    </p>
+            {!adminChallengeToken && <div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-slate-900" htmlFor="login-password">Password</label>
+                <Link className="text-sm font-bold text-water-700 hover:text-water-900" to="/forgot-password">Forgot password?</Link>
+              </div>
+              <div className="relative mt-2">
+                <FiLock aria-hidden="true" className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-slate-400"}`} />
+                <input
+                  aria-describedby={passwordError ? "login-password-error" : undefined}
+                  aria-invalid={Boolean(passwordError)}
+                  autoComplete="current-password"
+                  className="ww-field py-3 pl-12 pr-12 text-base"
+                  disabled={isSubmitting}
+                  id="login-password"
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (passwordError) setPasswordError("");
+                    if (message) setMessage("");
+                  }}
+                  placeholder="Enter password"
+                  ref={passwordRef}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                />
+                <button
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
+                  disabled={isSubmitting}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  type="button"
+                >
+                  {showPassword ? (
+                    <FiEyeOff aria-hidden="true" className="h-5 w-5" />
+                  ) : (
+                    <FiEye aria-hidden="true" className="h-5 w-5" />
                   )}
-                </div>}
+                </button>
+              </div>
+              {passwordError && (
+                <p className="mt-2 text-[13px] font-semibold text-red-700" id="login-password-error">
+                  {passwordError}
+                </p>
+              )}
+            </div>}
+
+            {!adminChallengeToken && (
+            <button
+              className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
+              disabled={isSubmitting || isLockedIdentifier}
+              style={{ cursor: isSubmitting ? "default" : undefined }}
+              type="submit"
+            >
+              {isSubmitting && <FiLoader aria-hidden="true" className="h-5 w-5 animate-spin" />}
+              {isSubmitting ? "Signing in…" : "Sign in"}
+            </button>
+            )}
+
+            <span aria-live="polite" className="sr-only" role="status">
+              {isSubmitting ? (adminChallengeToken ? "Verifying admin code. Please wait." : "Signing in. Please wait.") : ""}
+            </span>
 
                 {adminChallengeToken && (
                   <div>
@@ -458,22 +475,6 @@ export default function Login() {
                   </div>
                 )}
 
-                {!adminChallengeToken && (
-                <button
-                  className="ww-primary-button flex min-h-10 sm:min-h-12 lg:min-h-[3.25rem] w-full items-center justify-center gap-2 px-5 py-3 text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
-                  disabled={isSubmitting || isLockedIdentifier}
-                  style={{ cursor: isSubmitting ? "default" : undefined }}
-                  type="submit"
-                >
-                  {isSubmitting && <FiLoader aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />}
-                  {isSubmitting ? "Signing in…" : "Sign in"}
-                </button>
-                )}
-
-                <span aria-live="polite" className="sr-only" role="status">
-                  {isSubmitting ? (adminChallengeToken ? "Verifying admin code. Please wait." : "Signing in. Please wait.") : ""}
-                </span>
-
                 {lockMessage && (
                   <p className="rounded-xl bg-red-50 px-4 py-3 text-xs sm:text-sm font-semibold text-red-700" role="alert">
                     {lockMessage}
@@ -491,7 +492,8 @@ export default function Login() {
                 {adminChallengeToken && (
                   <button className="w-full text-xs sm:text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
                 )}
-              </form>
+          </form>
+        </div>
       </section>
     </main>
   );
