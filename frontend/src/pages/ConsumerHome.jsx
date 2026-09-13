@@ -183,7 +183,7 @@ export default function ConsumerHome() {
           <div className="mb-4">
             <h2 className="text-xl font-extrabold text-navy-900" id="consumer-announcements-heading">Latest announcements</h2>
           </div>
-          <AnnouncementPage announcements={home.announcements} showEndMarker={false} showHeader={false} />
+          <AnnouncementPage announcements={home.announcements} layout="grid" limit={5} showEndMarker={false} showHeader={false} />
           <Link
             className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
             to="/consumer/announcements"

@@ -36,6 +36,9 @@ const PAGE_SIZE = 10;
 
 export default function AnnouncementPage({
   announcements = sampleAnnouncements,
+  layout = "list",
+  limit = null,
+  paginate = true,
   onEdit,
   onDelete,
   showEndMarker = true,
@@ -43,11 +46,12 @@ export default function AnnouncementPage({
   title = "Community updates",
 }) {
   const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(announcements.length / PAGE_SIZE));
+  const feed = limit ? announcements.slice(0, limit) : announcements;
+  const totalPages = Math.max(1, Math.ceil(feed.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
-  const pageRows = announcements.slice(startIndex, startIndex + PAGE_SIZE);
-  const endIndex = Math.min(startIndex + pageRows.length, announcements.length);
+  const pageRows = limit || !paginate ? feed : feed.slice(startIndex, startIndex + PAGE_SIZE);
+  const endIndex = Math.min(startIndex + pageRows.length, feed.length);
   return (
     <section aria-labelledby={showHeader ? "announcement-feed-heading" : undefined}>
       {showHeader && (
@@ -70,7 +74,7 @@ export default function AnnouncementPage({
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className={layout === "grid" ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}>
           {pageRows.map((announcement) => (
             <article
               className={`overflow-hidden rounded-2xl border bg-white shadow-card ${
@@ -169,7 +173,7 @@ export default function AnnouncementPage({
         </div>
       )}
 
-      {announcements.length > 0 && (
+      {announcements.length > 0 && !limit && paginate && (
         <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-center text-xs font-semibold text-slate-500 sm:text-left">
             Showing <span className="font-mono tabular-nums text-slate-700">{startIndex + 1}–{endIndex}</span> of <span className="font-mono tabular-nums text-slate-700">{announcements.length}</span>
