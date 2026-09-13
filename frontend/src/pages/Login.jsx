@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  FiDroplet,
   FiEye,
   FiEyeOff,
   FiLoader,
@@ -11,7 +10,6 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { fetchTrustedDevices, login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import OtpInput from "../components/OtpInput";
-import PWAInstallButton from "../components/PWAInstallButton";
 import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
 
 const accountDestinations = {
@@ -333,43 +331,22 @@ export default function Login() {
   };
 
   return (
-    <main className="ww-app h-screen overflow-hidden px-5 py-5 font-sans text-slate-900 sm:px-8 sm:py-8 lg:px-12 lg:py-10">
-      <section className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
-        <div className="ww-glass-strong grid w-full overflow-hidden rounded-2xl lg:grid-cols-[0.94fr_1.06fr]">
-          <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10 lg:p-14">
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm"><FiDroplet aria-hidden="true" className="h-5 w-5" /></span>
-                  <div>
-                    <p className="text-sm font-extrabold tracking-[-0.02em] text-white">WaterWise</p>
-                    <p className="text-xs font-medium text-water-200">Sucol Water System</p>
-                  </div>
-                </div>
-                <PWAInstallButton variant="panel" />
-              </div>
-              <h1 className="mt-6 max-w-md text-2xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:mt-8">
-                Every drop, clearly understood.
-              </h1>
-              <p className="mt-4 max-w-md text-xs leading-5 text-water-100 sm:text-base sm:leading-6 lg:mt-5">One secure place for water readings, bills, payments, and barangay updates.</p>
-            </div>
-
-          </aside>
-
-          <div className="bg-white p-6 sm:p-10 lg:flex lg:items-center lg:p-14 overflow-auto">
-            <div className="mx-auto max-w-xl">
-              <div className="mb-8 lg:mb-10">
-                <p className="ww-eyebrow text-[10px] sm:text-xs !text-water-700">
-                  Secure sign in
-                </p>
-                <h2 className="mt-2 text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-4xl lg:mt-3">
-                  {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
-                </h2>
-                <p className="mt-3 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-500 lg:mt-4">
-                  {adminChallengeToken ? <>Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</> : "Use the credentials assigned to your WaterWise account."}
-                </p>
-              </div>
-
+    <main className="min-h-screen bg-canvas bg-gradient-to-b from-water-50 to-transparent px-5 py-6 font-sans text-slate-900 sm:px-8 sm:py-10">
+      <p className="mx-auto w-full max-w-md text-xs font-semibold text-slate-600">
+        Sucol Water System • Barangay Sucol
+      </p>
+      <section className="mx-auto flex w-full max-w-md flex-col items-center">
+        <img
+          alt="Sucol WaterWise logo"
+          className="mt-8 h-[72px] w-auto sm:h-[88px]"
+          src="/Sucol_logo.png"
+        />
+        <h1 className="mt-6 text-center text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-[1.75rem]">
+          {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
+        </h1>
+        <p className="mt-3 text-center text-sm leading-6 text-slate-500">
+          {adminChallengeToken ? <>Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</> : "Use the credentials assigned to your WaterWise account."}
+        </p>
               <form aria-busy={isSubmitting} className="space-y-5 lg:space-y-6" onSubmit={handleSubmit}>
                 {!adminChallengeToken && <div>
                   <label
@@ -515,9 +492,6 @@ export default function Login() {
                   <button className="w-full text-xs sm:text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
                 )}
               </form>
-            </div>
-          </div>
-        </div>
       </section>
     </main>
   );
