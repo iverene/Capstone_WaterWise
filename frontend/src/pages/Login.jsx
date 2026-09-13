@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  FiCheckCircle,
   FiEye,
   FiEyeOff,
   FiLoader,
   FiLock,
   FiMail,
+  FiShield,
 } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router";
 import { fetchTrustedDevices, login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
@@ -494,6 +496,14 @@ export default function Login() {
             )}
           </form>
         </div>
+        <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+          <li className="flex items-center gap-1.5"><FiShield aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> OTP protected</li>
+          <li className="flex items-center gap-1.5"><FiLock aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Encrypted session</li>
+          <li className="flex items-center gap-1.5"><FiCheckCircle aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Barangay verified</li>
+        </ul>
+        <p className="mt-4 text-center text-xs text-slate-400">
+          Sucol Water System office • Mon–Fri 8am–5pm • Visit office for account help
+        </p>
       </section>
     </main>
   );
