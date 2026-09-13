@@ -8,7 +8,7 @@
   .waterwise-sidebar-brand > button { width: 24px; height: 36px; }
   .waterwise-sidebar-brand > div > p:first-child { font-size: 19px; letter-spacing: -.7px; }
   .waterwise-sidebar-brand > div > p:last-child { font-size: 10px; color: #6680ab; }
-  .waterwise-brand-accent { color: #0082f7; }
+  .waterwise-brand-accent { color: #0284c7; }
   .waterwise-top-wave { display: block; width: calc(100% + 24px); height: 65px; margin: 10px -12px 0; flex-shrink: 0; }
   .waterwise-sidebar nav { margin-top: 8px; scrollbar-width: thin; }
   .waterwise-sidebar nav ul { gap: 5px; }
