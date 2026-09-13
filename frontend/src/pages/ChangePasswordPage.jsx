@@ -50,10 +50,10 @@ function isStrongPassword(password) {
 function RequirementRow({ met, label }) {
   return (
     <li className="flex items-center gap-2.5">
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${met ? "bg-emerald-500 text-white" : "border border-slate-300 bg-white text-transparent"}`}>
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${met ? "bg-emerald-500 text-white" : "border border-slate-300 bg-white text-slate-300"}`}>
         <Check aria-hidden="true" className="h-3 w-3" strokeWidth={3} />
       </span>
-      <span className={`text-sm ${met ? "font-semibold text-slate-700" : "text-slate-500"}`}>{label}</span>
+      <span className={`text-xs ${met ? "font-semibold text-slate-700" : "text-slate-500"}`}>{label}</span>
     </li>
   );
 }
@@ -196,7 +196,7 @@ export default function ChangePasswordPage() {
             <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-water-50 text-water-700"><Mail className="h-5 w-5" /></span>
             <p className="mt-3 text-sm leading-6 text-slate-600">We&apos;ll send a 6-digit code to the email registered to your signed-in account.</p>
             {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-left text-sm font-semibold text-red-700" role="alert">{error}</p>}
-            <button className="ww-primary-button mt-5 flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting || cooldownSeconds > 0} onClick={sendOtp} type="button">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Sending code…" : cooldownSeconds > 0 ? `Try again in ${formatCountdown(cooldownSeconds)}` : "Send email code"}</button>
+            <button className="ww-primary-button mx-auto mt-5 flex min-h-12 w-full max-w-xs items-center justify-center gap-2" disabled={isSubmitting || cooldownSeconds > 0} onClick={sendOtp} type="button">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Sending code…" : cooldownSeconds > 0 ? `Try again in ${formatCountdown(cooldownSeconds)}` : "Send email code"}</button>
             {!emailOnly && <button className="mt-3 w-full text-xs font-bold text-water-700 hover:text-water-900 sm:text-sm" onClick={() => { setMethod("current"); setError(""); setMessage(""); }} type="button">Use current password instead</button>}
           </div>
         </section>
@@ -243,7 +243,10 @@ export default function ChangePasswordPage() {
             <p aria-live="polite" className="sr-only">{requirementsMet.filter(Boolean).length} of {passwordRequirements.length} password requirements met{passwordsMatch ? ", passwords match" : ""}.</p>
             {passwordField("confirm-account-password", "Confirm new password", confirmation, setConfirmation, "new-password")}
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
-            <button className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting || !canSubmit} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing password…" : "Change password"}</button>
+            <div className="flex items-center gap-2">
+              <button className="ww-primary-button flex min-h-12 flex-1 items-center justify-center gap-2" disabled={isSubmitting || !canSubmit} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing password…" : "Change password"}</button>
+              <button className="min-h-12 shrink-0 rounded-xl px-5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" disabled={isSubmitting} onClick={() => navigate(backPath)} type="button">Cancel</button>
+            </div>
           </form>
         </section>
       )}

@@ -122,7 +122,7 @@ export default function ChangeEmailPage() {
               <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-water-50 text-water-700"><Mail className="h-5 w-5" /></span>
               <p className="mt-3 text-sm leading-6 text-slate-600">We&apos;ll send a 6-digit verification code to your current registered email address.</p>
               {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-left text-sm font-semibold text-red-700" role="alert">{error}</p>}
-              <button className="ww-primary-button mt-5 flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting || cooldownSeconds > 0} onClick={sendOtp} type="button">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Sending code…" : cooldownSeconds > 0 ? `Try again in ${formatCountdown(cooldownSeconds)}` : "Send verification code"}</button>
+              <button className="ww-primary-button mx-auto mt-5 flex min-h-12 w-full max-w-xs items-center justify-center gap-2" disabled={isSubmitting || cooldownSeconds > 0} onClick={sendOtp} type="button">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Sending code…" : cooldownSeconds > 0 ? `Try again in ${formatCountdown(cooldownSeconds)}` : "Send verification code"}</button>
             </div>
           </section>
         )}
@@ -151,7 +151,7 @@ export default function ChangeEmailPage() {
                 <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="new-consumer-email">New email address</label>
                 <input autoComplete="email" className="ww-field mt-1.5 py-2.5 pl-4 pr-4 text-sm sm:mt-2 sm:py-3 sm:text-base" id="new-consumer-email" onChange={(event) => { setNewEmail(event.target.value); setError(""); }} placeholder="name@example.com" type="email" value={newEmail} />
               </div>
-              <button className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2" disabled={isSubmitting} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing email…" : "Save new email"}</button>
+              <button className="ww-primary-button mx-auto flex min-h-12 w-full max-w-xs items-center justify-center gap-2" disabled={isSubmitting} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing email…" : "Save new email"}</button>
             </form>
           </section>
         )}
