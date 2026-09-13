@@ -167,7 +167,7 @@ export function ToastProvider({ children }) {
             return (
               <div
                 aria-atomic="true"
-                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full max-w-[20rem] overflow-hidden rounded-xl border bg-white sm:max-w-md sm:rounded-2xl ${border}`}
+                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full overflow-hidden rounded-xl border bg-white sm:max-w-md sm:rounded-2xl ${border}`}
                 key={item.id}
                 role={item.type === "error" ? "alert" : "status"}
               >
