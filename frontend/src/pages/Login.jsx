@@ -336,14 +336,15 @@ export default function Login() {
   };
 
   return (
-    <main className="min-h-screen bg-canvas bg-gradient-to-b from-water-50 to-transparent px-5 py-6 font-sans text-slate-900 sm:px-8 sm:py-10">
-      <section className="mx-auto flex w-full max-w-md flex-col items-center">
+    <main className="flex min-h-screen flex-col bg-canvas bg-gradient-to-b from-water-50 to-transparent px-5 py-8 font-sans text-slate-900 sm:px-8 sm:py-12">
+      <div className="m-auto flex w-full max-w-3xl flex-col items-center">
+      <section className="flex w-full max-w-md flex-col items-center">
         <img
           alt="Sucol WaterWise logo"
-          className="mt-4 h-[102px] w-auto sm:h-[118px]"
+          className="h-[102px] w-auto sm:h-[118px]"
           src="/Sucol_logo.png"
         />
-        <h1 className="mt-2 text-center text-xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-[1.75rem]">
+        <h1 className="mt-4 text-center text-xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-2xl">
           {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
         </h1>
         <p className="mt-3 text-center text-sm leading-6 text-slate-500">
@@ -364,9 +365,9 @@ export default function Login() {
                   aria-describedby={identifierError ? "login-identifier-error" : undefined}
                   aria-invalid={Boolean(identifierError)}
                   autoComplete="username"
-                  className="ww-field py-3 pl-12 pr-4 text-base"
-                  disabled={isSubmitting}
-                  id="login-identifier"
+          className="ww-field py-3 pl-12 pr-4 text-sm"
+          disabled={isSubmitting}
+          id="login-identifier"
                   onChange={(event) => {
                     setIdentifier(event.target.value);
                     if (identifierError) setIdentifierError("");
@@ -396,9 +397,9 @@ export default function Login() {
                   aria-describedby={passwordError ? "login-password-error" : undefined}
                   aria-invalid={Boolean(passwordError)}
                   autoComplete="current-password"
-                  className="ww-field py-3 pl-12 pr-12 text-base"
-                  disabled={isSubmitting}
-                  id="login-password"
+          className="ww-field py-3 pl-12 pr-12 text-sm"
+          disabled={isSubmitting}
+          id="login-password"
                   onChange={(event) => {
                     setPassword(event.target.value);
                     if (passwordError) setPasswordError("");
@@ -433,7 +434,7 @@ export default function Login() {
 
             {!adminChallengeToken && (
             <button
-              className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
+              className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
               disabled={isSubmitting || isLockedIdentifier}
               style={{ cursor: isSubmitting ? "default" : undefined }}
               type="submit"
@@ -485,7 +486,7 @@ export default function Login() {
 
             {message && (
               <p
-                className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-center font-medium text-slate-900"
                 role="status"
               >
                 {message}
@@ -501,32 +502,33 @@ export default function Login() {
           <li className="flex items-center gap-1.5"><FiLock aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Encrypted session</li>
           <li className="flex items-center gap-1.5"><FiCheckCircle aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Barangay verified</li>
         </ul>
-        <footer className="mt-6 w-full rounded-2xl border border-slate-200 bg-white/80 px-5 py-2 shadow-sm">
-          <ul className="divide-y divide-slate-100">
-            <li className="flex items-center gap-3 py-2.5">
+      </section>
+        <footer className="mt-8 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 shadow-sm sm:px-6 sm:py-4">
+          <ul className="grid gap-1 sm:grid-cols-3 sm:gap-2">
+            <li className="flex items-center gap-3 rounded-xl px-2 py-2 sm:flex-col sm:gap-1.5 sm:px-1 sm:py-2 sm:text-center">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiMapPin aria-hidden="true" className="h-4 w-4" /></span>
-              <span>
+              <span className="min-w-0 sm:text-center">
                 <span className="block text-sm font-semibold text-slate-900">Sucol Water System office</span>
                 <span className="block text-xs text-slate-500">Barangay Sucol</span>
               </span>
             </li>
-            <li className="flex items-center gap-3 py-2.5">
+            <li className="flex items-center gap-3 rounded-xl px-2 py-2 sm:flex-col sm:gap-1.5 sm:px-1 sm:py-2 sm:text-center">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiClock aria-hidden="true" className="h-4 w-4" /></span>
-              <span>
+              <span className="min-w-0 sm:text-center">
                 <span className="block text-sm font-semibold text-slate-900">Open Mon–Fri</span>
                 <span className="block text-xs text-slate-500">8:00am – 5:00pm</span>
               </span>
             </li>
-            <li className="flex items-center gap-3 py-2.5">
+            <li className="flex items-center gap-3 rounded-xl px-2 py-2 sm:flex-col sm:gap-1.5 sm:px-1 sm:py-2 sm:text-center">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiHelpCircle aria-hidden="true" className="h-4 w-4" /></span>
-              <span>
+              <span className="min-w-0 sm:text-center">
                 <span className="block text-sm font-semibold text-slate-900">Need account help?</span>
-                <span className="block text-xs text-slate-500">Visit the office to verify your identity</span>
+                <span className="block text-xs text-slate-500">Our staff will assist you in person</span>
               </span>
             </li>
           </ul>
         </footer>
-      </section>
+      </div>
     </main>
   );
 }
