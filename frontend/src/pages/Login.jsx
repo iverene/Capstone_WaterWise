@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FiCheckCircle,
+  FiClock,
   FiEye,
   FiEyeOff,
+  FiHelpCircle,
   FiLoader,
   FiLock,
   FiMail,
+  FiMapPin,
   FiShield,
 } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -334,16 +337,13 @@ export default function Login() {
 
   return (
     <main className="min-h-screen bg-canvas bg-gradient-to-b from-water-50 to-transparent px-5 py-6 font-sans text-slate-900 sm:px-8 sm:py-10">
-      <p className="mx-auto w-full max-w-md text-xs font-semibold text-slate-600">
-        Sucol Water System • Barangay Sucol
-      </p>
       <section className="mx-auto flex w-full max-w-md flex-col items-center">
         <img
           alt="Sucol WaterWise logo"
-          className="mt-8 h-[72px] w-auto sm:h-[88px]"
+          className="mt-4 h-[102px] w-auto sm:h-[118px]"
           src="/Sucol_logo.png"
         />
-        <h1 className="mt-6 text-center text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-[1.75rem]">
+        <h1 className="mt-2 text-center text-xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-[1.75rem]">
           {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
         </h1>
         <p className="mt-3 text-center text-sm leading-6 text-slate-500">
@@ -501,9 +501,31 @@ export default function Login() {
           <li className="flex items-center gap-1.5"><FiLock aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Encrypted session</li>
           <li className="flex items-center gap-1.5"><FiCheckCircle aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Barangay verified</li>
         </ul>
-        <p className="mt-4 text-center text-xs text-slate-400">
-          Sucol Water System office • Mon–Fri 8am–5pm • Visit office for account help
-        </p>
+        <footer className="mt-6 w-full rounded-2xl border border-slate-200 bg-white/80 px-5 py-2 shadow-sm">
+          <ul className="divide-y divide-slate-100">
+            <li className="flex items-center gap-3 py-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiMapPin aria-hidden="true" className="h-4 w-4" /></span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Sucol Water System office</span>
+                <span className="block text-xs text-slate-500">Barangay Sucol</span>
+              </span>
+            </li>
+            <li className="flex items-center gap-3 py-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiClock aria-hidden="true" className="h-4 w-4" /></span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Open Mon–Fri</span>
+                <span className="block text-xs text-slate-500">8:00am – 5:00pm</span>
+              </span>
+            </li>
+            <li className="flex items-center gap-3 py-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiHelpCircle aria-hidden="true" className="h-4 w-4" /></span>
+              <span>
+                <span className="block text-sm font-semibold text-slate-900">Need account help?</span>
+                <span className="block text-xs text-slate-500">Visit the office to verify your identity</span>
+              </span>
+            </li>
+          </ul>
+        </footer>
       </section>
     </main>
   );
