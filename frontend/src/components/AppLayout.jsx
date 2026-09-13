@@ -344,11 +344,14 @@ export default function AppLayout({ children }) {
       setIsChangePasswordOpen(true);
     };
     const openEmailChange = () => setIsChangeEmailOpen(true);
+    const requestLogout = () => setIsLogoutConfirmOpen(true);
     window.addEventListener("waterwise:open-change-password", openPasswordChange);
     window.addEventListener("waterwise:open-change-email", openEmailChange);
+    window.addEventListener("waterwise:request-logout", requestLogout);
     return () => {
       window.removeEventListener("waterwise:open-change-password", openPasswordChange);
       window.removeEventListener("waterwise:open-change-email", openEmailChange);
+      window.removeEventListener("waterwise:request-logout", requestLogout);
     };
   }, []);
 
@@ -576,7 +579,6 @@ export default function AppLayout({ children }) {
             </div>
           ) : null
         }
-        onLogout={() => setIsLogoutConfirmOpen(true)}
         onProfile={
           activeRole === "consumer"
             ? () => navigate("/consumer/profile-details")
