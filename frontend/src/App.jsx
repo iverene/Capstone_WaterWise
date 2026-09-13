@@ -18,6 +18,7 @@ import AnnouncementsPage from "./pages/AnnouncementsPage";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import UsageMetrics from "./pages/UsageMetrics";
 import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
@@ -208,6 +209,19 @@ function RoleRouteGuard({ children, requiredRole }) {
   return children;
 }
 
+// Shared account pages (e.g. change password) accept any authenticated role.
+// Role-specific pages keep using RoleRouteGuard with their path allowlists.
+function AnyRoleRouteGuard({ children }) {
+  const location = useLocation();
+  const account = getStoredAccount();
+
+  if (!account) {
+    return <Navigate replace state={{ from: location.pathname }} to="/login" />;
+  }
+
+  return children;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -215,6 +229,14 @@ export function AppRoutes() {
       <Route element={<Login />} path="/login" />
       <Route element={<ForgotPassword />} path="/forgot-password" />
       <Route element={<ResetPassword />} path="/reset-password" />
+      <Route
+        element={
+          <AnyRoleRouteGuard>
+            <AppLayout><ChangePasswordPage /></AppLayout>
+          </AnyRoleRouteGuard>
+        }
+        path="/account/change-password"
+      />
       <Route
         element={
           <RoleRouteGuard requiredRole="meter-reader">

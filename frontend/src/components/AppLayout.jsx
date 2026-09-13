@@ -28,7 +28,6 @@ import {
 } from "../services/consumerPortal.service";
 import NotificationPage from "../pages/NotificationPage";
 import Header from "./Header";
-import ChangePasswordModal from "./ChangePasswordModal";
 import ChangeEmailModal from "./ChangeEmailModal";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import NotificationBadgeTrigger from "./NotificationBadgeTrigger";
@@ -121,8 +120,6 @@ export default function AppLayout({ children }) {
   const [account, setAccount] = useState(getStoredAccount);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-  const [isPasswordEmailOnly, setIsPasswordEmailOnly] = useState(false);
   const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isNotificationLoading, setIsNotificationLoading] = useState(true);
@@ -339,17 +336,11 @@ export default function AppLayout({ children }) {
   }, [isNotificationOpen]);
 
   useEffect(() => {
-    const openPasswordChange = (event) => {
-      setIsPasswordEmailOnly(Boolean(event.detail?.emailOnly));
-      setIsChangePasswordOpen(true);
-    };
     const openEmailChange = () => setIsChangeEmailOpen(true);
     const requestLogout = () => setIsLogoutConfirmOpen(true);
-    window.addEventListener("waterwise:open-change-password", openPasswordChange);
     window.addEventListener("waterwise:open-change-email", openEmailChange);
     window.addEventListener("waterwise:request-logout", requestLogout);
     return () => {
-      window.removeEventListener("waterwise:open-change-password", openPasswordChange);
       window.removeEventListener("waterwise:open-change-email", openEmailChange);
       window.removeEventListener("waterwise:request-logout", requestLogout);
     };
@@ -636,15 +627,6 @@ export default function AppLayout({ children }) {
         onCancel={() => setIsLogoutConfirmOpen(false)}
         onConfirm={handleLogout}
       />
-
-      {isChangePasswordOpen && (
-        <ChangePasswordModal
-          emailOnly={isPasswordEmailOnly}
-          isOpen
-          onClose={() => setIsChangePasswordOpen(false)}
-          onSuccess={(successMessage) => toast.success("Password changed", successMessage)}
-        />
-      )}
 
       {isChangeEmailOpen && (
         <ChangeEmailModal

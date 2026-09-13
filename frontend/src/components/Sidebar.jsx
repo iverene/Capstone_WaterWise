@@ -64,7 +64,15 @@ export default function Sidebar({
   subtitle = "Sucol Water System",
   title = "WaterWise",
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const readSavedCollapsed = () => {
+    try {
+      return window.sessionStorage.getItem("waterwise:sidebar-collapsed");
+    } catch {
+      return null;
+    }
+  };
+
+  const [isCollapsed, setIsCollapsed] = useState(() => readSavedCollapsed() !== "0");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isAccountActionsOpen, setIsAccountActionsOpen] = useState(false);
   const accountRef = useRef(null);
@@ -81,10 +89,23 @@ export default function Sidebar({
   const AccountContainer = "button";
 
   useEffect(() => {
+    // Respect an explicit earlier choice (e.g. collapsed before navigating to
+    // another page). Only auto-expand on a genuinely first mount.
+    if (readSavedCollapsed() !== null) return undefined;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const openTimer = window.setTimeout(() => setIsCollapsed(false), reduceMotion ? 0 : 180);
     return () => window.clearTimeout(openTimer);
   }, []);
+
+  // Only explicit toggles are persisted: the auto-expand timer reflects
+  // first-mount behavior, not a user choice, so it must not overwrite it.
+  const persistCollapsed = (value) => {
+    try {
+      window.sessionStorage.setItem("waterwise:sidebar-collapsed", value ? "1" : "0");
+    } catch {
+      // Storage may be unavailable; the sidebar still works for this view.
+    }
+  };
 
   useEffect(() => {
     if (!isMoreOpen) return undefined;
@@ -246,7 +267,7 @@ export default function Sidebar({
               <button
                 aria-label="Expand sidebar"
                 className="group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-                onClick={() => setIsCollapsed(false)}
+                onClick={() => { persistCollapsed(false); setIsCollapsed(false); }}
                 type="button"
               >
                 <img alt="" className="h-11 w-11 rounded-xl bg-white object-contain group-hover:hidden group-focus-visible:hidden" src="/Sucol_logo.png" />
@@ -265,7 +286,7 @@ export default function Sidebar({
                 <button
                   aria-label="Collapse sidebar"
                   className="ww-popover-enter flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-                  onClick={() => setIsCollapsed(true)}
+                  onClick={() => { persistCollapsed(true); setIsCollapsed(true); }}
                   type="button"
                 >
                   <FiChevronLeft aria-hidden="true" className="h-5 w-5" />

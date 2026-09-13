@@ -1,14 +1,16 @@
 ﻿import { CalendarDays, Check, ChevronRight, Crown, Droplet, KeyRound, Lightbulb, Mail, Settings, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { useNavigate } from "react-router";
 import "./AdminProfileOverview.css";
 
 export default function AdminProfileOverview({ account, onTrustedDevices, onManageAccounts, onSystemSettings, settingsError }) {
+  const navigate = useNavigate();
   const username = account?.username ?? account?.name ?? "Administrator";
   const role = account?.role === "super-admin" ? "Super Administrator" : "Administrator";
   const rawDate = account?.created_at ?? account?.createdAt;
   const joined = rawDate && !Number.isNaN(new Date(rawDate).getTime()) ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium" }).format(new Date(rawDate)) : "Not available";
   const status = account?.status ? String(account.status) : "Not available";
   const active = status.toLowerCase() === "active";
-  const changePassword = () => window.dispatchEvent(new CustomEvent("waterwise:open-change-password", { detail: { emailOnly: true } }));
+  const changePassword = () => navigate("/account/change-password");
   const changeEmail = () => window.dispatchEvent(new Event("waterwise:open-change-email"));
   const actions = [
     { Icon: KeyRound, title: "Change password", description: "Update your password with email OTP verification.", onClick: changePassword },
