@@ -76,8 +76,10 @@ export function ToastProvider({ children }) {
     const type = toastStyles[options.type] ? options.type : "info";
     const id = createToastId();
     const duration = options.duration ?? (type === "error" ? 5000 : 4000);
+    const dedupeKey = options.key ?? `${type}|${options.title || toastStyles[type].label}|${options.message ?? ""}`;
     const toast = {
       actions: Array.isArray(options.actions) ? options.actions : [],
+      dedupeKey,
       dismissOnInteract: options.dismissOnInteract === true,
       duration,
       id,
@@ -87,7 +89,27 @@ export function ToastProvider({ children }) {
       type,
     };
 
-    setToasts((current) => [...current.slice(-3), toast]);
+    // Spam guard: an identical toast already on screen collapses into this
+    // fresh one (timer restarts), and timers of toasts evicted by the cap are
+    // cleared so rapid firing can't stack duplicates or leak timers.
+    const retiredIds = [];
+    setToasts((current) => {
+      const kept = current.filter((item) => {
+        if (item.dedupeKey !== dedupeKey) return true;
+        retiredIds.push(item.id);
+        return false;
+      });
+      const next = [...kept.slice(-3), toast];
+      if (kept.length > 3) {
+        kept.slice(0, kept.length - 3).forEach((item) => retiredIds.push(item.id));
+      }
+      return next;
+    });
+    retiredIds.forEach((retiredId) => {
+      window.clearTimeout(timers.current.get(retiredId));
+      timers.current.delete(retiredId);
+      exiting.current.delete(retiredId);
+    });
     if (duration > 0) {
       timers.current.set(id, window.setTimeout(() => dismiss(id), duration));
     }
@@ -138,14 +160,14 @@ export function ToastProvider({ children }) {
       {typeof document !== "undefined" && createPortal(
         <div
           aria-label="System notifications"
-          className="pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[100] flex max-h-[calc(100dvh-7rem)] flex-col items-center gap-2 overflow-y-auto overscroll-contain sm:inset-x-auto sm:right-6 sm:top-[4.5rem] sm:w-[25rem] sm:items-stretch sm:gap-3 lg:right-20 lg:top-6"
+          className="pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[100] flex max-h-[calc(100dvh-7rem)] flex-col items-center gap-2 overflow-y-auto overscroll-contain sm:inset-x-auto sm:right-6 sm:top-[4.5rem] sm:w-[25rem] sm:items-stretch sm:gap-3 lg:right-6 lg:top-6"
         >
           {toasts.map((item) => {
             const { badge, border, icon, Icon, label } = toastStyles[item.type];
             return (
               <div
                 aria-atomic="true"
-                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full max-w-[20rem] overflow-hidden rounded-xl border bg-white shadow-raised sm:max-w-md sm:rounded-2xl ${border}`}
+                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full max-w-[20rem] overflow-hidden rounded-xl border bg-white sm:max-w-md sm:rounded-2xl ${border}`}
                 key={item.id}
                 role={item.type === "error" ? "alert" : "status"}
               >
