@@ -17,7 +17,11 @@ export async function getSystemSettingByKey(req, res) {
     return res.status(200).json({ success: true, data: setting });
   } catch (error) {
     console.error("Failed to fetch system setting:", error);
-    return res.status(404).json({ success: false, message: "Setting not found." });
+    const notFound = error.statusCode === 404;
+    return res.status(notFound ? 404 : 500).json({
+      success: false,
+      message: notFound ? "Setting not found." : "Unable to load the setting.",
+    });
   }
 }
 
@@ -44,6 +48,9 @@ export async function updateSystemSettingByKey(req, res) {
     return res.status(200).json({ success: true, data: updated, message: `"${key}" updated successfully.` });
   } catch (error) {
     console.error("Failed to update system setting:", error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ success: false, message: "Setting not found." });
+    }
     return res.status(500).json({ success: false, message: "Unable to update the setting." });
   }
 }

@@ -128,8 +128,26 @@ function clearTrustedDeviceCookie(res, role, req) {
   res.clearCookie(getTrustedDeviceCookieName(), { ...flipped, path: "/api/auth" });
 }
 
-function setSessionCookie(res, token, req) {
-  res.cookie(getSessionCookieName(), token, sessionCookieOptions(req));
+function getSessionCookieMaxAgeMs(role) {
+  // Only meter-reader gets a persistent cookie so the installed PWA survives
+  // tab close/clear. Bounded by the role's JWT lifetime (8h default).
+  // Meter readers are already exempt from the 15m inactivity expiry.
+  if (role !== "meter-reader") return undefined;
+  const duration = getAccessTokenDuration(role);
+  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
+    // jsonwebtoken numeric expiresIn = seconds.
+    return duration * 1000;
+  }
+  const match = String(duration ?? "").trim().match(/^(\d+)\s*(ms|s|m|h|d|w|y)?$/i);
+  if (!match) return 8 * 60 * 60 * 1000;
+  const value = Number(match[1]);
+  const unit = (match[2] ?? "s").toLowerCase();
+  const multipliers = { ms: 1, s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000, w: 7 * 24 * 60 * 60 * 1000, y: 365 * 24 * 60 * 60 * 1000 };
+  return value * (multipliers[unit] ?? 1000);
+}
+
+function setSessionCookie(res, token, req, role) {
+  res.cookie(getSessionCookieName(), token, sessionCookieOptions(req, getSessionCookieMaxAgeMs(role)));
 }
 
 function clearSessionCookie(res, req) {
@@ -421,7 +439,7 @@ export async function login(req, res) {
         const passwordHash = await getPasswordHash(user.id, user.role);
         await touchSessionActivity(user.role, user.id);
         const sessionToken = createAccessToken(user, passwordHash);
-        setSessionCookie(res, sessionToken, req);
+        setSessionCookie(res, sessionToken, req, user.role);
         return res.status(200).json({
           success: true,
           user,
@@ -462,7 +480,7 @@ export async function login(req, res) {
     const loginPasswordHash = await getPasswordHash(user.id, user.role);
     await touchSessionActivity(user.role, user.id);
     const loginSessionToken = createAccessToken(user, loginPasswordHash);
-    setSessionCookie(res, loginSessionToken, req);
+    setSessionCookie(res, loginSessionToken, req, user.role);
     return res.status(200).json({ success: true, user });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -649,7 +667,7 @@ export async function verifyAdminLoginOtp(req, res) {
     if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
     await touchSessionActivity(user.role, user.id);
     const otpSessionToken = createAccessToken(user, account.password);
-    setSessionCookie(res, otpSessionToken, req);
+    setSessionCookie(res, otpSessionToken, req, user.role);
     return res.status(200).json({
       success: true,
       user,
