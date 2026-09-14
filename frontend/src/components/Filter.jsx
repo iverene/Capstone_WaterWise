@@ -25,6 +25,7 @@ export default function Filter({
   ariaLabel = "Filter results",
   buttonLabel = "Filters",
   className = "",
+  compact = false,
   dataTestId,
   description = "Choose the options that should be shown in this view.",
   disabled = false,
@@ -87,6 +88,7 @@ export default function Filter({
         <Dropdown
           ariaLabel={field.ariaLabel ?? ariaLabel}
           className="min-w-0 flex-1"
+          compact={compact || field.compact}
           dataTestId={field.dataTestId ?? dataTestId}
           disabled={disabled || field.disabled}
           icon={SlidersHorizontal}
@@ -94,7 +96,7 @@ export default function Filter({
           name={field.name}
           onValueChange={field.onValueChange}
           options={field.options ?? []}
-          triggerClassName={`border-slate-200 bg-slate-100 text-slate-700 focus-visible:bg-white ${focusClasses}`}
+          triggerClassName={`border-slate-200 bg-white text-navy-900 shadow-sm ${focusClasses}`}
           value={field.value ?? ""}
         />
       </div>
@@ -113,6 +115,7 @@ export default function Filter({
               <Dropdown
                 ariaLabel={field.ariaLabel ?? field.label ?? ariaLabel}
                 className={field.className ?? "w-48"}
+                compact={compact || field.compact}
                 dataTestId={field.dataTestId}
                 disabled={disabled || field.disabled}
                 id={fieldId}
@@ -120,7 +123,7 @@ export default function Filter({
                 name={field.name}
                 onValueChange={field.onValueChange}
                 options={field.options ?? []}
-                triggerClassName={`border-slate-200 bg-slate-100 text-slate-700 focus-visible:bg-white ${focusClasses}`}
+                triggerClassName={`border-slate-200 bg-white text-navy-900 shadow-sm ${focusClasses}`}
                 value={field.value ?? ""}
               />
             );
@@ -172,6 +175,7 @@ export default function Filter({
                   </label>
                   <Dropdown
                     ariaLabel={field.ariaLabel ?? field.label ?? ariaLabel}
+                    compact={compact || field.compact}
                     disabled={disabled || field.disabled}
                     id={fieldId}
                     name={field.name}
@@ -180,7 +184,7 @@ export default function Filter({
                       [key]: nextValue,
                     }))}
                     options={field.options ?? []}
-                    triggerClassName={`border-slate-200 bg-slate-100 text-slate-700 focus-visible:bg-white ${focusClasses}`}
+                    triggerClassName={`border-slate-200 bg-white text-navy-900 shadow-sm ${focusClasses}`}
                     value={draftValues[key] ?? ""}
                   />
                 </div>

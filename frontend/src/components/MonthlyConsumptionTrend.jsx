@@ -104,8 +104,7 @@ function MonthlyConsumptionTrend() {
               };
             })
             .filter(
-              (item) =>
-                Number.isFinite(item.consumption) && item.consumption > 0,
+              (item) => Number.isFinite(item.consumption),
             )
             .sort((a, b) => a.monthIndex - b.monthIndex)
         : [];

@@ -64,7 +64,7 @@ export default function AnalyticsDashboard() {
 
       <div
         aria-label="Analytics workspaces"
-        className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200 sm:gap-2"
+        className="mb-5 -mt-3 flex gap-1 overflow-x-auto border-b border-slate-200 sm:gap-2"
         onKeyDown={handleTabKeyDown}
         role="tablist"
       >

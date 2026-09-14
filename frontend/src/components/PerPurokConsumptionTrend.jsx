@@ -20,6 +20,7 @@ import {
   fetchAllPuroksYearlyHistory,
   fetchAllPuroksYearlyPrediction,
 } from "../services/consumptionAPI";
+import { manilaCalendar, monthBuckets, parseYearMonth, yearBuckets } from "../utils/chartPeriod";
 import ChartTooltip from "./ChartTooltip";
 import LoadingSkeleton from "./LoadingSkeleton";
 
@@ -188,7 +189,42 @@ function PerPurokConsumptionTrend() {
           };
         });
 
-        const latestThree = normalizedHistory.slice(-3);
+        // Zero-filled trailing windows: elapsed months/years with no readings
+        // plot at zero instead of vanishing and faking each purok's trend.
+        const anchorYear = Number(purokHistory?.latestYear) || manilaCalendar().year;
+        let windowHistory;
+        if (period === "Monthly") {
+          const buckets = monthBuckets({ count: 6 });
+          const totals = new Map(buckets.map((bucket) => [bucket.key, 0]));
+          for (const record of normalizedHistory) {
+            const position = parseYearMonth(record?.month ?? record?.label, anchorYear);
+            if (!position || position.monthIndex < 0) continue;
+            const key = `${position.year ?? anchorYear}-${String(position.monthIndex + 1).padStart(2, "0")}`;
+            if (totals.has(key)) totals.set(key, totals.get(key) + Number(record.consumption ?? 0));
+          }
+          windowHistory = buckets.map((bucket) => ({
+            consumption: totals.get(bucket.key),
+            label: bucket.label,
+            month: bucket.label,
+            predicted: null,
+            year: bucket.year,
+          }));
+        } else {
+          const buckets = yearBuckets(6);
+          const totals = new Map(buckets.map((bucket) => [bucket.key, 0]));
+          for (const record of normalizedHistory) {
+            const recordYear = Number(record?.year);
+            if (!Number.isInteger(recordYear)) continue;
+            const key = String(recordYear);
+            if (totals.has(key)) totals.set(key, totals.get(key) + Number(record.consumption ?? 0));
+          }
+          windowHistory = buckets.map((bucket) => ({
+            consumption: totals.get(bucket.key),
+            label: bucket.label,
+            predicted: null,
+            year: bucket.year,
+          }));
+        }
 
         const predictionValue = Number(
           purokPrediction?.prediction ??
@@ -199,17 +235,17 @@ function PerPurokConsumptionTrend() {
             0,
         );
 
-        const connectedHistory = latestThree.map((record, index) => ({
+        const connectedHistory = windowHistory.map((record, index) => ({
           ...record,
 
           predicted:
-            index === latestThree.length - 1 ? record.consumption : null,
+            index === windowHistory.length - 1 ? record.consumption : null,
         }));
 
         let predictionLabel = "Next";
 
         if (period === "Monthly") {
-          const lastLabel = latestThree[latestThree.length - 1]?.label;
+          const lastLabel = windowHistory[windowHistory.length - 1]?.label;
 
           const { monthIndex } = normalizeMonth(lastLabel);
 
@@ -217,7 +253,7 @@ function PerPurokConsumptionTrend() {
             predictionLabel = MONTH_LABELS[(monthIndex + 1) % 12];
           }
         } else {
-          const lastYear = Number(latestThree[latestThree.length - 1]?.year);
+          const lastYear = Number(windowHistory[windowHistory.length - 1]?.year);
 
           if (Number.isFinite(lastYear)) {
             predictionLabel = String(lastYear + 1);
@@ -240,7 +276,7 @@ function PerPurokConsumptionTrend() {
 
         combinedData[purokName] = {
           chartData:
-            latestThree.length > 0 || predictionValue > 0 ? chartData : [],
+            windowHistory.some((record) => record.consumption > 0) || predictionValue > 0 ? chartData : [],
 
           predictedConsumption: predictionValue,
         };
