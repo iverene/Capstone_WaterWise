@@ -20,11 +20,11 @@ const TABS = [
   },
   {
     id: "prediction",
-    label: "Prediction",
+    label: "Predictive",
   },
   {
     id: "decision-support",
-    label: "Decision Support",
+    label: "Prescriptive",
   },
 ];
 
