@@ -15,7 +15,7 @@ export default function CurrentBalanceCard({ amountDue = 0 }) {
       descriptionIcon={hasBalance ? Clock3 : CheckCircle2}
       descriptionTone={hasBalance ? "warning" : "positive"}
       icon={WalletCards}
-      title="Amount due"
+      title="Amount Due"
       value={value}
       valueTestId="balance-amount"
     />

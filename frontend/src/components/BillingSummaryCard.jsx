@@ -33,7 +33,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         descriptionHighlight={`${totalBills} billing ${totalBills === 1 ? "record" : "records"}`}
         descriptionIcon={ReceiptText}
         icon={Banknote}
-        title="Total billed"
+        title="Total Billed"
         value={currency(totalBilling)}
         valueTestId="total-billing-value"
       />
@@ -45,7 +45,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         descriptionIcon={openBills ? Clock3 : CheckCircle2}
         descriptionTone={openBills ? "warning" : "positive"}
         icon={WalletCards}
-        title="Outstanding balance"
+        title="Outstanding Balance"
         value={currency(outstanding)}
         valueTestId="outstanding-billing-value"
       />
@@ -57,7 +57,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         descriptionIcon={CheckCircle2}
         descriptionTone="positive"
         icon={CheckCircle2}
-        title="Paid bills"
+        title="Paid Bills"
         value={paidBills}
         valueTestId="paid-bills-value"
       />
@@ -69,7 +69,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         descriptionIcon={openBills ? Clock3 : CheckCircle2}
         descriptionTone={openBills ? "warning" : "positive"}
         icon={openBills ? Clock3 : CheckCircle2}
-        title="Open bills"
+        title="Open Bills"
         value={openBills}
         valueTestId="open-bills-value"
       />

@@ -210,7 +210,7 @@ export default function BillingLedger({
                 value: statusFilter,
               },
             ]}
-            title="Bill filters"
+            title="Bill Filters"
           />
         </div>
 

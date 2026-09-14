@@ -48,7 +48,7 @@ export default function AdminYearlyConsumptionCard() {
       description={predictionPeriod ? `Forecast for ${predictionPeriod}` : "Expected demand for the next year"}
       error={error}
       icon={CalendarDays}
-      label="Next-year forecast"
+      label="Next-Year Forecast"
       loading={loading}
       onRefresh={loadPrediction}
       testId="yearly-consumption-card"

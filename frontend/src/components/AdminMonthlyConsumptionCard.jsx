@@ -48,7 +48,7 @@ export default function AdminMonthlyConsumptionCard() {
       description={predictionPeriod ? `Forecast for ${predictionPeriod}` : "Expected demand for the next month"}
       error={error}
       icon={Droplets}
-      label="Next-month forecast"
+      label="Next-Month Forecast"
       loading={loading}
       onRefresh={loadPrediction}
       testId="monthly-consumption-card"

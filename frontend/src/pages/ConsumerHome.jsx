@@ -137,7 +137,7 @@ export default function ConsumerHome() {
           descriptionIcon={hasBalance ? ReceiptText : CheckCircle2}
           descriptionTone={hasBalance ? "warning" : "positive"}
           icon={WalletCards}
-          title="Outstanding balance"
+          title="Outstanding Balance"
           value={currency(home.billing.outstandingBalance)}
         />
         <KPI
@@ -146,7 +146,7 @@ export default function ConsumerHome() {
           descriptionIcon={home.billing.nextDueDate ? CalendarClock : CheckCircle2}
           descriptionTone={home.billing.nextDueDate ? "warning" : "positive"}
           icon={CalendarClock}
-          title="Next due date"
+          title="Next Due Date"
           value={compactDate(home.billing.nextDueDate)}
         />
         <KPI
@@ -155,7 +155,7 @@ export default function ConsumerHome() {
           descriptionIcon={usageDifference == null ? Droplets : undefined}
           icon={Droplets}
           showTrendBadge={false}
-          title="Latest consumption"
+          title="Latest Consumption"
           trend={usageDifference == null
             ? undefined
             : usageDifference === 0
@@ -172,7 +172,7 @@ export default function ConsumerHome() {
           descriptionIcon={home.reading.latestDate ? CalendarClock : Gauge}
           descriptionTone={home.reading.latestDate ? "water" : "neutral"}
           icon={Gauge}
-          title="Current meter reading"
+          title="Current Meter Reading"
           unit="m³"
           value={home.reading.currentReading.toFixed(1)}
         />

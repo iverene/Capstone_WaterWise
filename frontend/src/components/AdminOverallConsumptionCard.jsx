@@ -94,7 +94,7 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
       }
       error={error}
       icon={Database}
-      label="Historical baseline"
+      label="Historical Baseline"
       loading={loading}
       onRefresh={loadOverallConsumption}
       testId="overall-consumption-card"

@@ -9,7 +9,7 @@ export default function MonthlyConsumptionWidget({ month = "N/A", usage = 0 }) {
       descriptionHighlightTestId="consumption-month"
       descriptionIcon={CalendarDays}
       icon={Droplets}
-      title="Water used this month"
+      title="Water Used This Month"
       unit="m³"
       value={usage}
       valueTestId="consumption-usage"

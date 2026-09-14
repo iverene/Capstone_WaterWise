@@ -93,8 +93,8 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
   if (loading) {
     return (
       <div className={className}>
-        <HistoryKpiSkeleton compact={compact} Icon={Droplets} label="Monthly consumption" />
-        <HistoryKpiSkeleton compact={compact} Icon={CalendarDays} label="Yearly consumption" />
+        <HistoryKpiSkeleton compact={compact} Icon={Droplets} label="Monthly Consumption" />
+        <HistoryKpiSkeleton compact={compact} Icon={CalendarDays} label="Yearly Consumption" />
       </div>
     );
   }
@@ -106,8 +106,8 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
 
   return (
     <div className={className}>
-      <HistoryKpi compact={compact} Icon={Droplets} label="Monthly consumption" periodKey="month" records={monthly} />
-      <HistoryKpi compact={compact} Icon={CalendarDays} label="Yearly consumption" periodKey="year" records={yearlyRecords.length > 0 ? yearlyRecords : yearly} />
+      <HistoryKpi compact={compact} Icon={Droplets} label="Monthly Consumption" periodKey="month" records={monthly} />
+      <HistoryKpi compact={compact} Icon={CalendarDays} label="Yearly Consumption" periodKey="year" records={yearlyRecords.length > 0 ? yearlyRecords : yearly} />
     </div>
   );
 }

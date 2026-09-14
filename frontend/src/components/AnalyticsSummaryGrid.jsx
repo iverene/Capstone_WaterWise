@@ -30,7 +30,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         descriptionHighlight={latestRecord?.month ?? "No recorded month"}
         descriptionIcon={CalendarDays}
         icon={Droplets}
-        title="Latest water use"
+        title="Latest Water Use"
         unit="m³"
         value={number(latestRecord?.volume)}
         valueTestId="stat-latest"
@@ -39,7 +39,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         description="used to calculate the average"
         descriptionHighlight={`${consumptionHistory.length} recorded month${consumptionHistory.length === 1 ? "" : "s"}`}
         icon={Gauge}
-        title="Monthly average"
+        title="Monthly Average"
         unit="m³"
         value={number(averageUsage)}
         valueTestId="stat-avg"
@@ -48,7 +48,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         description="included in this period"
         descriptionHighlight={`${consumptionHistory.length} recorded month${consumptionHistory.length === 1 ? "" : "s"}`}
         icon={Sigma}
-        title="Total for period"
+        title="Total for Period"
         unit="m³"
         value={number(totalConsumption)}
         valueTestId="stat-total"
