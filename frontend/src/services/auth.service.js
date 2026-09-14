@@ -5,6 +5,7 @@ import {
   getPersistentMeterReaderUser,
   getStoredAccount,
   refreshMeterReaderPersistence,
+  storeSession,
 } from "./authToken";
 import { disableCurrentPushNotifications } from "./pushNotifications";
 
@@ -255,15 +256,25 @@ export async function resetPassword(token, password) {
 export async function getCurrentAccount(options) {
   const result = await apiRequest("/auth/me", options);
   const storedAccount = getStoredAccount() ?? {};
-  const incoming = result.user ?? {};
+  const incoming = result.user;
+  if (!incoming?.id || !incoming?.role) {
+    throw new Error("The session response did not contain a valid account.");
+  }
   // Defensive merge: never blank a stored name/username/email with
   // undefined/null from a sparse response. Backend now enriches /auth/me,
   // but this guards old sessions and partial payloads.
-  const user = { ...storedAccount };
+  const sameAccount = storedAccount.id === incoming.id && storedAccount.role === incoming.role;
+  const user = sameAccount ? { ...storedAccount } : {};
   for (const [key, value] of Object.entries(incoming)) {
     if (value !== undefined && value !== null && value !== "") user[key] = value;
   }
-  window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  if (sameAccount) {
+    window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  } else {
+    // Restart account-scoped listeners after cookie-only recovery and clear
+    // stale account caches if another tab has changed the signed-in account.
+    storeSession({ user });
+  }
   // Keep the meter-reader offline identity fresh on every successful online
   // verify (rolling 7-day grace). No token/password is persisted.
   refreshMeterReaderPersistence(user);
@@ -297,12 +308,11 @@ export function noteSessionStored(user) {
 
 export async function hasVerifiedSession() {
   const stored = getStoredAccount();
-  if (!stored?.id || !stored?.role) return false;
   const now = Date.now();
   if (
     verifiedSessionCache.ok &&
-    verifiedSessionCache.userId === stored.id &&
-    verifiedSessionCache.role === stored.role &&
+    verifiedSessionCache.userId === stored?.id &&
+    verifiedSessionCache.role === stored?.role &&
     now - verifiedSessionCache.at < VERIFY_CACHE_TTL_MS
   ) {
     return true;
@@ -311,7 +321,7 @@ export async function hasVerifiedSession() {
   // within offline grace. Online sync still requires the HttpOnly cookie;
   // a real 401 later forces login. This restores the deployed behavior where
   // clearing the tab + tapping the PWA does not ask for login before recording.
-  if (stored.role === "meter-reader") {
+  if (stored?.role === "meter-reader") {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       if (getPersistentMeterReaderUser()?.id === stored.id) return true;
     }
@@ -332,8 +342,13 @@ export async function hasVerifiedSession() {
     } catch (error) {
       // Offline (no response) with a valid persistent meter-reader identity:
       // stay in the workspace and queue readings; sync when back online.
-      if (!error?.response && stored.role === "meter-reader") {
+      const status = error?.response?.status;
+      if ((!error?.response || status >= 500) && stored?.role === "meter-reader") {
         if (getPersistentMeterReaderUser()?.id === stored.id) return true;
+      }
+      if (status === 401) {
+        clearVerifiedSessionCache();
+        clearSession();
       }
       return false;
     } finally {

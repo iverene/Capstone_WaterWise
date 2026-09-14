@@ -56,7 +56,8 @@ export function getPersistentMeterReaderUser() {
       window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
       return null;
     }
-    if (session?.offlineGraceUntil && Date.now() > Number(session.offlineGraceUntil)) {
+    const graceUntil = Number(session?.offlineGraceUntil);
+    if (!Number.isFinite(graceUntil) || Date.now() >= graceUntil) {
       window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
       return null;
     }
@@ -222,9 +223,10 @@ export function getStoredAccount() {
   }
   try {
     const live = window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY);
-    if (live) return JSON.parse(live) ?? null;
+    const account = live ? JSON.parse(live) : null;
+    if (account?.id && account?.role) return account;
   } catch {
-    return null;
+    // A damaged tab cache must not block restoration from localStorage.
   }
   // Tab was closed / PWA relaunched: restore meter-reader tab session from
   // the persistent minimal identity (if within 7-day offline grace) so guards

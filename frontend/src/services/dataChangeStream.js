@@ -61,7 +61,8 @@ export function subscribeToDataChanges(onChange) {
         credentials: "include",
         signal: controller.signal,
       });
-      if (response.status === 401 || response.status === 403) {
+      if (controller.signal.aborted) return;
+      if (response.status === 401) {
         handleStreamUnauthorized();
         return;
       }

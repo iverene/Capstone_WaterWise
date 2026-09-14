@@ -54,7 +54,7 @@ apiClient.defaults.adapter = async (config) => {
   }
 
   const requestKey = getRequestKey(config);
-  if (requestKey.split("?")[0] === "/auth/admin/trusted-devices") {
+  if (["/auth/me", "/auth/admin/trusted-devices"].includes(requestKey.split("?")[0])) {
     return networkAdapter(config);
   }
   const account = getStoredAccount();

@@ -52,7 +52,8 @@ export default function Login() {
     // expired/invalid HttpOnly cookies and bounced /login -> workspace ->
     // 401 -> /login. Only redirect when /auth/me actually succeeds.
     let cancelled = false;
-    if (!getStoredAccount()) return undefined;
+    // A persistent HttpOnly cookie may outlive the tab's stored identity.
+    // Ask the server even when storage is empty (including older PWA builds).
     hasVerifiedSession().then((ok) => {
       if (!ok || cancelled) return;
       const account = getStoredAccount();
