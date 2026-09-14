@@ -3,13 +3,13 @@ import { Building2, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
-import { useToast } from "../components/Toast";
+import AccountBackButton from "../components/AccountBackButton";
 import {
   completeConsumerEmailChange,
   requestConsumerEmailChangeOtp,
   verifyConsumerEmailChangeOtp,
 } from "../services/auth.service";
-import { getStoredAccount } from "../services/authToken";
+import { getStoredAccount, clearSession } from "../services/authToken";
 
 const formatCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 const EMAIL_OTP_SESSION_KEY = "waterwise:email-change-otp-challenge";
@@ -43,7 +43,6 @@ const profileHomeByRole = {
 
 export default function ChangeEmailPage() {
   const navigate = useNavigate();
-  const toast = useToast();
   const accountRole = getStoredAccount()?.role ?? "consumer";
   const backPath = profileHomeByRole[accountRole] ?? "/login";
 
@@ -101,18 +100,29 @@ export default function ChangeEmailPage() {
     try {
       const result = await completeConsumerEmailChange(emailChangeToken, normalizedEmail);
       window.sessionStorage.removeItem(EMAIL_OTP_SESSION_KEY);
-      // AppLayout syncs its header account state off this event (same as the
-      // old modal's onSuccess), then the page navigates back to the profile.
-      window.dispatchEvent(new CustomEvent("waterwise:email-changed", { detail: { email: result.email } }));
-      toast.success("Email changed", result.message);
-      navigate(backPath);
+      // Backend clears the HttpOnly session cookie on email change, so
+      // staying on a protected page would bounce as generic "Session expired".
+      // Clear local session, flag the reason, and go straight to login where
+      // an email-specific success notice is shown instead.
+      clearSession();
+      try {
+        window.sessionStorage.setItem("waterwise:email-changed", "1");
+        window.sessionStorage.removeItem("waterwise:session-expired");
+        window.sessionStorage.removeItem("waterwise:session-inactive");
+      } catch {
+        // Storage failures must not block the login redirect.
+      }
+      navigate("/login", { replace: true, state: { emailChanged: true, message: result.message, email: result.email } });
     } catch (requestError) { setError(requestError.message); }
     finally { setIsSubmitting(false); }
   };
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <PageHeader eyebrow="Account Security" title="Change Email" />
+      <div>
+        <AccountBackButton fallbackPath={backPath} />
+        <PageHeader eyebrow="Account Security" title="Change Email" />
+      </div>
 
       <div className="mx-auto w-full max-w-md">
         {!challengeToken && (

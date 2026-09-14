@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useToast } from "./Toast";
-import { clearSession, getAccessToken, getStoredAccount } from "../services/authToken";
+import { clearSession, getStoredAccount } from "../services/authToken";
 import {
   clearLocalActivity,
   getIdleMs,
@@ -28,7 +28,7 @@ export default function SessionInactivityGuard() {
 
   useEffect(() => {
     toastRef.current = toast;
-    if (!getAccessToken()) return undefined;
+    if (!getStoredAccount()) return undefined;
     if (PUBLIC_ROUTES.includes(location.pathname)) return undefined;
     // Meter readers work long stretches in the field without touching the
     // screen (walking between houses, reading meters). Inactivity logout
@@ -109,7 +109,7 @@ export default function SessionInactivityGuard() {
     };
 
     const handleVisibility = () => {
-      if (document.visibilityState === "visible" && getAccessToken()) {
+      if (document.visibilityState === "visible" && getStoredAccount()) {
         schedule();
       }
     };

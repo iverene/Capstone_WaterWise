@@ -166,15 +166,24 @@ export async function getNotifications({ consumerId } = {}) {
     (readRecords ?? []).map((record) => [record.notification_id, record]),
   );
 
-  return notifications.map((notification) => {
-    const readRecord = readsByNotificationId.get(notification.id);
-    return {
-      ...notification,
-      is_read: Boolean(readRecord),
-      read_at: readRecord?.read_at ?? null,
-      dismissed_at: readRecord?.dismissed_at ?? null,
-    };
-  });
+  // Per-user dismissals live in `notification_reads.dismissed_at` so one
+  // resident hiding a broadcast never removes it for everyone else. Admin
+  // callers (no consumerId) still receive the full set including dismissed.
+  return notifications
+    .filter(
+      (notification) =>
+        !normalizedConsumerId ||
+        readsByNotificationId.get(notification.id)?.dismissed_at == null,
+    )
+    .map((notification) => {
+      const readRecord = readsByNotificationId.get(notification.id);
+      return {
+        ...notification,
+        is_read: Boolean(readRecord),
+        read_at: readRecord?.read_at ?? null,
+        dismissed_at: readRecord?.dismissed_at ?? null,
+      };
+    });
 }
 
 export async function getNotificationById(id) {
@@ -347,13 +356,22 @@ export async function deleteNotificationReads(notificationIds, consumerIdValue) 
     return { deletedCount: 0 };
   }
 
-  const { error } = await supabase
-    .from("notifications")
-    .delete()
-    .in("id", ownedIds);
+  // Per-user dismiss: never delete from `notifications` here. Broadcast rows
+  // (consumer_id NULL) are shared by every resident, so removing the row
+  // would wipe it for everyone. Persist the dismissal in `notification_reads`
+  // instead; `getNotifications` filters dismissed rows per consumer.
+  const now = new Date().toISOString();
+  const { error } = await supabase.from("notification_reads").upsert(
+    ownedIds.map((notificationId) => ({
+      notification_id: notificationId,
+      consumer_id: consumerId,
+      dismissed_at: now,
+    })),
+    { onConflict: "notification_id,consumer_id" },
+  );
 
   if (error) {
-    throw createError(`Failed to delete notifications: ${error.message}`, 500);
+    throw createError(`Failed to dismiss notifications: ${error.message}`, 500);
   }
 
   return { deletedCount: ownedIds.length };

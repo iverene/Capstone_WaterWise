@@ -84,7 +84,7 @@ const ROLE_CONFIG = {
   consumer: {
     label: "Resident",
     profile: "Community resident",
-    userName: "Iverene Grace M. Causapin",
+    userName: "Resident",
     basePath: "/consumer",
     homePath: "/consumer/home",
     links: [
@@ -123,11 +123,11 @@ export default function AppLayout({ children }) {
   const [isNotificationLoading, setIsNotificationLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
-  const [accountName, setAccountName] = useState("");
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const pushToastIdRef = useRef(null);
   const isEnablingPushRef = useRef(false);
+  const handleEnablePushFnRef = useRef(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
@@ -135,6 +135,7 @@ export default function AppLayout({ children }) {
   const dismissedIdsRef = useRef(new Set());
   const activeRole = account?.role ?? pathRole ?? "consumer";
   const activeRoleConfig = ROLE_CONFIG[activeRole] ?? ROLE_CONFIG.consumer;
+  const accountName = account?.name || account?.username || account?.email || activeRoleConfig.userName;
 
   const unreadCount = notifications.filter((item) => !item.isRead).length;
 
@@ -171,11 +172,11 @@ export default function AppLayout({ children }) {
 
     getCurrentAccount({ signal: controller.signal })
       .then(({ user }) => {
+        if (controller.signal.aborted) return;
         setAccount(user);
-        setAccountName(user?.name ?? user?.email ?? "");
       })
       .catch((error) => {
-        setAccountName("");
+        if (controller.signal.aborted || isCanceledRequest(error)) return;
         if (error.response?.status === 401) navigate("/login");
       });
 
@@ -240,16 +241,31 @@ export default function AppLayout({ children }) {
   const handleEnablePush = useCallback(async () => {
     if (isEnablingPushRef.current) return;
     isEnablingPushRef.current = true;
+    const setPushLoading = (loading) => {
+      if (!pushToastIdRef.current) return;
+      toast.update(pushToastIdRef.current, {
+        actions: [
+          { label: "Enable notifications", onClick: () => handleEnablePushFnRef.current?.(), variant: "primary", loading, disabled: loading },
+          { label: "Not now", onClick: () => dismissPushPrompt(), variant: "ghost", disabled: loading },
+        ],
+      });
+    };
+    setPushLoading(true);
     try {
       await enablePushNotifications();
       dismissPushPrompt();
       toast.success("Notifications enabled", "This device will receive WaterWise alerts even when the app is closed.");
     } catch (error) {
       isEnablingPushRef.current = false;
+      setPushLoading(false);
       if (Notification.permission === "denied") dismissPushPrompt();
       toast.error("Notifications not enabled", error.message);
     }
   }, [dismissPushPrompt, toast]);
+
+  useEffect(() => {
+    handleEnablePushFnRef.current = handleEnablePush;
+  }, [handleEnablePush]);
 
   const showPushToast = useCallback(() => {
     if (pushToastIdRef.current) return;

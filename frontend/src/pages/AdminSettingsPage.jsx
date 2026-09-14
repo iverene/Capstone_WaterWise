@@ -199,12 +199,12 @@ export default function AdminSettingsPage() {
 
   return (
     <main className="space-y-4 sm:space-y-6">
-      <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile")} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
+      <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile", { replace: true })} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
       <PageHeader
         description="Manage system-wide configuration. Only the Super Admin can modify these settings."
         eyebrow="Administration"
         mobileCompact
-        onBack={() => navigate("/admin/profile")}
+        onBack={() => navigate("/admin/profile", { replace: true })}
         title="System Settings"
       />
 
@@ -215,7 +215,7 @@ export default function AdminSettingsPage() {
             {needsReverify ? (
               <button
                 className="min-h-10 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700"
-                onClick={() => navigate("/admin/profile")}
+                onClick={() => navigate("/admin/profile", { replace: true })}
                 type="button"
               >
                 Return to profile to verify

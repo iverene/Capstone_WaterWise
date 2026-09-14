@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   CircleAlert,
   Info,
+  LoaderCircle,
 } from "lucide-react";
 import {
   createContext,
@@ -186,13 +187,16 @@ export function ToastProvider({ children }) {
                         {item.actions.map((action) => (
                           <button
                             className={action.variant === "primary"
-                              ? "ww-primary-button flex min-h-9 w-full items-center justify-center px-3 text-xs disabled:opacity-60 sm:min-h-11 sm:px-4 sm:text-sm"
-                              : "flex min-h-9 w-full items-center justify-center rounded-xl px-3 text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-navy-900 disabled:opacity-60 sm:min-h-11 sm:px-4 sm:text-sm"}
-                            disabled={action.disabled}
+                              ? "ww-primary-button flex min-h-9 w-full items-center justify-center gap-2 px-3 text-xs disabled:opacity-60 sm:min-h-11 sm:px-4 sm:text-sm"
+                              : "flex min-h-9 w-full items-center justify-center gap-2 rounded-xl px-3 text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-navy-900 disabled:opacity-60 sm:min-h-11 sm:px-4 sm:text-sm"}
+                            disabled={action.disabled || action.loading}
                             key={action.label}
                             onClick={action.onClick}
                             type="button"
                           >
+                            {action.loading && (
+                              <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin sm:h-5 sm:w-5" />
+                            )}
                             {action.label}
                           </button>
                         ))}

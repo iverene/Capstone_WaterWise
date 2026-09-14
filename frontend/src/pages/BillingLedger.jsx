@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import BillingHistoryTable from "../components/BillingHistoryTable";
 import ConsumptionReceiptModal from "../components/ConsumptionReceiptModal";
@@ -57,22 +57,39 @@ export default function BillingLedger({
   const [searchParams, setSearchParams] = useSearchParams();
   const usesApi = historyDataProp === undefined;
   const [ledger, setLedger] = useState(null);
+  const [isLoading, setIsLoading] = useState(usesApi);
   const [error, setError] = useState("");
+  const [requestVersion, setRequestVersion] = useState(0);
   const [periodFilter, setPeriodFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const retry = useCallback(() => {
+    setError("");
+    setLedger(null);
+    setIsLoading(true);
+    setRequestVersion((version) => version + 1);
+  }, []);
 
   useEffect(() => {
     if (!usesApi) return undefined;
 
     const controller = new AbortController();
     fetchBillingLedger({ signal: controller.signal })
-      .then(setLedger)
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setLedger(data);
+          setIsLoading(false);
+        }
+      })
       .catch((requestError) => {
-        if (!isCanceledRequest(requestError)) setError(requestError.message);
+        if (!isCanceledRequest(requestError) && !controller.signal.aborted) {
+          setError(requestError.message);
+          setIsLoading(false);
+        }
       });
 
     return () => controller.abort();
-  }, [usesApi]);
+  }, [usesApi, requestVersion]);
 
   const historyData = usesApi ? ledger?.historyData ?? [] : historyDataProp;
   const ledgerAccount = usesApi ? ledger?.ledgerAccount : ledgerAccountProp;
@@ -141,7 +158,25 @@ export default function BillingLedger({
     return (
       <div className="space-y-5">
         {pageHeader}
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800" role="alert">{error}</div>
+        <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
+          <span>{error}</span>
+          {usesApi && (
+            <button className="min-h-11 rounded-xl bg-red-700 px-4 font-bold text-white hover:bg-red-800" onClick={retry} type="button">
+              Try again
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Loading vs empty are distinct: a loaded ledger with no account row is an
+  // empty state, not an infinite skeleton.
+  if (usesApi ? isLoading : !ledgerAccount) {
+    return (
+      <div className="space-y-5">
+        {pageHeader}
+        <LoadingSkeleton label="Loading billing ledger" variant="billing" />
       </div>
     );
   }
@@ -150,7 +185,10 @@ export default function BillingLedger({
     return (
       <div className="space-y-5">
         {pageHeader}
-        <LoadingSkeleton label="Loading billing ledger" variant="billing" />
+        <div className="rounded-xl border border-slate-200 bg-white p-6 text-center" role="status">
+          <p className="text-sm font-bold text-navy-900">No billing records found</p>
+          <p className="mt-1 text-sm text-slate-500">Your billing history will appear here once available.</p>
+        </div>
       </div>
     );
   }

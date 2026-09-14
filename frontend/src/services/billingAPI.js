@@ -72,6 +72,8 @@ export async function fetchBillingHistory(options = {}) {
   return Array.isArray(records) ? records.map(normalizeBillingRecord) : [];
 }
 
+// Admin-only: GET /billing/:id rejects consumers (403). Consumer portals
+// must use fetchConsumerBillings() (GET /billing/consumer/:consumerId, owner-checked).
 export async function fetchBillingById(id, options = {}) {
   const response = await billingClient.get(`/${id}`, options);
   return response.data?.data ? normalizeBillingRecord(response.data.data) : null;

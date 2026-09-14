@@ -72,7 +72,7 @@ export default function Sidebar({
     }
   };
 
-  const [isCollapsed, setIsCollapsed] = useState(() => readSavedCollapsed() !== "0");
+  const [isCollapsed, setIsCollapsed] = useState(() => readSavedCollapsed() === "1");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isAccountActionsOpen, setIsAccountActionsOpen] = useState(false);
   const accountRef = useRef(null);
@@ -88,17 +88,12 @@ export default function Sidebar({
   const additionalMobileItems = items.length > 4 ? items.slice(3) : [];
   const AccountContainer = "button";
 
-  useEffect(() => {
-    // Respect an explicit earlier choice (e.g. collapsed before navigating to
-    // another page). Only auto-expand on a genuinely first mount.
-    if (readSavedCollapsed() !== null) return undefined;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const openTimer = window.setTimeout(() => setIsCollapsed(false), reduceMotion ? 0 : 180);
-    return () => window.clearTimeout(openTimer);
-  }, []);
-
-  // Only explicit toggles are persisted: the auto-expand timer reflects
-  // first-mount behavior, not a user choice, so it must not overwrite it.
+  // Collapsed state persists across remounts via sessionStorage (explicit
+  // toggles only). No auto-expand timer: the sidebar renders in its final
+  // state on mount so navigating between pages never replays a close→open
+  // animation.
+  // Only explicit toggles are persisted, so a remount restores the user's
+  // last choice (or expanded by default) without overwriting it.
   const persistCollapsed = (value) => {
     try {
       window.sessionStorage.setItem("waterwise:sidebar-collapsed", value ? "1" : "0");

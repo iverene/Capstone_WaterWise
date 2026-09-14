@@ -1,4 +1,4 @@
-import { getStoredAccount } from "./authToken";
+import { getPersistentMeterReaderUser, getStoredAccount } from "./authToken";
 import { createMeterReading } from "./meterReadingAPI";
 
 const DATABASE_NAME = "waterwise-meter-reader";
@@ -7,7 +7,10 @@ const CONTEXT_STORE = "contexts";
 const OUTBOX_STORE = "reading-outbox";
 
 const accountScope = () => {
-  const account = getStoredAccount();
+  // getStoredAccount() already restores the persistent meter-reader identity
+  // into the tab, but fall back explicitly so cached contexts/outbox stay
+  // visible even on the very first read after a PWA relaunch.
+  const account = getStoredAccount() ?? getPersistentMeterReaderUser();
   return String(account?.id ?? account?.username ?? "anonymous");
 };
 
