@@ -26,6 +26,7 @@ export default function AnalyticsMetricCard({
   loading,
   onRefresh,
   showRefreshButton = true,
+  skeleton = true,
   testId,
   unit = "m³",
   value,
@@ -47,6 +48,21 @@ export default function AnalyticsMetricCard({
         title={label}
         unit={unit}
         value={value}
+      />
+    );
+  }
+
+  if (loading && !skeleton) {
+    return (
+      <KPI
+        cardTestId={testId}
+        className={heightClass}
+        compact={compact}
+        description={`Loading ${label.toLowerCase()}`}
+        icon={Icon}
+        title={label}
+        unit={unit}
+        value="—"
       />
     );
   }
