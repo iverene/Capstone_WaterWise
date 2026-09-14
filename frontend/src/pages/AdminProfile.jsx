@@ -52,6 +52,15 @@ function getStoredStaffPermission() {
   return null;
 }
 
+function getStoredSettingsPermission() {
+  try {
+    const permission = JSON.parse(window.sessionStorage.getItem(SETTINGS_PERMISSION_KEY) ?? "null");
+    if (permission?.token && Number(permission.expiresAt) > Date.now() && isOwnedByCurrentAccount(permission)) return permission;
+    window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY);
+  } catch { window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY); }
+  return null;
+}
+
 function getStoredStaffOtpChallenge() {
   try {
     const challenge = JSON.parse(window.sessionStorage.getItem(STAFF_OTP_CHALLENGE_KEY) ?? "null");
@@ -268,6 +277,24 @@ export default function AdminProfile() {
   };
 
   const beginStaffOtpAuthorization = async (pendingAction) => {
+    // Reuse: if a valid 15m page-view permission already exists, skip OTP and
+    // navigate straight back in. Per-write actions still need their own
+    // password/OTP each time.
+    if (pendingAction.action === "manage-staff") {
+      const existingPermission = getStoredStaffPermission();
+      if (existingPermission?.token) {
+        setStaffManagementPermission(existingPermission);
+        navigate("/admin/staff-management");
+        return;
+      }
+    }
+    if (pendingAction.action === "manage-system-settings") {
+      const existingPermission = getStoredSettingsPermission();
+      if (existingPermission?.token) {
+        navigate("/admin/settings");
+        return;
+      }
+    }
     if (pendingAction.action === "manage-staff") {
       const existingChallenge = getStoredStaffOtpChallenge();
       if (existingChallenge) {
@@ -492,9 +519,9 @@ export default function AdminProfile() {
         </div>
       </section>}
       </> : <>
-      <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2  text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile")} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
+      <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2  text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile", { replace: true })} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
       <PageHeader compact description="Create and manage regular administrator and meter-reader accounts during this verified session." eyebrow="Restricted management" title="Super Admin Staff Management" />
-      {!staffManagementPermission?.token && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Your staff-management permission has expired.</p><button className="mt-3 text-sm font-bold text-water-700" onClick={() => navigate("/admin/profile")} type="button">Return and verify again</button></section>}
+      {!staffManagementPermission?.token && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Your staff-management permission has expired.</p><button className="mt-3 text-sm font-bold text-water-700" onClick={() => navigate("/admin/profile", { replace: true })} type="button">Return and verify again</button></section>}
       </>}
       {account?.role === "super-admin" && isStaffManagementPage && staffManagementPermission?.token && <section className="min-w-0" aria-labelledby="super-admin-tools-heading">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-tools-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts. These controls are hidden from regular administrators.</p>

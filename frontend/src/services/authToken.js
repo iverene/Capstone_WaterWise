@@ -5,14 +5,70 @@ export const TOKEN_STORAGE_KEY = "accessToken";
 const PERSISTENT_METER_READER_KEY = "waterwiseMeterReaderSession";
 const PERSISTENT_CONSUMER_KEY = "waterwiseConsumerPushSession";
 const CONSUMER_PUSH_SESSION_ENABLED_KEY = "waterwiseConsumerPushSessionEnabled";
+// Offline grace for meter-reader PWA: how long a closed tab / offline relaunch
+// may reopen the readings workspace without re-login. No password or token is
+// stored here — only a minimal identity {id, role, username} used to scope
+// IndexedDB caches and allow offline UI. Server sync still needs the HttpOnly
+// cookie session; when online and expired the backend 401 forces re-login.
+const METER_READER_OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
-function getPersistentMeterReaderSession() {
+function sanitizeMeterReaderUser(user) {
+  if (!user || user.role !== "meter-reader" || user.id == null) return null;
+  const safe = { id: user.id, role: "meter-reader" };
+  if (user.username) safe.username = user.username;
+  if (user.email) safe.email = user.email;
+  if (user.name) safe.name = user.name;
+  return safe;
+}
+
+function writePersistentMeterReader(user) {
   try {
-    const session = JSON.parse(window.localStorage.getItem(PERSISTENT_METER_READER_KEY));
-    return session?.user?.role === "meter-reader" && session.token ? session : null;
+    const safe = sanitizeMeterReaderUser(user);
+    if (!safe) {
+      window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+      return;
+    }
+    const now = Date.now();
+    window.localStorage.setItem(
+      PERSISTENT_METER_READER_KEY,
+      JSON.stringify({
+        user: safe,
+        loginAt: now,
+        offlineGraceUntil: now + METER_READER_OFFLINE_GRACE_MS,
+      }),
+    );
+  } catch {
+    // Persistence is best-effort; sessionStorage session still works for the tab.
+  }
+}
+
+export function refreshMeterReaderPersistence(user) {
+  if (user?.role === "meter-reader") writePersistentMeterReader(user);
+}
+
+export function getPersistentMeterReaderUser() {
+  try {
+    const raw = window.localStorage.getItem(PERSISTENT_METER_READER_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    const safe = sanitizeMeterReaderUser(session?.user);
+    if (!safe) {
+      window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+      return null;
+    }
+    if (session?.offlineGraceUntil && Date.now() > Number(session.offlineGraceUntil)) {
+      window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+      return null;
+    }
+    return safe;
   } catch {
     return null;
   }
+}
+
+function getPersistentMeterReaderSession() {
+  const user = getPersistentMeterReaderUser();
+  return user ? { user } : null;
 }
 
 function getPersistentConsumerSession() {
@@ -61,8 +117,23 @@ export function storeSession({ user }) {
   } catch {
     // Activity tracking is best-effort; backend idle enforcement still applies.
   }
-  window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
-  window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
+  // Meter-reader PWA: persist minimal identity (no token/password) so closing
+  // the tab / reopening the installed PWA offline restores the workspace.
+  // Other roles stay session-only.
+  if (user?.role === "meter-reader") {
+    writePersistentMeterReader(user);
+  } else {
+    try {
+      window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+    } catch {
+      // Ignore.
+    }
+  }
+  try {
+    window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
+  } catch {
+    // Ignore.
+  }
   window.dispatchEvent(new Event("waterwise-session-changed"));
 }
 
@@ -140,20 +211,34 @@ export function clearStoredOtpState() {
 
 export function getStoredAccount() {
   // One-time scrub: remove legacy readable tokens from pre-cookie sessions.
+  // NOTE: do NOT scrub the meter-reader persistent identity here — it must
+  // survive tab close / PWA relaunch for offline recording.
   try {
     if (window.sessionStorage.getItem(TOKEN_STORAGE_KEY)) {
       window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     }
-    window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
-    window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
   } catch {
     // Ignore storage failures.
   }
   try {
-    return JSON.parse(window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY)) ?? getPersistentSession()?.user ?? null;
+    const live = window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY);
+    if (live) return JSON.parse(live) ?? null;
   } catch {
     return null;
   }
+  // Tab was closed / PWA relaunched: restore meter-reader tab session from
+  // the persistent minimal identity (if within 7-day offline grace) so guards
+  // and IndexedDB scopes see the same account id.
+  const persistent = getPersistentMeterReaderSession();
+  if (persistent?.user) {
+    try {
+      window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(persistent.user));
+    } catch {
+      // Best-effort restore; callers still get the user below.
+    }
+    return persistent.user;
+  }
+  return getPersistentSession()?.user ?? null;
 }
 
 export function hasAuthenticatedSession() {
