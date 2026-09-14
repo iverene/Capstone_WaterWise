@@ -1,4 +1,4 @@
-import { clearSession, getStoredAccount } from "./authToken";
+import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 import { API_BASE_URL } from "./apiClient";
 
@@ -21,6 +21,7 @@ function parseEventBlock(block) {
 }
 
 function handleStreamUnauthorized() {
+  if (isLoggingOut() || !getStoredAccount()) return;
   // Mirror apiClient 401 handling so an expired/revoked/mismatched SSE
   // session ends the session instead of retrying every 3s forever.
   try {
@@ -41,7 +42,7 @@ export function subscribeToDataChanges(onChange) {
 
   const connect = async () => {
     const account = getStoredAccount();
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted || isLoggingOut()) return;
     if (!account) {
       // No session (logged out / login page): don't spam retries. A new
       // subscription is created on `waterwise-session-changed` after login.
@@ -61,7 +62,7 @@ export function subscribeToDataChanges(onChange) {
         credentials: "include",
         signal: controller.signal,
       });
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || isLoggingOut()) return;
       if (response.status === 401) {
         handleStreamUnauthorized();
         return;
