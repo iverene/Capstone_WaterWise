@@ -3,7 +3,7 @@ import { CalendarDays } from "lucide-react";
 import { fetchOverallYearlyPrediction } from "../services/consumptionAPI";
 import AnalyticsMetricCard from "./AnalyticsMetricCard";
 
-export default function AdminYearlyConsumptionCard() {
+export default function AdminYearlyConsumptionCard({ compact = false }) {
   const [prediction, setPrediction] = useState(null);
   const [predictionPeriod, setPredictionPeriod] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,6 +45,7 @@ export default function AdminYearlyConsumptionCard() {
 
   return (
     <AnalyticsMetricCard
+      compact={compact}
       description={predictionPeriod ? `Forecast for ${predictionPeriod}` : "Expected demand for the next year"}
       error={error}
       icon={CalendarDays}

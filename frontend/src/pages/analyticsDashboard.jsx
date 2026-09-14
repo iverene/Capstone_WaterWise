@@ -127,10 +127,10 @@ export default function AnalyticsDashboard() {
               </h2>
               <p className="mt-1 text-sm text-slate-500">Expected water demand across the system and each purok.</p>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <AdminOverallConsumptionCard />
-              <AdminMonthlyConsumptionCard />
-              <AdminYearlyConsumptionCard />
+            <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <AdminOverallConsumptionCard compact />
+              <AdminMonthlyConsumptionCard compact />
+              <AdminYearlyConsumptionCard compact />
             </div>
             <AdminPerPurokConsumptionCard />
           </section>

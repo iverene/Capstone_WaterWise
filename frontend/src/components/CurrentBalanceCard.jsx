@@ -11,7 +11,7 @@ export default function CurrentBalanceCard({ amountDue = 0 }) {
   return (
     <KPI
       description={hasBalance ? "outstanding household balance" : "your account is current"}
-      descriptionHighlight={hasBalance ? "Payment needed" : "No unpaid bills"}
+      descriptionHighlight={hasBalance ? "Payment Needed" : "No Unpaid Bills"}
       descriptionIcon={hasBalance ? Clock3 : CheckCircle2}
       descriptionTone={hasBalance ? "warning" : "positive"}
       icon={WalletCards}

@@ -3,7 +3,7 @@ import { Droplets } from "lucide-react";
 import { fetchOverallMonthlyPrediction } from "../services/consumptionAPI";
 import AnalyticsMetricCard from "./AnalyticsMetricCard";
 
-export default function AdminMonthlyConsumptionCard() {
+export default function AdminMonthlyConsumptionCard({ compact = false }) {
   const [prediction, setPrediction] = useState(null);
   const [predictionPeriod, setPredictionPeriod] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,6 +45,7 @@ export default function AdminMonthlyConsumptionCard() {
 
   return (
     <AnalyticsMetricCard
+      compact={compact}
       description={predictionPeriod ? `Forecast for ${predictionPeriod}` : "Expected demand for the next month"}
       error={error}
       icon={Droplets}

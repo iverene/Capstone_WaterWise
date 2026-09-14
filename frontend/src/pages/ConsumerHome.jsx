@@ -157,10 +157,10 @@ export default function ConsumerHome() {
 
       <section className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4" aria-label="Account summary">
         <KPI
-          description={hasBalance ? "awaiting payment" : "account is clear"}
+          description={hasBalance ? "Awaiting Payment" : "Account Is Clear"}
           descriptionHighlight={hasBalance
-            ? `${home.billing.pendingCount} bill${home.billing.pendingCount === 1 ? "" : "s"}`
-            : "No unpaid bills"}
+            ? `${home.billing.pendingCount} Bill${home.billing.pendingCount === 1 ? "" : "s"}`
+            : "No Unpaid Bills"}
           descriptionIcon={hasBalance ? ReceiptText : CheckCircle2}
           descriptionTone={hasBalance ? "warning" : "positive"}
           icon={WalletCards}
@@ -168,17 +168,14 @@ export default function ConsumerHome() {
           value={currency(home.billing.outstandingBalance)}
         />
         <KPI
-          description={home.billing.nextDueDate ? "payment deadline" : "account is clear"}
-          descriptionHighlight={home.billing.nextDueDate ? displayDate(home.billing.nextDueDate) : "No due date"}
-          descriptionIcon={home.billing.nextDueDate ? CalendarClock : CheckCircle2}
-          descriptionTone={home.billing.nextDueDate ? "warning" : "positive"}
+          description={home.billing.nextDueDate ? "Payment Deadline" : "Account Is Clear"}
           icon={CalendarClock}
           title="Next Due Date"
           value={compactDate(home.billing.nextDueDate)}
         />
         <KPI
-          description={usageDifference == null ? "no previous month" : usageDifference === 0 ? "from last month" : "than last month"}
-          descriptionHighlight={usageDifference == null ? "First reading" : undefined}
+          description={usageDifference == null ? "No Previous Month" : usageDifference === 0 ? "From Last Month" : "Than Last Month"}
+          descriptionHighlight={usageDifference == null ? "First Reading" : undefined}
           descriptionIcon={usageDifference == null ? Droplets : undefined}
           icon={Droplets}
           showTrendBadge={false}
@@ -194,8 +191,8 @@ export default function ConsumerHome() {
           value={home.reading.latestUsage.toFixed(1)}
         />
         <KPI
-          description={home.reading.latestDate ? "recorded" : undefined}
-          descriptionHighlight={home.reading.latestDate ? displayDate(home.reading.latestDate) : "No reading yet"}
+          description={home.reading.latestDate ? "Recorded" : undefined}
+          descriptionHighlight={home.reading.latestDate ? displayDate(home.reading.latestDate) : "No Reading Yet"}
           descriptionIcon={home.reading.latestDate ? CalendarClock : Gauge}
           descriptionTone={home.reading.latestDate ? "water" : "neutral"}
           icon={Gauge}

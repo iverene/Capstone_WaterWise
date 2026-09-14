@@ -605,7 +605,7 @@ export default function EventManagementPage() {
             </div>
           </aside>
           <div aria-label="Event summary" className="order-1 flex h-full flex-col gap-2 sm:gap-3 lg:order-2 lg:col-span-1">
-            <KPI className="flex-1" compact description="Scheduled in the selected month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
+            <KPI className="flex-1" compact description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
             <KPI
               className="flex-1"
               compact

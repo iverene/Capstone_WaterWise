@@ -52,9 +52,9 @@ export default function ReportDetailsModal({ onClose, reportId }) {
           {report && (
             <div className="space-y-6">
               <div className="grid gap-3 sm:grid-cols-3">
-                <KPI className="shadow-none sm:p-4" description="report coverage" icon={CalendarDays} title="Period" value={`${report.start_date} – ${report.end_date}`} />
-                <KPI className="shadow-none sm:p-4" description="included source records" icon={FileText} title="Records" value={report.record_count.toLocaleString()} />
-                <KPI className="shadow-none sm:p-4" description="report generation status" icon={CheckCircle2} title="Status" value={report.status} />
+                <KPI className="shadow-none sm:p-4" description="Coverage" icon={CalendarDays} title="Period" value={`${report.start_date} – ${report.end_date}`} />
+                <KPI className="shadow-none sm:p-4" description="Source Records" icon={FileText} title="Records" value={report.record_count.toLocaleString()} />
+                <KPI className="shadow-none sm:p-4" description="Report Status" icon={CheckCircle2} title="Status" value={report.status} />
               </div>
 
               <section>
