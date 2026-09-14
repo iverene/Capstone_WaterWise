@@ -1,4 +1,6 @@
 export const ACCOUNT_STORAGE_KEY = "user";
+// Legacy key kept only to scrub pre-cookie sessions. No new tokens are stored;
+// auth is HttpOnly cookie-only (waterwise_session set by backend).
 export const TOKEN_STORAGE_KEY = "accessToken";
 const PERSISTENT_METER_READER_KEY = "waterwiseMeterReaderSession";
 const PERSISTENT_CONSUMER_KEY = "waterwiseConsumerPushSession";
@@ -27,23 +29,17 @@ function getPersistentSession() {
 }
 
 export function getAccessToken() {
-  return window.sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? getPersistentSession()?.token ?? null;
+  // Cookie-only: never expose a readable token. Return null so callers rely
+  // on HttpOnly cookie. Legacy stored tokens are ignored (scrubbed on write).
+  return null;
 }
 
-export function getAccessTokenExpiresAt(token = getAccessToken()) {
-  try {
-    if (!token) return null;
-    const encodedPayload = token.split(".")[1];
-    const normalizedPayload = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
-    const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, "=");
-    const payload = JSON.parse(window.atob(paddedPayload));
-    return Number.isFinite(payload.exp) ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
+export function getAccessTokenExpiresAt() {
+  // No readable JWT in cookie-only mode — backend 401 handles expiry.
+  return null;
 }
 
-export function storeSession({ token, user }) {
+export function storeSession({ user }) {
   const previousUser = getStoredAccount();
   if (previousUser && (previousUser.id !== user?.id || previousUser.role !== user?.role)) {
     clearStoredApiCache();
@@ -51,7 +47,13 @@ export function storeSession({ token, user }) {
     // OTP challenges or staff permissions (same-tab login switching).
     clearStoredOtpState();
   }
-  window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+  // Cookie-only: backend Set-Cookie carries the session. Scrub any legacy
+  // readable token so Session Storage never holds accessToken again.
+  try {
+    window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore.
+  }
   window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
   try {
     window.sessionStorage.setItem("waterwise:last-activity-at", String(Date.now()));
@@ -59,26 +61,20 @@ export function storeSession({ token, user }) {
   } catch {
     // Activity tracking is best-effort; backend idle enforcement still applies.
   }
-  if (user?.role === "meter-reader") {
-    window.localStorage.setItem(PERSISTENT_METER_READER_KEY, JSON.stringify({ token, user }));
-  } else {
-    window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
-  }
-  if (user?.role === "consumer" && window.localStorage.getItem(CONSUMER_PUSH_SESSION_ENABLED_KEY) === "true") {
-    window.localStorage.setItem(PERSISTENT_CONSUMER_KEY, JSON.stringify({ token, user }));
-  } else {
-    window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
-  }
+  window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+  window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
   window.dispatchEvent(new Event("waterwise-session-changed"));
 }
 
 export function enableConsumerPushSessionPersistence() {
-  const token = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
-  const user = JSON.parse(window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY) ?? "null");
-  if (!token || user?.role !== "consumer") return false;
-  window.localStorage.setItem(CONSUMER_PUSH_SESSION_ENABLED_KEY, "true");
-  window.localStorage.setItem(PERSISTENT_CONSUMER_KEY, JSON.stringify({ token, user }));
-  return true;
+  // Session-cookie-only: persistence disabled. Kept as no-op for compat.
+  // Push subscriptions remain stored server-side; session still ends on tab close.
+  try {
+    window.localStorage.setItem(CONSUMER_PUSH_SESSION_ENABLED_KEY, "true");
+  } catch {
+    // Ignore.
+  }
+  return Boolean(getStoredAccount()?.role === "consumer");
 }
 
 export function disableConsumerPushSessionPersistence() {
@@ -143,6 +139,16 @@ export function clearStoredOtpState() {
 }
 
 export function getStoredAccount() {
+  // One-time scrub: remove legacy readable tokens from pre-cookie sessions.
+  try {
+    if (window.sessionStorage.getItem(TOKEN_STORAGE_KEY)) {
+      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+    window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+    window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
   try {
     return JSON.parse(window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY)) ?? getPersistentSession()?.user ?? null;
   } catch {
@@ -151,11 +157,7 @@ export function getStoredAccount() {
 }
 
 export function hasAuthenticatedSession() {
-  const token = getAccessToken();
-  const expiresAt = getAccessTokenExpiresAt(token);
-  if (!token || !expiresAt || expiresAt <= Date.now()) {
-    clearSession();
-    return false;
-  }
+  // Cookie-only: stored account presence = session. Backend 401 handles
+  // expiry/inactivity/password-change/deactivation.
   return Boolean(getStoredAccount());
 }

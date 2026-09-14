@@ -1,5 +1,5 @@
 import { apiRequest } from "./apiClient";
-import { clearSession, getAccessToken } from "./authToken";
+import { clearSession, getStoredAccount } from "./authToken";
 
 export const DEFAULT_INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
 // Backwards-compatible static export; prefer getInactivityTimeoutMs() which
@@ -134,7 +134,7 @@ function getPingThrottleMs() {
 }
 
 async function pingBackendActivity() {
-  if (!getAccessToken()) return;
+  if (!getStoredAccount()) return;
   const now = Date.now();
   if (now - lastPingAt < getPingThrottleMs()) return;
   if (pingInFlight) return;
@@ -154,7 +154,7 @@ async function pingBackendActivity() {
 }
 
 export function touchLocalActivity(timestamp = Date.now()) {
-  if (!getAccessToken()) return timestamp;
+  if (!getStoredAccount()) return timestamp;
   try {
     window.sessionStorage.setItem(LAST_ACTIVITY_KEY, String(timestamp));
   } catch {

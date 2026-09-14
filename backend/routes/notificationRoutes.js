@@ -36,7 +36,7 @@ router.post(
 router.put("/read-all", authorizeRoles("consumer"), markAllNotificationsRead);
 router.post("/delete", authorizeRoles("consumer"), removeNotifications);
 router.put("/:id/read", authorizeRoles("consumer"), markNotificationRead);
-router.get("/:id", authorizeRoles("admin"), showNotification);
+router.get("/:id", authorizeRoles("admin"), showNotification); // Intentionally admin-only: consumers must use the list endpoint (GET /?consumerId=<ownId>) so single-record access always carries an owner check. Do not add "consumer" here without enforcing notification.consumer_id === null || === req.user.id (IDOR).
 router.post("/", authorizeRoles("admin"), addNotification);
 
 export default router;
