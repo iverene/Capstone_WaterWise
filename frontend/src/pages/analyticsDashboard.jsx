@@ -1,15 +1,13 @@
-import { BrainCircuit, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import AnalyticsDescriptivePanel from "../components/AnalyticsDescriptivePanel";
 import AdminOverallConsumptionCard from "../components/AdminOverallConsumptionCard";
 import AdminMonthlyConsumptionCard from "../components/AdminMonthlyConsumptionCard";
 import AdminYearlyConsumptionCard from "../components/AdminYearlyConsumptionCard";
 import AdminPerPurokConsumptionCard from "../components/AdminPerPurokConsumptionCard";
-import ConsumptionRankingSection from "../components/ConsumptionRankingSection";
 import MonthlyConsumptionTrend from "../components/MonthlyConsumptionTrend";
 import YearlyConsumptionTrend from "../components/YearlyConsumptionTrend";
 import PerPurokConsumptionTrend from "../components/PerPurokConsumptionTrend";
-import PurokComparisonChart from "../components/PurokComparisonChart";
 import AnomalyRecommendationSection from "../components/AnomalyRecommendationSection";
 import PageHeader from "../components/PageHeader";
 
@@ -150,38 +148,6 @@ export default function AnalyticsDashboard() {
           role="tabpanel"
           tabIndex={0}
         >
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Action workspace</p>
-              <h2 className="mt-1 text-xl font-extrabold text-navy-900">Priorities and recommendations</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                Review the areas using the most water, compare puroks, investigate anomalies, and decide which operational response should come first.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <div className="flex items-center gap-2 text-sm font-bold text-emerald-800">
-                <BrainCircuit aria-hidden="true" className="h-5 w-5" />
-                Human review required
-              </div>
-              <p className="mt-2 text-xs leading-5 text-emerald-700">
-                Recommendations support official decisions; they do not automatically change service operations.
-              </p>
-            </div>
-          </div>
-
-          <ConsumptionRankingSection />
-
-          <section aria-labelledby="purok-comparison-heading" className="space-y-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Resource prioritization</p>
-              <h2 className="mt-1 text-xl font-extrabold text-navy-900" id="purok-comparison-heading">
-                Purok comparison
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">Compare consumption levels before planning inspections or community interventions.</p>
-            </div>
-            <PurokComparisonChart />
-          </section>
-
           <AnomalyRecommendationSection />
         </section>
       )}
