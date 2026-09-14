@@ -106,8 +106,8 @@ export default function KPI({
   ) : null;
 
   return (
-    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-card ${compact ? "p-3" : "p-3 sm:p-4"} ${className}`.trim()} data-testid={cardTestId}>
-      <div className={`flex min-w-0 flex-wrap items-center ${compact ? "gap-2 sm:gap-2.5" : "gap-2 sm:gap-2.5"}`}>
+    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-card ${compact ? "p-4" : "p-3 sm:p-4"} ${className}`.trim()} data-testid={cardTestId}>
+      <div className={`flex min-w-0 flex-wrap items-center ${compact ? "gap-2.5 sm:gap-3" : "gap-2 sm:gap-2.5"}`}>
         {Icon ? (
           <span className={`flex shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700 ${compact ? "h-8 w-8 sm:h-9 sm:w-9" : "h-8 w-8 sm:h-9 sm:w-9"}`}>
             <Icon aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -130,13 +130,13 @@ export default function KPI({
         ) : null}
       </div>
 
-      <p className={`min-w-0 overflow-hidden font-sans font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums ${compact ? "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-2 sm:text-2xl" : "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl"}`} data-testid={valueTestId}>
+      <p className={`min-w-0 overflow-hidden font-sans font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums ${compact ? "mt-2.5 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl" : "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl"}`} data-testid={valueTestId}>
         {value}
         {unit ? <span className="ml-1 text-[10px] font-bold text-slate-500 sm:text-[13px]">{unit}</span> : null}
       </p>
 
       {(supportingValue || description || (trendBelow && trendBadge)) ? (
-        <div className={`flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] leading-4 sm:text-xs ${compact ? "pt-1.5 sm:pt-2" : "pt-2 sm:pt-2.5"}`}>
+        <div className={`flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] leading-4 sm:text-xs ${compact ? "pt-2 sm:pt-2.5" : "pt-2 sm:pt-2.5"}`}>
           {trendBelow && trendBadge}
           {supportingValue ? (
             <span className={`inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 font-bold ring-1 ring-inset sm:px-2 sm:py-1 ${supportingToneStyles[resolvedTone] ?? supportingToneStyles.water}`}>
