@@ -520,7 +520,7 @@ export function AppRoutes() {
         }
         path="/consumer/:section"
       />
-      <Route element={<Navigate replace to="/login" />} path="*" />
+      <Route element={<NotFoundPage />} path="*" />
     </Routes>
   );
 }
