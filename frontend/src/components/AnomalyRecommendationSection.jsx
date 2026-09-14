@@ -144,7 +144,7 @@ export default function AnomalyRecommendationSection() {
             Recommended Actions
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <div aria-label="Recommendation period" className="inline-flex rounded-xl bg-slate-100 p-1" role="group">
             {["monthly", "yearly"].map((option) => (
               <button

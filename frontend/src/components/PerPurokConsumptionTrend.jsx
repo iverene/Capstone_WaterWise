@@ -331,15 +331,19 @@ gap-3
       >
         <h2
           className="
+min-w-0
+flex-1
 text-[15px]
 font-extrabold
+leading-snug
 tracking-tight
 text-navy-900
+line-clamp-2
 "
         >
           Per Purok Consumption Forecast
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <div
             className="
 inline-flex
