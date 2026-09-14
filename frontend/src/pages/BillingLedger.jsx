@@ -95,7 +95,7 @@ export default function BillingLedger({
     ledgerAccount?.name,
     historyData,
   );
-  const pageHeader = <PageHeader description="Check the amount due, payment status, billing periods, and remaining balances." descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6" eyebrow="Resident portal" title="Bills and payment history" />;
+  const pageHeader = <PageHeader description="Check the amount due, payment status, billing periods, and remaining balances." descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6" eyebrow="Resident portal" title="Bills and Payment History" />;
 
   useEffect(() => {
     if (!ledger || !requestedBillingId || requestedView) return;

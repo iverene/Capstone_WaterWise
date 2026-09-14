@@ -58,7 +58,7 @@ export default function AnalyticsDashboard() {
       <PageHeader
         description="Understand expected demand, identify unusual consumption, and turn system data into practical barangay actions."
         eyebrow="Operational intelligence"
-        title="Water analytics"
+        title="Water Analytics"
       />
 
       <div

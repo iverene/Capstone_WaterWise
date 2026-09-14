@@ -90,7 +90,7 @@ export default function AdminReadingsPage() {
 
   return (
     <main className="min-w-0 space-y-6">
-      <PageHeader description="Review meter movements and recorded water use across every purok." eyebrow="Read-only records" title="Consumer consumption readings" />
+      <PageHeader description="Review meter movements and recorded water use across every purok." eyebrow="Read-only records" title="Consumer Consumption Readings" />
 
       <section aria-label="Reading summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <KPI compact description="Matches the current filters" icon={Users} title="Visible accounts" value={visibleResidents.length} />

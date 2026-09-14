@@ -1,8 +1,11 @@
 /**
- * Compact page-level heading. Keep actions and metrics in sibling sections so
- * the title remains easy to scan on small screens.
+ * Compact page-level heading. Renders eyebrow + title only: descriptions were
+ * dropped globally because daily users don't re-read instructions, and the
+ * paragraph pushed content down on small screens. Page-level `description`
+ * props are ignored (passing extras is harmless) in case copy is ever needed
+ * back on specific pages.
  */
-export default function PageHeader({ eyebrow, title, description, className = "", compact = false, mobileCompact = false, descriptionClassName = "" }) {
+export default function PageHeader({ eyebrow, title, className = "", compact = false, mobileCompact = false }) {
   return (
     <header
       className={`bg-transparent pr-0 lg:pr-16 ${className}`.trim()}
@@ -15,11 +18,6 @@ export default function PageHeader({ eyebrow, title, description, className = ""
       <h1 className={`${eyebrow ? "mt-1.5" : ""} ${mobileCompact ? "text-xl sm:text-3xl" : compact ? "text-lg sm:text-xl" : "text-2xl sm:text-3xl"} font-extrabold tracking-tight text-navy-900`}>
         {title}
       </h1>
-      {description ? (
-        <p className={`mt-1.5 max-w-3xl ${mobileCompact ? "text-[13px] leading-5 sm:text-sm sm:leading-6" : "text-sm leading-6"} ${descriptionClassName} text-slate-600`}>
-          {description}
-        </p>
-      ) : null}
     </header>
   );
 }

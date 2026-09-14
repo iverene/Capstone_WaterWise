@@ -205,7 +205,7 @@ export default function AdminSettingsPage() {
         eyebrow="Administration"
         mobileCompact
         onBack={() => navigate("/admin/profile")}
-        title="System settings"
+        title="System Settings"
       />
 
       {loadError && (

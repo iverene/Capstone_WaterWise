@@ -96,7 +96,7 @@ export default function UsageMetrics({ amountDue: amountDueProp, usageHistory })
       description="Understand your monthly water use and review the meter values behind each result."
       descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
       eyebrow="Resident analytics"
-      title="Water analytics"
+      title="Water Analytics"
     />
   );
 

@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FiChevronLeft,
   FiChevronRight,
-  FiDroplet,
   FiKey,
   FiLogOut,
   FiMail,
@@ -10,7 +9,7 @@ import {
   FiUser,
   FiX,
 } from "react-icons/fi";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 import "./Sidebar.css";
 
 function getItemLabel(item) {
@@ -28,11 +27,6 @@ function NavigationLink({ collapsed = false, item, mobile = false, onNavigate })
     <>
       {Icon && <Icon aria-hidden="true" className={mobile ? "h-5 w-5 shrink-0" : "h-5 w-5 shrink-0"} />}
       <span className={collapsed && !mobile ? "sr-only" : `truncate ${mobile ? "" : "ww-popover-enter"}`}>{label}</span>
-      {collapsed && !mobile && (
-        <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] z-50 hidden whitespace-nowrap rounded-lg bg-navy-950 px-2.5 py-1.5 text-xs font-semibold text-white shadow-raised group-hover:block group-focus-visible:block">
-          {label}
-        </span>
-      )}
     </>
   );
 
@@ -70,22 +64,48 @@ export default function Sidebar({
   subtitle = "Sucol Water System",
   title = "WaterWise",
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const readSavedCollapsed = () => {
+    try {
+      return window.sessionStorage.getItem("waterwise:sidebar-collapsed");
+    } catch {
+      return null;
+    }
+  };
+
+  const [isCollapsed, setIsCollapsed] = useState(() => readSavedCollapsed() !== "0");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isAccountActionsOpen, setIsAccountActionsOpen] = useState(false);
   const accountRef = useRef(null);
   const accountTriggerRef = useRef(null);
   const closeButtonRef = useRef(null);
   const moreTriggerRef = useRef(null);
+  const asideRef = useRef(null);
+  const navRef = useRef(null);
+  const edgeIndicatorRef = useRef(null);
+  const collapseTooltipRef = useRef(null);
+  const location = useLocation();
   const primaryMobileItems = items.length > 4 ? items.slice(0, 3) : items;
   const additionalMobileItems = items.length > 4 ? items.slice(3) : [];
   const AccountContainer = "button";
 
   useEffect(() => {
+    // Respect an explicit earlier choice (e.g. collapsed before navigating to
+    // another page). Only auto-expand on a genuinely first mount.
+    if (readSavedCollapsed() !== null) return undefined;
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const openTimer = window.setTimeout(() => setIsCollapsed(false), reduceMotion ? 0 : 180);
     return () => window.clearTimeout(openTimer);
   }, []);
+
+  // Only explicit toggles are persisted: the auto-expand timer reflects
+  // first-mount behavior, not a user choice, so it must not overwrite it.
+  const persistCollapsed = (value) => {
+    try {
+      window.sessionStorage.setItem("waterwise:sidebar-collapsed", value ? "1" : "0");
+    } catch {
+      // Storage may be unavailable; the sidebar still works for this view.
+    }
+  };
 
   useEffect(() => {
     if (!isMoreOpen) return undefined;
@@ -119,6 +139,82 @@ export default function Sidebar({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [isAccountActionsOpen]);
+
+  // Collapsed-rail edge indicator: a dedicated element positioned against the
+  // aside (which never clips) instead of a ::before on the link (which lives
+  // inside the scrolling nav and either sits inside the rail or forces a
+  // horizontal scrollbar when pushed past its edge).
+  const positionEdgeIndicator = useCallback((link) => {
+    const edge = edgeIndicatorRef.current;
+    const aside = asideRef.current;
+    if (!edge || !aside) return;
+    if (!link) {
+      edge.style.opacity = "0";
+      return;
+    }
+    const asideBox = aside.getBoundingClientRect();
+    const linkBox = link.getBoundingClientRect();
+    edge.style.top = `${linkBox.top - asideBox.top + 8}px`;
+    edge.style.height = `${Math.max(linkBox.height - 16, 4)}px`;
+    edge.style.opacity = "1";
+  }, []);
+
+  const resetEdgeIndicator = useCallback(() => {
+    const nav = navRef.current;
+    positionEdgeIndicator(nav ? nav.querySelector('a[aria-current="page"]') : null);
+    if (collapseTooltipRef.current) collapseTooltipRef.current.style.opacity = "0";
+  }, [positionEdgeIndicator]);
+
+  // Collapsed-rail tooltip: rendered against the aside (outside the scrolling
+  // nav) because the per-link tooltip spans get clipped by the nav's scroll
+  // container and their labels end up swallowed inside the rail.
+  const positionCollapseTooltip = useCallback((link) => {
+    const tip = collapseTooltipRef.current;
+    const aside = asideRef.current;
+    if (!tip || !aside) return;
+    if (!link) {
+      tip.style.opacity = "0";
+      return;
+    }
+    const asideBox = aside.getBoundingClientRect();
+    const linkBox = link.getBoundingClientRect();
+    tip.textContent = link.getAttribute("aria-label") || link.textContent?.trim() || "";
+    tip.style.left = `${asideBox.width + 12}px`;
+    tip.style.top = `${linkBox.top - asideBox.top + (linkBox.height - tip.offsetHeight) / 2}px`;
+    tip.style.opacity = "1";
+  }, []);
+
+  useEffect(() => {
+    if (!isCollapsed) {
+      if (edgeIndicatorRef.current) edgeIndicatorRef.current.style.opacity = "0";
+      if (collapseTooltipRef.current) collapseTooltipRef.current.style.opacity = "0";
+      return;
+    }
+    resetEdgeIndicator();
+  }, [isCollapsed, location.pathname, items, resetEdgeIndicator]);
+
+  const handleNavIndicatorHover = (event) => {
+    const link = event.target?.closest?.("a");
+    if (link && navRef.current?.contains(link)) {
+      positionEdgeIndicator(link);
+      positionCollapseTooltip(link);
+    }
+  };
+
+  // Tab switches (Alt+Tab, clicking another tab) never fire mouseleave, so a
+  // visible tooltip/edge would get stuck. Reset both when the pointer leaves
+  // the document or the window loses focus.
+  useEffect(() => {
+    const handlePointerExit = () => {
+      resetEdgeIndicator();
+    };
+    window.addEventListener("blur", handlePointerExit);
+    document.documentElement.addEventListener("mouseleave", handlePointerExit);
+    return () => {
+      window.removeEventListener("blur", handlePointerExit);
+      document.documentElement.removeEventListener("mouseleave", handlePointerExit);
+    };
+  }, [resetEdgeIndicator]);
 
   return (
     <>
@@ -162,48 +258,46 @@ export default function Sidebar({
         </div>
       )}
 
-      <aside data-collapsed={isCollapsed} className={`waterwise-sidebar fixed inset-x-3 bottom-3 z-40 rounded-full border border-white/50 bg-white/35 pb-[env(safe-area-inset-bottom)] shadow-raised backdrop-blur-xl lg:sticky lg:inset-auto lg:top-4 lg:ml-4 lg:mt-4 lg:h-[calc(100vh-2rem)] lg:shrink-0 lg:self-start lg:overflow-visible lg:rounded-3xl lg:border-slate-200 lg:bg-white lg:pb-0 lg:shadow-card lg:backdrop-blur-none lg:transition-[width] lg:duration-500 lg:ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:lg:duration-0 ${isCollapsed ? "lg:w-20" : "lg:w-64"}`}>
+      <aside ref={asideRef} data-collapsed={isCollapsed} className={`waterwise-sidebar fixed inset-x-3 bottom-3 z-40 rounded-full border border-white/50 bg-white/35 pb-[env(safe-area-inset-bottom)] shadow-raised backdrop-blur-xl lg:sticky lg:inset-auto lg:top-4 lg:ml-4 lg:mt-4 lg:h-[calc(100vh-2rem)] lg:shrink-0 lg:self-start lg:overflow-visible lg:rounded-3xl lg:border-slate-200 lg:bg-white lg:pb-0 lg:shadow-card lg:backdrop-blur-none lg:transition-[width] lg:duration-500 lg:ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:lg:duration-0 ${isCollapsed ? "lg:w-20" : "lg:w-64"}`}>
+        <span ref={edgeIndicatorRef} aria-hidden="true" className={`pointer-events-none absolute left-3 top-0 z-40 hidden h-4 w-[3px] rounded-full bg-[#0085ff] opacity-0 transition-[top,height,opacity] duration-150 motion-reduce:transition-none ${isCollapsed ? "lg:block" : ""}`} />
+        <span ref={collapseTooltipRef} aria-hidden="true" className={`pointer-events-none absolute top-0 z-50 hidden whitespace-nowrap rounded-lg bg-navy-950 px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-raised transition-opacity duration-150 motion-reduce:transition-none ${isCollapsed ? "lg:block" : ""}`} />
         <div className="waterwise-sidebar-inner flex h-full items-center gap-1 p-1.5 lg:flex-col lg:items-stretch lg:gap-0 lg:p-3">
           <div className={`waterwise-sidebar-brand hidden min-h-14 items-center lg:flex ${isCollapsed ? "justify-center" : "gap-3 px-1"}`}>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm">
-              <FiDroplet aria-hidden="true" className="h-5 w-5" />
-            </span>
-            {!isCollapsed && (
-              <div className="ww-popover-enter min-w-0 flex-1">
-                <p className="truncate text-base font-extrabold tracking-tight text-navy-900">{title === "WaterWise" ? <>Water<span className="waterwise-brand-accent">Wise</span></> : title}</p>
-                <p className="truncate text-[11px] font-medium text-slate-500">{subtitle}</p>
-              </div>
-            )}
-            {!isCollapsed && (
+            {isCollapsed ? (
               <button
-                aria-label="Collapse sidebar"
-                className="ww-popover-enter flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-                onClick={() => setIsCollapsed(true)}
+                aria-label="Expand sidebar"
+                className="group relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                onClick={() => { persistCollapsed(false); setIsCollapsed(false); }}
                 type="button"
               >
-                <FiChevronLeft aria-hidden="true" className="h-5 w-5" />
+                <img alt="" className="h-11 w-11 rounded-xl bg-white object-contain group-hover:hidden group-focus-visible:hidden" src="/Sucol_logo.png" />
+                <span className="hidden h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm group-hover:flex group-focus-visible:flex">
+                  <FiChevronRight aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] z-50 hidden whitespace-nowrap rounded-lg bg-navy-950 px-2.5 py-1.5 text-xs font-semibold text-white shadow-raised group-hover:block group-focus-visible:block">Expand sidebar</span>
               </button>
+            ) : (
+              <>
+                <img alt="" className="h-11 w-11 shrink-0 rounded-xl bg-white object-contain" src="/Sucol_logo.png" />
+                <div className="ww-popover-enter min-w-0 flex-1">
+                  <p className="truncate text-base font-extrabold tracking-tight text-navy-900">{title === "WaterWise" ? <>Water<span className="waterwise-brand-accent">Wise</span></> : title}</p>
+                  <p className="truncate text-[11px] font-medium text-slate-500">{subtitle}</p>
+                </div>
+                <button
+                  aria-label="Collapse sidebar"
+                  className="ww-popover-enter flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                  onClick={() => { persistCollapsed(true); setIsCollapsed(true); }}
+                  type="button"
+                >
+                  <FiChevronLeft aria-hidden="true" className="h-5 w-5" />
+                </button>
+              </>
             )}
           </div>
 
-
-
-          {isCollapsed && (
-            <button
-              aria-label="Expand sidebar"
-              className="group relative mt-2 hidden h-11 shrink-0 w-full items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 lg:flex"
-              onClick={() => setIsCollapsed(false)}
-              type="button"
-            >
-              <FiChevronRight aria-hidden="true" className="h-5 w-5" />
-              <span className="pointer-events-none absolute left-[calc(100%+0.75rem)] z-50 hidden whitespace-nowrap rounded-lg bg-navy-950 px-2.5 py-1.5 text-xs font-semibold text-white shadow-raised group-hover:block group-focus-visible:block">Expand sidebar</span>
-            </button>
-          )}
-
           <svg className="waterwise-top-wave" viewBox="0 0 256 80" preserveAspectRatio="none" aria-hidden="true"><path d="M0 18C85-20 136 83 256 18V80H0Z" fill="#e2f1ff"/><path d="M0 34C96-6 141 102 256 29V80H0Z" fill="#cce6ff"/><path d="M0 66C87-1 164 98 256 50V80H0Z" fill="#f3f9ff"/></svg>
 
-          <nav className="mt-5 hidden min-h-0 flex-1 overflow-y-auto overflow-x-visible lg:block" aria-label={`${activeRoleLabel ?? "WaterWise"} navigation`}>
-            {!isCollapsed && <p className="ww-popover-enter mb-2 px-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-slate-400">Workspace</p>}
+          <nav ref={navRef} onMouseOver={handleNavIndicatorHover} onFocus={handleNavIndicatorHover} onMouseLeave={resetEdgeIndicator} className="mt-5 hidden min-h-0 flex-1 overflow-y-auto overflow-x-visible lg:block" aria-label={`${activeRoleLabel ?? "WaterWise"} navigation`}>
             <ul className="grid min-w-0 gap-1">
               {items.map((item) => (
                 <li key={getItemLabel(item)}><NavigationLink collapsed={isCollapsed} item={item} /></li>
@@ -238,7 +332,7 @@ export default function Sidebar({
               type="button"
             >
               <FiUser aria-hidden="true" className="h-5 w-5 shrink-0" />
-              {!isCollapsed && <span>View profile</span>}
+              {!isCollapsed && <span>Profile</span>}
             </button>}
             {onChangePassword && <button
               aria-label={isCollapsed ? "Change password" : undefined}

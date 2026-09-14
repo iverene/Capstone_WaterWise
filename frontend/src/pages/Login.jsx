@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  FiDroplet,
+  FiCheckCircle,
+  FiClock,
   FiEye,
   FiEyeOff,
+  FiHelpCircle,
   FiLoader,
   FiLock,
   FiMail,
+  FiMapPin,
+  FiShield,
 } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router";
 import { fetchTrustedDevices, login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import OtpInput from "../components/OtpInput";
-import PWAInstallButton from "../components/PWAInstallButton";
 import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
 
 const accountDestinations = {
@@ -333,192 +336,199 @@ export default function Login() {
   };
 
   return (
-    <main className="ww-app h-screen overflow-hidden px-5 py-5 font-sans text-slate-900 sm:px-8 sm:py-8 lg:px-12 lg:py-10">
-      <section className="mx-auto flex h-full w-full max-w-6xl items-center justify-center">
-        <div className="ww-glass-strong grid w-full overflow-hidden rounded-2xl lg:grid-cols-[0.94fr_1.06fr]">
-          <aside className="ww-page-header relative flex flex-col rounded-none border-0 p-6 text-white shadow-none sm:p-10 lg:p-14">
-            <div>
+    <main className="flex min-h-screen flex-col bg-canvas bg-gradient-to-b from-water-50 to-transparent px-5 py-8 font-sans text-slate-900 sm:px-8 sm:py-12">
+      <div className="m-auto flex w-full max-w-3xl flex-col items-center">
+      <section className="flex w-full max-w-md flex-col items-center">
+        <img
+          alt="Sucol WaterWise logo"
+          className="h-[102px] w-auto sm:h-[118px]"
+          src="/Sucol_logo.png"
+        />
+        <h1 className="mt-4 text-center text-xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-2xl">
+          {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
+        </h1>
+        <p className="mt-3 text-center text-sm leading-6 text-slate-500">
+          {adminChallengeToken ? <>Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</> : "Use the credentials assigned to your WaterWise account."}
+        </p>
+        <div className="ww-glass-strong mt-8 w-full rounded-2xl bg-white p-6 sm:p-8">
+          <form aria-busy={isSubmitting} className="space-y-5" onSubmit={handleSubmit}>
+            {!adminChallengeToken && <div>
+              <label
+                className="text-sm font-semibold text-slate-900"
+                htmlFor="login-identifier"
+              >
+                Email or username
+              </label>
+              <div className="relative mt-2">
+                <FiMail aria-hidden="true" className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${identifierError ? "text-red-500" : "text-slate-400"}`} />
+                <input
+                  aria-describedby={identifierError ? "login-identifier-error" : undefined}
+                  aria-invalid={Boolean(identifierError)}
+                  autoComplete="username"
+          className="ww-field py-3 pl-12 pr-4 text-sm"
+          disabled={isSubmitting}
+          id="login-identifier"
+                  onChange={(event) => {
+                    setIdentifier(event.target.value);
+                    if (identifierError) setIdentifierError("");
+                    if (message) setMessage("");
+                  }}
+                  placeholder="name@sucolwater.gov"
+                  ref={identifierRef}
+                  type="text"
+                  value={identifier}
+                />
+              </div>
+              {identifierError && (
+                <p className="mt-2 text-[13px] font-semibold text-red-700" id="login-identifier-error">
+                  {identifierError}
+                </p>
+              )}
+            </div>}
+
+            {!adminChallengeToken && <div>
               <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm"><FiDroplet aria-hidden="true" className="h-5 w-5" /></span>
-                  <div>
-                    <p className="text-sm font-extrabold tracking-[-0.02em] text-white">WaterWise</p>
-                    <p className="text-xs font-medium text-water-200">Sucol Water System</p>
-                  </div>
-                </div>
-                <PWAInstallButton variant="panel" />
+                <label className="text-sm font-semibold text-slate-900" htmlFor="login-password">Password</label>
+                <Link className="text-sm font-bold text-water-700 hover:text-water-900" to="/forgot-password">Forgot password?</Link>
               </div>
-              <h1 className="mt-6 max-w-md text-2xl font-extrabold leading-[1.08] tracking-[-0.04em] sm:text-5xl lg:mt-8">
-                Every drop, clearly understood.
-              </h1>
-              <p className="mt-4 max-w-md text-xs leading-5 text-water-100 sm:text-base sm:leading-6 lg:mt-5">One secure place for water readings, bills, payments, and barangay updates.</p>
-            </div>
-
-          </aside>
-
-          <div className="bg-white p-6 sm:p-10 lg:flex lg:items-center lg:p-14 overflow-auto">
-            <div className="mx-auto max-w-xl">
-              <div className="mb-8 lg:mb-10">
-                <p className="ww-eyebrow text-[10px] sm:text-xs !text-water-700">
-                  Secure sign in
-                </p>
-                <h2 className="mt-2 text-2xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-4xl lg:mt-3">
-                  {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}
-                </h2>
-                <p className="mt-3 text-xs sm:text-sm leading-5 sm:leading-6 text-slate-500 lg:mt-4">
-                  {adminChallengeToken ? <>Enter the code sent to <strong>{maskedEmail}</strong>. It expires in 5 minutes.</> : "Use the credentials assigned to your WaterWise account."}
-                </p>
-              </div>
-
-              <form aria-busy={isSubmitting} className="space-y-5 lg:space-y-6" onSubmit={handleSubmit}>
-                {!adminChallengeToken && <div>
-                  <label
-                    className="text-sm sm:text-sm font-semibold text-slate-900"
-                    htmlFor="login-identifier"
-                  >
-                    Email or username
-                  </label>
-                  <div className="relative mt-2">
-                    <FiMail aria-hidden="true" className={`pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 ${identifierError ? "text-red-500" : "text-slate-400"}`} />
-                    <input
-                      aria-describedby={identifierError ? "login-identifier-error" : undefined}
-                      aria-invalid={Boolean(identifierError)}
-                      autoComplete="username"
-                      className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-4 text-sm sm:text-base"
-                      disabled={isSubmitting}
-                      id="login-identifier"
-                      onChange={(event) => {
-                        setIdentifier(event.target.value);
-                        if (identifierError) setIdentifierError("");
-                        if (message) setMessage("");
-                      }}
-                      placeholder="name@sucolwater.gov"
-                      ref={identifierRef}
-                      type="text"
-                      value={identifier}
-                    />
-                  </div>
-                  {identifierError && (
-                    <p className="mt-2 text-xs sm:text-sm font-semibold text-red-700" id="login-identifier-error">
-                      {identifierError}
-                    </p>
-                  )}
-                </div>}
-
-                {!adminChallengeToken && <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm sm:text-sm font-semibold text-slate-900" htmlFor="login-password">Password</label>
-                    <Link className="text-sm sm:text-sm font-bold text-water-700 hover:text-water-900" to="/forgot-password">Forgot password?</Link>
-                  </div>
-                  <div className="relative mt-2">
-                    <FiLock aria-hidden="true" className={`pointer-events-none absolute left-3 sm:left-4 top-1/2 h-4 w-4 sm:h-5 sm:w-5 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-slate-400"}`} />
-                    <input
-                      aria-describedby={passwordError ? "login-password-error" : undefined}
-                      aria-invalid={Boolean(passwordError)}
-                      autoComplete="current-password"
-                      className="ww-field py-2.5 sm:py-3 lg:py-3.5 pl-10 sm:pl-12 pr-12 text-sm sm:text-base"
-                      disabled={isSubmitting}
-                      id="login-password"
-                      onChange={(event) => {
-                        setPassword(event.target.value);
-                        if (passwordError) setPasswordError("");
-                        if (message) setMessage("");
-                      }}
-                      placeholder="Enter password"
-                      ref={passwordRef}
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                    />
-                    <button
-                      aria-label={showPassword ? "Hide password" : "Show password"}
-                      aria-pressed={showPassword}
-                      className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
-                      disabled={isSubmitting}
-                      onClick={() => setShowPassword((visible) => !visible)}
-                      type="button"
-                    >
-                      {showPassword ? (
-                        <FiEyeOff aria-hidden="true" className="h-5 w-5" />
-                      ) : (
-                        <FiEye aria-hidden="true" className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                  {passwordError && (
-                    <p className="mt-2 text-xs sm:text-sm font-semibold text-red-700" id="login-password-error">
-                      {passwordError}
-                    </p>
-                  )}
-                </div>}
-
-                {adminChallengeToken && (
-                  <div>
-                    <label className="text-xs sm:text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
-                    <div className="mt-3">
-                      <OtpInput
-                        disabled={isSubmitting || otpSecondsLeft === 0}
-                        id="admin-login-otp"
-                        invalid={Boolean(message)}
-                        onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
-                        onAutoVerify={handleAutoVerifyOtp}
-                        success={otpSuccess}
-                        value={otp}
-                      />
-                    </div>
-                    <p aria-live="polite" className={`mt-3 text-xs sm:text-sm font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
-                      {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
-                    </p>
-                    {otpSecondsLeft === 0 && (
-                      <button
-                        className="mt-3 text-xs sm:text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
-                        disabled={isSubmitting || isResending}
-                        onClick={handleResendOtp}
-                        type="button"
-                      >
-                        {isResending ? "Sending new code…" : "Resend code"}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {!adminChallengeToken && (
+              <div className="relative mt-2">
+                <FiLock aria-hidden="true" className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${passwordError ? "text-red-500" : "text-slate-400"}`} />
+                <input
+                  aria-describedby={passwordError ? "login-password-error" : undefined}
+                  aria-invalid={Boolean(passwordError)}
+                  autoComplete="current-password"
+          className="ww-field py-3 pl-12 pr-12 text-sm"
+          disabled={isSubmitting}
+          id="login-password"
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (passwordError) setPasswordError("");
+                    if (message) setMessage("");
+                  }}
+                  placeholder="Enter password"
+                  ref={passwordRef}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                />
                 <button
-                  className="ww-primary-button flex min-h-10 sm:min-h-12 lg:min-h-[3.25rem] w-full items-center justify-center gap-2 px-5 py-3 text-sm sm:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
-                  disabled={isSubmitting || isLockedIdentifier}
-                  style={{ cursor: isSubmitting ? "default" : undefined }}
-                  type="submit"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-pressed={showPassword}
+                  className="absolute inset-y-0 right-0 flex w-12 items-center justify-center rounded-r-xl text-slate-500 transition hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
+                  disabled={isSubmitting}
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  type="button"
                 >
-                  {isSubmitting && <FiLoader aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />}
-                  {isSubmitting ? "Signing in…" : "Sign in"}
+                  {showPassword ? (
+                    <FiEyeOff aria-hidden="true" className="h-5 w-5" />
+                  ) : (
+                    <FiEye aria-hidden="true" className="h-5 w-5" />
+                  )}
                 </button>
-                )}
+              </div>
+              {passwordError && (
+                <p className="mt-2 text-[13px] font-semibold text-red-700" id="login-password-error">
+                  {passwordError}
+                </p>
+              )}
+            </div>}
 
-                <span aria-live="polite" className="sr-only" role="status">
-                  {isSubmitting ? (adminChallengeToken ? "Verifying admin code. Please wait." : "Signing in. Please wait.") : ""}
-                </span>
+            {!adminChallengeToken && (
+            <button
+              className="ww-primary-button flex min-h-12 w-full items-center justify-center gap-2 px-5 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:cursor-default disabled:bg-water-500 disabled:opacity-90"
+              disabled={isSubmitting || isLockedIdentifier}
+              style={{ cursor: isSubmitting ? "default" : undefined }}
+              type="submit"
+            >
+              {isSubmitting && <FiLoader aria-hidden="true" className="h-5 w-5 animate-spin" />}
+              {isSubmitting ? "Signing in…" : "Sign in"}
+            </button>
+            )}
 
-                {lockMessage && (
-                  <p className="rounded-xl bg-red-50 px-4 py-3 text-xs sm:text-sm font-semibold text-red-700" role="alert">
-                    {lockMessage}
-                  </p>
-                )}
+            <span aria-live="polite" className="sr-only" role="status">
+              {isSubmitting ? (adminChallengeToken ? "Verifying admin code. Please wait." : "Signing in. Please wait.") : ""}
+            </span>
 
-                {message && (
-                  <p
-                    className="rounded-xl bg-white px-4 py-3 text-xs sm:text-sm font-medium text-slate-900"
-                    role="status"
+            {adminChallengeToken && (
+              <div>
+                <label className="text-sm font-semibold text-slate-900" id="admin-login-otp-label">Verification code</label>
+                <div className="mt-3">
+                  <OtpInput
+                    disabled={isSubmitting || otpSecondsLeft === 0}
+                    id="admin-login-otp"
+                    invalid={Boolean(message)}
+                    onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
+                    onAutoVerify={handleAutoVerifyOtp}
+                    success={otpSuccess}
+                    value={otp}
+                  />
+                </div>
+                <p aria-live="polite" className={`mt-3 text-[13px] font-semibold ${otpSecondsLeft > 0 ? "text-slate-500" : "text-red-600"}`}>
+                  {otpSecondsLeft > 0 ? `Time remaining: ${otpCountdown}` : "This verification code has expired. Request a new code below."}
+                </p>
+                {otpSecondsLeft === 0 && (
+                  <button
+                    className="mt-3 text-sm font-bold text-water-700 transition hover:text-water-900 disabled:cursor-not-allowed disabled:text-slate-400"
+                    disabled={isSubmitting || isResending}
+                    onClick={handleResendOtp}
+                    type="button"
                   >
-                    {message}
-                  </p>
+                    {isResending ? "Sending new code…" : "Resend code"}
+                  </button>
                 )}
-                {adminChallengeToken && (
-                  <button className="w-full text-xs sm:text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
-                )}
-              </form>
-            </div>
-          </div>
+              </div>
+            )}
+
+            {lockMessage && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" role="alert">
+                {lockMessage}
+              </p>
+            )}
+
+            {message && (
+              <p
+                className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-center font-medium text-slate-900"
+                role="status"
+              >
+                {message}
+              </p>
+            )}
+            {adminChallengeToken && (
+              <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
+            )}
+          </form>
         </div>
+        <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+          <li className="flex items-center gap-1.5"><FiShield aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> OTP protected</li>
+          <li className="flex items-center gap-1.5"><FiLock aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Encrypted session</li>
+          <li className="flex items-center gap-1.5"><FiCheckCircle aria-hidden="true" className="h-3.5 w-3.5 text-water-700" /> Barangay verified</li>
+        </ul>
       </section>
+        <footer className="mt-8 w-full rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 shadow-sm sm:px-6 sm:py-4">
+          <ul className="grid gap-1 sm:grid-cols-3 sm:gap-2">
+            <li className="flex items-center gap-3 rounded-xl px-2 py-2 sm:flex-col sm:gap-1.5 sm:px-1 sm:py-2 sm:text-center">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiMapPin aria-hidden="true" className="h-4 w-4" /></span>
+              <span className="min-w-0 sm:text-center">
+                <span className="block text-sm font-semibold text-slate-900">Sucol Water System office</span>
+                <span className="block text-xs text-slate-500">Barangay Sucol</span>
+              </span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl px-2 py-2 sm:flex-col sm:gap-1.5 sm:px-1 sm:py-2 sm:text-center">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiClock aria-hidden="true" className="h-4 w-4" /></span>
+              <span className="min-w-0 sm:text-center">
+                <span className="block text-sm font-semibold text-slate-900">Open Mon–Fri</span>
+                <span className="block text-xs text-slate-500">8:00am – 5:00pm</span>
+              </span>
+            </li>
+            <li className="flex items-center gap-3 rounded-xl px-2 py-2 sm:flex-col sm:gap-1.5 sm:px-1 sm:py-2 sm:text-center">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700"><FiHelpCircle aria-hidden="true" className="h-4 w-4" /></span>
+              <span className="min-w-0 sm:text-center">
+                <span className="block text-sm font-semibold text-slate-900">Need account help?</span>
+                <span className="block text-xs text-slate-500">Our staff will assist you in person</span>
+              </span>
+            </li>
+          </ul>
+        </footer>
+      </div>
     </main>
   );
 }
