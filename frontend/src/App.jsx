@@ -18,6 +18,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ChangeEmailPage from "./pages/ChangeEmailPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import UsageMetrics from "./pages/UsageMetrics";
 import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
@@ -499,7 +500,7 @@ export function AppRoutes() {
         }
         path="/consumer/:section"
       />
-      <Route element={<Navigate replace to="/login" />} path="*" />
+      <Route element={<NotFoundPage />} path="*" />
     </Routes>
   );
 }

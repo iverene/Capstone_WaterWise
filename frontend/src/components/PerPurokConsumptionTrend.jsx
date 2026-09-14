@@ -9,7 +9,6 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
 } from "recharts";
@@ -20,6 +19,7 @@ import {
   fetchAllPuroksYearlyHistory,
   fetchAllPuroksYearlyPrediction,
 } from "../services/consumptionAPI";
+import { manilaCalendar, monthBuckets, parseYearMonth, yearBuckets } from "../utils/chartPeriod";
 import ChartTooltip from "./ChartTooltip";
 import LoadingSkeleton from "./LoadingSkeleton";
 
@@ -188,7 +188,42 @@ function PerPurokConsumptionTrend() {
           };
         });
 
-        const latestThree = normalizedHistory.slice(-3);
+        // Zero-filled trailing windows: elapsed months/years with no readings
+        // plot at zero instead of vanishing and faking each purok's trend.
+        const anchorYear = Number(purokHistory?.latestYear) || manilaCalendar().year;
+        let windowHistory;
+        if (period === "Monthly") {
+          const buckets = monthBuckets({ count: 6 });
+          const totals = new Map(buckets.map((bucket) => [bucket.key, 0]));
+          for (const record of normalizedHistory) {
+            const position = parseYearMonth(record?.month ?? record?.label, anchorYear);
+            if (!position || position.monthIndex < 0) continue;
+            const key = `${position.year ?? anchorYear}-${String(position.monthIndex + 1).padStart(2, "0")}`;
+            if (totals.has(key)) totals.set(key, totals.get(key) + Number(record.consumption ?? 0));
+          }
+          windowHistory = buckets.map((bucket) => ({
+            consumption: totals.get(bucket.key),
+            label: bucket.label,
+            month: bucket.label,
+            predicted: null,
+            year: bucket.year,
+          }));
+        } else {
+          const buckets = yearBuckets(6);
+          const totals = new Map(buckets.map((bucket) => [bucket.key, 0]));
+          for (const record of normalizedHistory) {
+            const recordYear = Number(record?.year);
+            if (!Number.isInteger(recordYear)) continue;
+            const key = String(recordYear);
+            if (totals.has(key)) totals.set(key, totals.get(key) + Number(record.consumption ?? 0));
+          }
+          windowHistory = buckets.map((bucket) => ({
+            consumption: totals.get(bucket.key),
+            label: bucket.label,
+            predicted: null,
+            year: bucket.year,
+          }));
+        }
 
         const predictionValue = Number(
           purokPrediction?.prediction ??
@@ -199,17 +234,17 @@ function PerPurokConsumptionTrend() {
             0,
         );
 
-        const connectedHistory = latestThree.map((record, index) => ({
+        const connectedHistory = windowHistory.map((record, index) => ({
           ...record,
 
           predicted:
-            index === latestThree.length - 1 ? record.consumption : null,
+            index === windowHistory.length - 1 ? record.consumption : null,
         }));
 
         let predictionLabel = "Next";
 
         if (period === "Monthly") {
-          const lastLabel = latestThree[latestThree.length - 1]?.label;
+          const lastLabel = windowHistory[windowHistory.length - 1]?.label;
 
           const { monthIndex } = normalizeMonth(lastLabel);
 
@@ -217,7 +252,7 @@ function PerPurokConsumptionTrend() {
             predictionLabel = MONTH_LABELS[(monthIndex + 1) % 12];
           }
         } else {
-          const lastYear = Number(latestThree[latestThree.length - 1]?.year);
+          const lastYear = Number(windowHistory[windowHistory.length - 1]?.year);
 
           if (Number.isFinite(lastYear)) {
             predictionLabel = String(lastYear + 1);
@@ -240,7 +275,7 @@ function PerPurokConsumptionTrend() {
 
         combinedData[purokName] = {
           chartData:
-            latestThree.length > 0 || predictionValue > 0 ? chartData : [],
+            windowHistory.some((record) => record.consumption > 0) || predictionValue > 0 ? chartData : [],
 
           predictedConsumption: predictionValue,
         };
@@ -278,77 +313,59 @@ rounded-2xl
 border
 border-slate-200
 bg-white
-p-5
-shadow-card
-sm:p-6
+p-4
+sm:p-5
 "
     >
       {/* HEADER */}
 
       <div
         className="
-mb-6
+mb-4
 flex
-items-start
+flex-wrap
+items-center
 justify-between
-gap-4
+gap-3
 "
       >
-        <div>
-          <p
-            className="
-text-xs
-font-bold
-uppercase
-tracking-[0.14em]
-text-water-700
-"
-          >
-            Consumption Trend
-          </p>
-
-          <h2
-            className="
-mt-2
-text-xl
+        <h2
+          className="
+min-w-0
+flex-1
+text-[15px]
 font-extrabold
+leading-snug
+tracking-tight
 text-navy-900
+line-clamp-2
 "
-          >
-            Per Purok Consumption Trend
-          </h2>
-
-          <p
-            className="
-mt-1
-text-sm
-text-slate-500
-"
-          >
-            {period === "Monthly"
-              ? "Three historical months with one predicted month for each purok."
-              : "Three historical years with one predicted year for each purok."}
-          </p>
-
+        >
+          Per Purok Consumption Forecast
+        </h2>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <div
             className="
-mt-4
-flex
-gap-2
+inline-flex
+rounded-xl
+bg-slate-100
+p-1
 "
+            role="group"
+            aria-label="Purok trend period"
           >
             <button
               onClick={() => setPeriod("Monthly")}
+              aria-pressed={period === "Monthly"}
               className={`
-
 rounded-xl
 px-4
-min-h-11
+py-2
 text-xs
-font-semibold
-
+font-bold
+transition
 ${
-  period === "Monthly" ? "bg-water-600 text-white" : "bg-slate-100 text-slate-700"
+  period === "Monthly" ? "bg-white text-water-700 shadow-sm" : "text-slate-500 hover:text-slate-800"
 }
 
 `}
@@ -358,44 +375,50 @@ ${
 
             <button
               onClick={() => setPeriod("Yearly")}
+              aria-pressed={period === "Yearly"}
               className={`
 
 rounded-xl
 px-4
-min-h-11
+py-2
 text-xs
-font-semibold
-
-${period === "Yearly" ? "bg-water-600 text-white" : "bg-slate-100 text-slate-700"}
+font-bold
+transition
+${period === "Yearly" ? "bg-white text-water-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}
 
 `}
             >
               Yearly
             </button>
           </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={loadPerPurokTrend}
-          disabled={loading}
-          className="
+          <button
+            type="button"
+            onClick={loadPerPurokTrend}
+            disabled={loading}
+            className="
 flex
-h-11
-w-11
+h-8
+w-8
+shrink-0
 items-center
 justify-center
-rounded-xl
-bg-slate-100
-text-slate-600
-transition
-hover:bg-slate-200
+rounded-lg
+border
+border-slate-200
+text-slate-500
+hover:border-water-300
+hover:bg-water-50
+hover:text-water-700
+focus-visible:outline-none
+focus-visible:ring-2
+focus-visible:ring-water-600
 disabled:opacity-50
 "
-        >
-          <span className="sr-only">Refresh per-purok trends</span>
-          <RefreshCw
-            className={`
+          >
+            <span className="sr-only">Refresh per-purok trends</span>
+            <RefreshCw
+              className={`
 
 h-4
 w-4
@@ -403,8 +426,9 @@ w-4
 ${loading ? "animate-spin" : ""}
 
 `}
-          />
-        </button>
+            />
+          </button>
+        </div>
       </div>
 
       {/* LOADING */}
@@ -479,68 +503,27 @@ xl:grid-cols-3
 rounded-2xl
 border
 border-slate-200
-bg-slate-50
+bg-white
 p-4
 "
               >
                 <div
                   className="
 flex
-items-start
+items-center
 justify-between
+gap-3
 "
                 >
-                  <div>
-                    <h3
-                      className="
-font-bold
+                  <h3
+                    className="
+text-sm
+font-extrabold
 text-slate-900
 "
-                    >
-                      {purok}
-                    </h3>
-
-                    <p
-                      className="
-mt-1
-text-xs
-text-slate-500
-"
-                    >
-                      {period === "Monthly"
-                        ? "Monthly water consumption"
-                        : "Yearly water consumption"}
-                    </p>
-                  </div>
-
-                  {records?.predictedConsumption > 0 && (
-                    <div
-                      className="
-text-right
-"
-                    >
-                      <p
-                        className="
-text-xs
-text-slate-500
-"
-                      >
-                        Prediction
-                      </p>
-
-                      <p
-                        className="
-font-mono
-font-extrabold
-tabular-nums
-text-water-700
-"
-                      >
-                        {formatConsumption(records.predictedConsumption)}
-                        m³
-                      </p>
-                    </div>
-                  )}
+                  >
+                    {purok}
+                  </h3>
                 </div>
 
                 <div
@@ -564,38 +547,38 @@ h-60
                       >
                         <defs>
                           <linearGradient id="perPurokTrendFill" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#0284C7" stopOpacity={0.16} />
+                            <stop offset="0%" stopColor="#0284C7" stopOpacity={0.35} />
                             <stop offset="100%" stopColor="#0284C7" stopOpacity={0.02} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid stroke="#DCE5EA" strokeDasharray="3 3" vertical={false} />
 
-                        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#52697A", fontSize: 11 }} />
+                        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#64748b", fontSize: 11 }} />
 
                         <YAxis
                           axisLine={false}
                           tickLine={false}
-                          tick={{ fill: "#52697A", fontSize: 11 }}
+                          tick={{ fill: "#64748b", fontSize: 11 }}
                           tickFormatter={(value) => formatConsumption(value)}
+                          width={44}
                         />
 
-                        <Tooltip content={<ChartTooltip valueFormatter={formatConsumption} />} cursor={{ stroke: "#94A3B8", strokeWidth: 1 }} />
+                        <Tooltip content={<ChartTooltip hideConnectedPrediction unit="" valueFormatter={(value) => `${formatConsumption(value)} m³`} />} cursor={{ stroke: "#bae6fd" }} />
 
-                        <Legend />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
 
                         <Area
-                          type="linear"
+                          type="monotone"
                           dataKey="consumption"
                           name="Historical"
                           stroke="#0284C7"
                           strokeWidth={2.5}
                           fill="url(#perPurokTrendFill)"
-                          dot={{ r: 3.5, fill: "#ffffff", stroke: "#0284C7", strokeWidth: 2 }}
-                          activeDot={{ r: 6, fill: "#0284C7", stroke: "#ffffff", strokeWidth: 2 }}
+                          dot={{ r: 3, fill: "#0284C7", stroke: "#ffffff", strokeWidth: 2 }}
+                          activeDot={{ r: 5, fill: "#0284C7", stroke: "#ffffff", strokeWidth: 2 }}
                         />
 
                         <Line
-                          type="linear"
+                          type="monotone"
                           dataKey="predicted"
                           name="Prediction"
                           stroke="#0B2B40"

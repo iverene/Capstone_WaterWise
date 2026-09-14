@@ -38,6 +38,7 @@ export default function Login() {
   const [maskedEmail, setMaskedEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [otpError, setOtpError] = useState("");
   const [identifierError, setIdentifierError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -192,10 +193,12 @@ export default function Login() {
     if (adminChallengeToken) {
       if (!/^\d{6}$/.test(otp)) {
         setMessage("Enter the 6-digit verification code.");
+        setOtpError("Enter the 6-digit verification code.");
         return;
       }
       setIsSubmitting(true);
       setMessage("");
+      setOtpError("");
       try {
         const result = await verifyAdminLoginOtp(adminChallengeToken, otp);
         const destination = accountDestinations[result.user?.role];
@@ -210,6 +213,7 @@ export default function Login() {
         navigate(destination, { replace: true });
       } catch (error) {
         setMessage(error.message);
+        setOtpError(error.message);
       } finally {
         setIsSubmitting(false);
       }
@@ -258,6 +262,7 @@ export default function Login() {
         setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
         setPassword("");
         setMessage(result.message);
+        setOtpError("");
         return;
       }
       const authenticatedRole = result.user?.role === "tenant"
@@ -359,6 +364,7 @@ export default function Login() {
     if (!/^\d{6}$/.test(otpValue)) return;
     setIsSubmitting(true);
     setMessage("");
+    setOtpError("");
     try {
       const result = await verifyAdminLoginOtp(adminChallengeToken, otpValue);
       const destination = accountDestinations[result.user?.role];
@@ -374,6 +380,7 @@ export default function Login() {
       setTimeout(() => navigate(destination, { replace: true }), 600);
     } catch (error) {
       setMessage(error.message);
+      setOtpError(error.message);
       setOtp("");
     } finally {
       setIsSubmitting(false);
@@ -384,6 +391,7 @@ export default function Login() {
     if (isResending || otpSecondsLeft > 0) return;
     setIsResending(true);
     setMessage("");
+    setOtpError("");
     try {
       const result = await resendAdminLoginOtp(adminChallengeToken);
       setAdminChallengeToken(result.challengeToken);
@@ -399,6 +407,7 @@ export default function Login() {
         setOtpExpiresAt(Date.now() + retryAfterSeconds * 1000);
       }
       setMessage(error.message);
+      setOtpError(error.message);
     } finally {
       setIsResending(false);
     }
@@ -524,8 +533,8 @@ export default function Login() {
                   <OtpInput
                     disabled={isSubmitting || otpSecondsLeft === 0}
                     id="admin-login-otp"
-                    invalid={Boolean(message)}
-                    onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
+                    invalid={Boolean(otpError)}
+                    onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpError(""); setOtpSuccess(false); }}
                     onAutoVerify={handleAutoVerifyOtp}
                     success={otpSuccess}
                     value={otp}
@@ -562,7 +571,7 @@ export default function Login() {
               </p>
             )}
             {adminChallengeToken && (
-              <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
+              <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); setOtpError(""); }} type="button">Back to sign in</button>
             )}
           </form>
         </div>

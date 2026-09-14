@@ -26,40 +26,40 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
       data-testid={consumptionHistory.length ? "analytics-grid" : "analytics-empty"}
     >
       <KPI
-        description="latest recorded month"
-        descriptionHighlight={latestRecord?.month ?? "No recorded month"}
+        description="Recorded Month"
+        descriptionHighlight={latestRecord?.month ?? "No Recorded Month"}
         descriptionIcon={CalendarDays}
         icon={Droplets}
-        title="Latest water use"
+        title="Latest Water Use"
         unit="m³"
         value={number(latestRecord?.volume)}
         valueTestId="stat-latest"
       />
       <KPI
-        description="used to calculate the average"
-        descriptionHighlight={`${consumptionHistory.length} recorded month${consumptionHistory.length === 1 ? "" : "s"}`}
+        description="Averaged"
+        descriptionHighlight={`${consumptionHistory.length} Recorded Month${consumptionHistory.length === 1 ? "" : "s"}`}
         icon={Gauge}
-        title="Monthly average"
+        title="Monthly Average"
         unit="m³"
         value={number(averageUsage)}
         valueTestId="stat-avg"
       />
       <KPI
-        description="included in this period"
-        descriptionHighlight={`${consumptionHistory.length} recorded month${consumptionHistory.length === 1 ? "" : "s"}`}
+        description="This Period"
+        descriptionHighlight={`${consumptionHistory.length} Recorded Month${consumptionHistory.length === 1 ? "" : "s"}`}
         icon={Sigma}
-        title="Total for period"
+        title="Total for Period"
         unit="m³"
         value={number(totalConsumption)}
         valueTestId="stat-total"
       />
       <KPI
-        description="water used"
+        description="Water Used"
         descriptionHighlight={`${number(highestRecord?.volume)} m³`}
         descriptionIcon={Droplets}
         descriptionTone="warning"
         icon={TrendingUp}
-        title="Highest-use month"
+        title="Highest-Use Month"
         value={
           <span className="block text-lg sm:text-2xl">
             {highestRecord?.month ?? "No recorded month"}

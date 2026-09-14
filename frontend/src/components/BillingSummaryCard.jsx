@@ -29,47 +29,47 @@ export default function BillingSummaryCard({ billingData = [] }) {
       <KPI
         cardTestId="total-billing-card"
         compact
-        description="included in the total"
-        descriptionHighlight={`${totalBills} billing ${totalBills === 1 ? "record" : "records"}`}
+        description="In Total"
+        descriptionHighlight={`${totalBills} Billing ${totalBills === 1 ? "Record" : "Records"}`}
         descriptionIcon={ReceiptText}
         icon={Banknote}
-        title="Total billed"
+        title="Total Billed"
         value={currency(totalBilling)}
         valueTestId="total-billing-value"
       />
       <KPI
         cardTestId="outstanding-billing-card"
         compact
-        description={openBills ? "remaining to collect" : "nothing left to collect"}
-        descriptionHighlight={openBills ? `${openBills} open bill${openBills === 1 ? "" : "s"}` : "No open bills"}
+        description={openBills ? "Uncollected" : "All Collected"}
+        descriptionHighlight={openBills ? `${openBills} Open Bill${openBills === 1 ? "" : "s"}` : "No Open Bills"}
         descriptionIcon={openBills ? Clock3 : CheckCircle2}
         descriptionTone={openBills ? "warning" : "positive"}
         icon={WalletCards}
-        title="Outstanding balance"
+        title="Outstanding Balance"
         value={currency(outstanding)}
         valueTestId="outstanding-billing-value"
       />
       <KPI
         cardTestId="paid-bills-card"
         compact
-        description="fully settled"
-        descriptionHighlight={`${paidBills} bill${paidBills === 1 ? "" : "s"}`}
+        description="Fully Settled"
+        descriptionHighlight={`${paidBills} Bill${paidBills === 1 ? "" : "s"}`}
         descriptionIcon={CheckCircle2}
         descriptionTone="positive"
         icon={CheckCircle2}
-        title="Paid bills"
+        title="Paid Bills"
         value={paidBills}
         valueTestId="paid-bills-value"
       />
       <KPI
         cardTestId="open-bills-card"
         compact
-        description={openBills ? `${partiallyPaidBills} partially paid` : "all bills are settled"}
-        descriptionHighlight={openBills ? `${unpaidBills} unpaid` : "No open bills"}
+        description={openBills ? `${partiallyPaidBills} Partially Paid` : "All Settled"}
+        descriptionHighlight={openBills ? `${unpaidBills} Unpaid` : "No Open Bills"}
         descriptionIcon={openBills ? Clock3 : CheckCircle2}
         descriptionTone={openBills ? "warning" : "positive"}
         icon={openBills ? Clock3 : CheckCircle2}
-        title="Open bills"
+        title="Open Bills"
         value={openBills}
         valueTestId="open-bills-value"
       />

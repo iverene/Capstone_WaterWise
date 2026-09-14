@@ -7,6 +7,7 @@ import {
   Gauge,
   ReceiptText,
   WalletCards,
+  X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import AnnouncementPage from "../components/AnnouncementPage";
@@ -44,6 +45,7 @@ export default function ConsumerHome() {
   const [home, setHome] = useState(null);
   const [error, setError] = useState("");
   const [requestVersion, setRequestVersion] = useState(0);
+  const [dismissedBannerKey, setDismissedBannerKey] = useState(null);
 
   const retry = useCallback(() => {
     setError("");
@@ -98,18 +100,43 @@ export default function ConsumerHome() {
     : home.reading.latestUsage - home.reading.previousUsage;
   const hasBalance = home.billing.outstandingBalance > 0;
 
+  // The payment banner dismisses once per outstanding bill: the dismissal is
+  // keyed by billing ID (falling back to the balance), so a new bill or a
+  // changed balance brings the banner back. The KPI keeps showing the debt.
+  const paymentBannerKey = home ? `payment-banner:${home.billing.nextBillingId ?? home.billing.outstandingBalance}` : null;
+  const readStoredDismissedKey = () => {
+    try {
+      return window.localStorage.getItem("waterwise:dismissed-payment-banner");
+    } catch {
+      return null;
+    }
+  };
+  const showPaymentBanner = hasBalance && paymentBannerKey !== null && dismissedBannerKey !== paymentBannerKey && readStoredDismissedKey() !== paymentBannerKey;
+  const dismissPaymentBanner = () => {
+    if (!paymentBannerKey) return;
+    try {
+      window.localStorage.setItem("waterwise:dismissed-payment-banner", paymentBannerKey);
+    } catch {
+      // Storage may be unavailable; the banner still hides for this view.
+    }
+    setDismissedBannerKey(paymentBannerKey);
+  };
+
   return (
     <div className="space-y-5 sm:space-y-6">
       {pageHeader}
 
-      {hasBalance && (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5" aria-labelledby="payment-required-heading">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {showPaymentBanner && (
+        <section className="relative rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5" aria-labelledby="payment-required-heading">
+          <button aria-label="Dismiss payment reminder" className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 sm:right-4 sm:top-4" onClick={dismissPaymentBanner} type="button">
+            <X aria-hidden="true" className="h-4 w-4" />
+          </button>
+          <div className="flex flex-col gap-4 pr-10 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
                 <ReceiptText aria-hidden="true" className="h-5 w-5" />
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-amber-800">Important now</p>
                 <h2 className="mt-1 font-extrabold text-navy-900" id="payment-required-heading">Payment required</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-600">
@@ -130,32 +157,29 @@ export default function ConsumerHome() {
 
       <section className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4" aria-label="Account summary">
         <KPI
-          description={hasBalance ? "awaiting payment" : "account is clear"}
+          description={hasBalance ? "Awaiting Payment" : "Account Is Clear"}
           descriptionHighlight={hasBalance
-            ? `${home.billing.pendingCount} bill${home.billing.pendingCount === 1 ? "" : "s"}`
-            : "No unpaid bills"}
+            ? `${home.billing.pendingCount} Bill${home.billing.pendingCount === 1 ? "" : "s"}`
+            : "No Unpaid Bills"}
           descriptionIcon={hasBalance ? ReceiptText : CheckCircle2}
           descriptionTone={hasBalance ? "warning" : "positive"}
           icon={WalletCards}
-          title="Outstanding balance"
+          title="Outstanding Balance"
           value={currency(home.billing.outstandingBalance)}
         />
         <KPI
-          description={home.billing.nextDueDate ? "payment deadline" : "account is clear"}
-          descriptionHighlight={home.billing.nextDueDate ? displayDate(home.billing.nextDueDate) : "No due date"}
-          descriptionIcon={home.billing.nextDueDate ? CalendarClock : CheckCircle2}
-          descriptionTone={home.billing.nextDueDate ? "warning" : "positive"}
+          description={home.billing.nextDueDate ? "Payment Deadline" : "Account Is Clear"}
           icon={CalendarClock}
-          title="Next due date"
+          title="Next Due Date"
           value={compactDate(home.billing.nextDueDate)}
         />
         <KPI
-          description={usageDifference == null ? "no previous month" : usageDifference === 0 ? "from last month" : "than last month"}
-          descriptionHighlight={usageDifference == null ? "First reading" : undefined}
+          description={usageDifference == null ? "No Previous Month" : usageDifference === 0 ? "From Last Month" : "Than Last Month"}
+          descriptionHighlight={usageDifference == null ? "First Reading" : undefined}
           descriptionIcon={usageDifference == null ? Droplets : undefined}
           icon={Droplets}
           showTrendBadge={false}
-          title="Latest consumption"
+          title="Latest Consumption"
           trend={usageDifference == null
             ? undefined
             : usageDifference === 0
@@ -167,12 +191,12 @@ export default function ConsumerHome() {
           value={home.reading.latestUsage.toFixed(1)}
         />
         <KPI
-          description={home.reading.latestDate ? "recorded" : undefined}
-          descriptionHighlight={home.reading.latestDate ? displayDate(home.reading.latestDate) : "No reading yet"}
+          description={home.reading.latestDate ? "Recorded" : undefined}
+          descriptionHighlight={home.reading.latestDate ? displayDate(home.reading.latestDate) : "No Reading Yet"}
           descriptionIcon={home.reading.latestDate ? CalendarClock : Gauge}
           descriptionTone={home.reading.latestDate ? "water" : "neutral"}
           icon={Gauge}
-          title="Current meter reading"
+          title="Current Meter Reading"
           unit="m³"
           value={home.reading.currentReading.toFixed(1)}
         />

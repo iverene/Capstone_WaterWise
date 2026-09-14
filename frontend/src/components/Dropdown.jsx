@@ -7,8 +7,10 @@ export default function Dropdown({
   ariaInvalid = false,
   ariaLabel,
   className = "",
+  compact = false,
   dataTestId,
   disabled = false,
+  hideLabel = false,
   icon: Icon,
   id,
   name,
@@ -34,10 +36,10 @@ export default function Dropdown({
 
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 8;
-    const desiredHeight = Math.min(288, options.length * 46 + 12);
+    const desiredHeight = Math.min(288, options.length * (compact ? 36 : 46) + 12);
     const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
     const openAbove = spaceBelow < desiredHeight && rect.top > spaceBelow;
-    const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+    const width = Math.max(160, Math.min(rect.width, window.innerWidth - viewportPadding * 2));
     const left = Math.min(
       Math.max(viewportPadding, rect.left),
       window.innerWidth - width - viewportPadding,
@@ -50,7 +52,7 @@ export default function Dropdown({
       bottom: openAbove ? window.innerHeight - rect.top + 8 : undefined,
       width,
     });
-  }, [options.length]);
+  }, [compact, options.length]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -132,7 +134,7 @@ export default function Dropdown({
         aria-haspopup="listbox"
         aria-invalid={ariaInvalid}
         aria-label={ariaLabel}
-        className={`flex min-h-12 w-full items-center gap-3 rounded-xl border bg-white px-4 text-left text-sm font-bold text-navy-900 outline-none transition-colors hover:border-water-300 focus-visible:border-water-600 focus-visible:ring-4 focus-visible:ring-water-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${ariaInvalid ? "border-red-600 focus-visible:border-red-600 focus-visible:ring-red-100" : "border-slate-300"} ${triggerClassName}`}
+        className={`flex w-full items-center rounded-xl border bg-white px-4 text-left text-sm font-bold text-navy-900 outline-none transition-colors hover:border-water-300 focus-visible:border-water-600 focus-visible:ring-4 focus-visible:ring-water-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${compact ? "min-h-9 gap-2 px-3 text-xs" : "min-h-12 gap-3"} ${hideLabel ? "min-h-9 w-9 justify-center px-0" : ""} ${ariaInvalid ? "border-red-600 focus-visible:border-red-600 focus-visible:ring-red-100" : "border-slate-300"} ${triggerClassName}`}
         data-testid={dataTestId}
         disabled={disabled}
         id={id}
@@ -142,13 +144,17 @@ export default function Dropdown({
         type="button"
       >
         {Icon ? <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /> : null}
-        <span className={`min-w-0 flex-1 truncate ${selectedOption ? "" : "text-slate-400"}`}>
-          {selectedOption?.label ?? placeholder}
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
-        />
+        {!hideLabel && (
+          <span className={`min-w-0 flex-1 truncate ${selectedOption ? "" : "text-slate-400"}`}>
+            {selectedOption?.label ?? placeholder}
+          </span>
+        )}
+        {!hideLabel && (
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          />
+        )}
       </button>
 
       {isOpen && typeof document !== "undefined"
@@ -167,7 +173,7 @@ export default function Dropdown({
                 return (
                   <button
                     aria-selected={selected}
-                    className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-water-600 disabled:cursor-not-allowed disabled:text-slate-300 ${selected ? "bg-water-50 text-water-800" : "text-slate-700 hover:bg-slate-50"}`}
+                    className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 text-left font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-water-600 disabled:cursor-not-allowed disabled:text-slate-300 ${compact ? "min-h-9 text-xs" : "min-h-11 text-sm"} ${selected ? "bg-water-50 text-water-800" : "text-slate-700 hover:bg-slate-50"}`}
                     disabled={option.disabled}
                     key={option.value}
                     onClick={() => selectOption(option)}
