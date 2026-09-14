@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertCircle, CalendarDays, TrendingDown, TrendingUp } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchAllPuroksMonthlyHistory, fetchAllPuroksYearlyHistory } from "../services/consumptionAPI";
 import { fillYearlyBuckets, manilaCalendar, parseYearMonth, rangeMonthBuckets } from "../utils/chartPeriod";
@@ -209,15 +209,18 @@ export default function PurokHistoricalConsumptionGraphs() {
   return (
     <section aria-label="Consumption per purok" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-[15px] font-extrabold tracking-tight text-navy-900">Consumption Per Purok</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <Filter
+        <h3 className="min-w-0 flex-1 text-[15px] font-extrabold tracking-tight text-navy-900">Consumption Per Purok</h3>
+        <div className="flex shrink-0 flex-row items-center gap-2">
+            <Filter
             ariaLabel="Filter purok history by year"
             compact
             filters={[
               {
                 ariaLabel: "Filter purok history by year",
                 dataTestId: "purok-year-filter",
+                hideLabel: true,
+                hideLabelOnMobile: true,
+                icon: CalendarDays,
                 id: "purok-year-filter",
                 label: "",
                 name: "purokYear",

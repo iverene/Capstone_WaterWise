@@ -82,21 +82,22 @@ export default function Filter({
     const focusClasses = toneClasses[field.tone ?? tone] ?? toneClasses.water;
     return (
       <div className={`flex min-w-0 items-center gap-2 ${className}`}>
-        <span className={field.label ? "shrink-0 text-xs font-semibold text-slate-500" : "sr-only"}>
+        <span className={field.label ? `shrink-0 text-xs font-semibold text-slate-500 ${field.hideLabelOnMobile ? "hidden sm:inline" : ""}` : "sr-only"}>
           {field.label ?? field.ariaLabel ?? ariaLabel}
         </span>
         <Dropdown
           ariaLabel={field.ariaLabel ?? ariaLabel}
-          className="min-w-0 flex-1"
+          className={field.hideLabelOnMobile ? "w-auto shrink-0" : "min-w-0 flex-1"}
           compact={compact || field.compact}
           dataTestId={field.dataTestId ?? dataTestId}
           disabled={disabled || field.disabled}
-          icon={SlidersHorizontal}
+          hideLabel={field.hideLabel}
+          icon={field.icon ?? SlidersHorizontal}
           id={field.id}
           name={field.name}
           onValueChange={field.onValueChange}
           options={field.options ?? []}
-          triggerClassName={`border-slate-200 bg-white text-navy-900 shadow-sm ${focusClasses}`}
+          triggerClassName={field.triggerClassName ?? `border-slate-200 bg-white text-navy-900 shadow-sm ${focusClasses}`}
           value={field.value ?? ""}
         />
       </div>

@@ -10,6 +10,7 @@ export default function Dropdown({
   compact = false,
   dataTestId,
   disabled = false,
+  hideLabel = false,
   icon: Icon,
   id,
   name,
@@ -38,7 +39,7 @@ export default function Dropdown({
     const desiredHeight = Math.min(288, options.length * (compact ? 36 : 46) + 12);
     const spaceBelow = window.innerHeight - rect.bottom - viewportPadding;
     const openAbove = spaceBelow < desiredHeight && rect.top > spaceBelow;
-    const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
+    const width = Math.max(160, Math.min(rect.width, window.innerWidth - viewportPadding * 2));
     const left = Math.min(
       Math.max(viewportPadding, rect.left),
       window.innerWidth - width - viewportPadding,
@@ -133,7 +134,7 @@ export default function Dropdown({
         aria-haspopup="listbox"
         aria-invalid={ariaInvalid}
         aria-label={ariaLabel}
-        className={`flex w-full items-center rounded-xl border bg-white px-4 text-left text-sm font-bold text-navy-900 outline-none transition-colors hover:border-water-300 focus-visible:border-water-600 focus-visible:ring-4 focus-visible:ring-water-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${compact ? "min-h-9 gap-2 px-3 text-xs" : "min-h-12 gap-3"} ${ariaInvalid ? "border-red-600 focus-visible:border-red-600 focus-visible:ring-red-100" : "border-slate-300"} ${triggerClassName}`}
+        className={`flex w-full items-center rounded-xl border bg-white px-4 text-left text-sm font-bold text-navy-900 outline-none transition-colors hover:border-water-300 focus-visible:border-water-600 focus-visible:ring-4 focus-visible:ring-water-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${compact ? "min-h-9 gap-2 px-3 text-xs" : "min-h-12 gap-3"} ${hideLabel ? "min-h-9 w-9 justify-center px-0" : ""} ${ariaInvalid ? "border-red-600 focus-visible:border-red-600 focus-visible:ring-red-100" : "border-slate-300"} ${triggerClassName}`}
         data-testid={dataTestId}
         disabled={disabled}
         id={id}
@@ -143,13 +144,17 @@ export default function Dropdown({
         type="button"
       >
         {Icon ? <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" /> : null}
-        <span className={`min-w-0 flex-1 truncate ${selectedOption ? "" : "text-slate-400"}`}>
-          {selectedOption?.label ?? placeholder}
-        </span>
-        <ChevronDown
-          aria-hidden="true"
-          className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
-        />
+        {!hideLabel && (
+          <span className={`min-w-0 flex-1 truncate ${selectedOption ? "" : "text-slate-400"}`}>
+            {selectedOption?.label ?? placeholder}
+          </span>
+        )}
+        {!hideLabel && (
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          />
+        )}
       </button>
 
       {isOpen && typeof document !== "undefined"
