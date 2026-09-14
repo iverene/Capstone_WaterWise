@@ -123,33 +123,19 @@ export default function AnalyticsDashboard() {
             </div>
           </div>
 
-          <section aria-labelledby="forecast-summary-heading" className="space-y-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Demand outlook</p>
-              <h2 className="mt-1 text-xl font-extrabold text-navy-900" id="forecast-summary-heading">
-                Forecast summary
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">Expected water demand across the system and each purok.</p>
-            </div>
+          <section aria-label="Forecast summary" className="space-y-4">
             <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
               <AdminOverallConsumptionCard compact />
               <AdminMonthlyConsumptionCard compact />
               <AdminYearlyConsumptionCard compact />
             </div>
-            <AdminPerPurokConsumptionCard />
           </section>
 
-          <section aria-labelledby="forecast-trends-heading" className="space-y-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Historical context</p>
-              <h2 className="mt-1 text-xl font-extrabold text-navy-900" id="forecast-trends-heading">
-                Forecast trends
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">Compare predicted demand with recent monthly and yearly history.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <section aria-label="Forecast trends" className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               <MonthlyConsumptionTrend />
               <YearlyConsumptionTrend />
+              <AdminPerPurokConsumptionCard />
             </div>
             <PerPurokConsumptionTrend />
           </section>
