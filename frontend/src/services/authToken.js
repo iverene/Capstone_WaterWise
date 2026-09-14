@@ -1,4 +1,9 @@
 export const ACCOUNT_STORAGE_KEY = "user";
+let logoutInProgress = false;
+export const isLoggingOut = () => logoutInProgress;
+export function beginLogout() {
+  logoutInProgress = true;
+}
 // Legacy key kept only to scrub pre-cookie sessions. No new tokens are stored;
 // auth is HttpOnly cookie-only (waterwise_session set by backend).
 export const TOKEN_STORAGE_KEY = "accessToken";
@@ -97,6 +102,7 @@ export function getAccessTokenExpiresAt() {
 }
 
 export function storeSession({ user }) {
+  logoutInProgress = false;
   const previousUser = getStoredAccount();
   if (previousUser && (previousUser.id !== user?.id || previousUser.role !== user?.role)) {
     clearStoredApiCache();

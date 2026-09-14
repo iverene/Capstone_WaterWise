@@ -1,6 +1,8 @@
 import { apiRequest } from "./apiClient";
 import {
   ACCOUNT_STORAGE_KEY,
+  beginLogout,
+  isLoggingOut,
   clearSession,
   getPersistentMeterReaderUser,
   getStoredAccount,
@@ -254,7 +256,9 @@ export async function resetPassword(token, password) {
 }
 
 export async function getCurrentAccount(options) {
+  if (isLoggingOut()) throw new Error("Sign-out is in progress.");
   const result = await apiRequest("/auth/me", options);
+  if (isLoggingOut()) throw new Error("Sign-out is in progress.");
   const storedAccount = getStoredAccount() ?? {};
   const incoming = result.user;
   if (!incoming?.id || !incoming?.role) {
@@ -307,6 +311,7 @@ export function noteSessionStored(user) {
 }
 
 export async function hasVerifiedSession() {
+  if (isLoggingOut()) return false;
   const stored = getStoredAccount();
   const now = Date.now();
   if (
@@ -342,6 +347,7 @@ export async function hasVerifiedSession() {
     } catch (error) {
       // Offline (no response) with a valid persistent meter-reader identity:
       // stay in the workspace and queue readings; sync when back online.
+      if (isLoggingOut()) return false;
       const status = error?.response?.status;
       if ((!error?.response || status >= 500) && stored?.role === "meter-reader") {
         if (getPersistentMeterReaderUser()?.id === stored.id) return true;
@@ -360,14 +366,16 @@ export async function hasVerifiedSession() {
 
 export async function logout() {
   const account = getStoredAccount();
+  beginLogout();
   try {
-    await apiRequest("/auth/logout", { method: "POST" });
-  } catch {
-    // Logout endpoint best-effort; clear local session regardless.
-  }
-  try {
-    if (account?.role === "consumer") {
-      await disableCurrentPushNotifications();
+    try {
+      if (account?.role === "consumer") {
+        // Subscription removal needs the cookie that /auth/logout clears.
+        await disableCurrentPushNotifications();
+      }
+    } finally {
+      // Always attempt server logout, even if push cleanup fails.
+      await apiRequest("/auth/logout", { method: "POST" });
     }
   } finally {
     clearVerifiedSessionCache();

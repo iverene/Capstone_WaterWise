@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearSession, getStoredAccount } from "./authToken";
+import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
 import { clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 
@@ -107,7 +107,7 @@ apiClient.interceptors.response.use(
     const isPublicAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(
       window.location.pathname,
     );
-    if (status === 401 && !isPublicAuthPage && !isPublicAuthRequest) {
+    if (status === 401 && !isLoggingOut() && !isPublicAuthPage && !isPublicAuthRequest) {
       // Expired, idle-timed-out, revoked (password change), deactivated, or
       // device-mismatch sessions must end here instead of leaving the user
       // stuck: the stored session is no longer valid server-side. The reason
