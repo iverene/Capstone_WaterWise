@@ -4,6 +4,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import { fetchAllPuroksMonthlyHistory, fetchAllPuroksYearlyHistory } from "../services/consumptionAPI";
 import { fillYearlyBuckets, manilaCalendar, parseYearMonth, rangeMonthBuckets } from "../utils/chartPeriod";
 import ChartTooltip from "./ChartTooltip";
+import Filter from "./Filter";
 import LoadingSkeleton from "./LoadingSkeleton";
 
 const PUROKS = Array.from({ length: 6 }, (_, index) => `Purok ${index + 1}`);
@@ -100,7 +101,7 @@ function PurokGraph({ color, data, purok }) {
     <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="font-extrabold text-slate-900">{purok}</h3>
+          <h2 className="text-sm font-extrabold text-slate-900">{purok}</h2>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {trend ? (
@@ -131,29 +132,40 @@ function PurokGraph({ color, data, purok }) {
   );
 }
 
-export default function PurokHistoricalConsumptionGraphs({ year = "" }) {
+export default function PurokHistoricalConsumptionGraphs() {
   const [period, setPeriod] = useState("monthly");
   const [monthly, setMonthly] = useState([]);
   const [yearly, setYearly] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
+  const [availableYears, setAvailableYears] = useState([]);
 
   const loadHistory = useCallback(async () => {
     try {
-      const selectedYear = year ? Number(year) : undefined;
       const [monthlyResponse, yearlyResponse] = await Promise.all([
-        fetchAllPuroksMonthlyHistory(selectedYear),
+        fetchAllPuroksMonthlyHistory(selectedYear || undefined),
         fetchAllPuroksYearlyHistory(),
       ]);
       setMonthly(normalize(monthlyResponse, "monthly", selectedYear));
       setYearly(normalize(yearlyResponse, "yearly", selectedYear));
+      const years = [...new Set(
+        unwrap(yearlyResponse)
+          .flatMap((record) => Array.isArray(record?.historical) ? record.historical : [])
+          .map((item) => Number(item?.year))
+          .filter(Number.isInteger),
+      )].sort((a, b) => b - a);
+      setAvailableYears(years);
+      if (!selectedYear && years.length > 0) {
+        setSelectedYear(String(years[0]));
+      }
       setError("");
     } catch (requestError) {
       setError(requestError?.response?.data?.message ?? requestError?.message ?? "Unable to load purok history.");
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [selectedYear]);
 
   useEffect(() => {
     const initialLoadId = window.setTimeout(loadHistory, 0);
@@ -195,18 +207,37 @@ export default function PurokHistoricalConsumptionGraphs({ year = "" }) {
   }, [monthly, period, yearly]);
 
   return (
-    <section aria-label="Consumption per purok" className="space-y-5">
-      <div className="flex justify-end">
-        <div aria-label="Purok consumption period" className="inline-flex w-fit rounded-xl bg-slate-100 p-1" role="group">
+    <section aria-label="Consumption per purok" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-[15px] font-extrabold tracking-tight text-navy-900">Consumption Per Purok</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter
+            ariaLabel="Filter purok history by year"
+            compact
+            filters={[
+              {
+                ariaLabel: "Filter purok history by year",
+                dataTestId: "purok-year-filter",
+                id: "purok-year-filter",
+                label: "",
+                name: "purokYear",
+                onValueChange: setSelectedYear,
+                options: availableYears.map((entry) => ({ label: String(entry), value: String(entry) })),
+                value: selectedYear,
+              },
+            ]}
+          />
+          <div aria-label="Purok consumption period" className="inline-flex w-fit rounded-xl bg-slate-100 p-1" role="group">
           {["monthly", "yearly"].map((option) => (
             <button aria-pressed={period === option} className={`rounded-xl px-4 py-2 text-xs font-bold capitalize transition ${period === option ? "bg-white text-water-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`} key={option} onClick={() => setPeriod(option)} type="button">{option}</button>
           ))}
+          </div>
         </div>
       </div>
 
-      {loading && <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{PUROKS.map((purok) => <LoadingSkeleton key={purok} label={`Loading ${purok} consumption history`} variant="card" />)}</div>}
-      {!loading && error && <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"><AlertCircle className="h-5 w-5" />{error}</div>}
-      {!loading && !error && <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{displayedPuroks.map((record, index) => <PurokGraph color={COLORS[index % COLORS.length]} data={record.historical} key={record.purok} purok={record.purok} />)}</div>}
+      {loading && <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{PUROKS.map((purok) => <LoadingSkeleton key={purok} label={`Loading ${purok} consumption history`} variant="card" />)}</div>}
+      {!loading && error && <div className="mt-4 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700"><AlertCircle className="h-5 w-5" />{error}</div>}
+      {!loading && !error && <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{displayedPuroks.map((record, index) => <PurokGraph color={COLORS[index % COLORS.length]} data={record.historical} key={record.purok} purok={record.purok} />)}</div>}
     </section>
   );
 }
