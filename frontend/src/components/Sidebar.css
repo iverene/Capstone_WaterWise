@@ -8,15 +8,14 @@
   .waterwise-sidebar-brand > button { width: 24px; height: 36px; }
   .waterwise-sidebar-brand > div > p:first-child { font-size: 19px; letter-spacing: -.7px; }
   .waterwise-sidebar-brand > div > p:last-child { font-size: 10px; color: #6680ab; }
-  .waterwise-brand-accent { color: #0082f7; }
+  .waterwise-brand-accent { color: #0284c7; }
   .waterwise-top-wave { display: block; width: calc(100% + 24px); height: 65px; margin: 10px -12px 0; flex-shrink: 0; }
   .waterwise-sidebar nav { margin-top: 8px; scrollbar-width: thin; }
-  .waterwise-sidebar nav > p { color: #7791b4; font-size: 10px; letter-spacing: 2px; margin-bottom: 12px; padding-left: 17px; }
   .waterwise-sidebar nav ul { gap: 5px; }
   .waterwise-sidebar nav a { min-height: 43px; border-radius: 8px; color: #3c5683; font-size: 13px; font-weight: 600; padding-left: 16px; gap: 14px; }
   .waterwise-sidebar nav a:hover { background: #e7f2ff; color: #006ee6; }
   .waterwise-sidebar nav a[aria-current="page"] { background: #deedff; color: #0075ef; }
-  .waterwise-sidebar nav a[aria-current="page"]::before { content: ''; position: absolute; top: 8px; bottom: 8px; left: 0; width: 3px; border-radius: 4px; background: #0085ff; }
+  .waterwise-sidebar[data-collapsed="false"] nav a[aria-current="page"]::before { content: ''; position: absolute; top: 8px; bottom: 8px; left: 0; width: 3px; border-radius: 4px; background: #0085ff; }
   .waterwise-sidebar-account { position: relative; flex-shrink: 0; margin: 0 -12px -20px; padding: 14px 17px 28px; border: 0; background: #f8fcff; }
   .waterwise-sidebar-account > button { gap: 10px; padding: 0; }
   .waterwise-sidebar-account > button > span:first-child { background: #dbeeff; color: #007dec; }

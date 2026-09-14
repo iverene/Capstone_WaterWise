@@ -14,7 +14,7 @@ export default function AdminAccountInformation() {
 
   return <div className="space-y-5 sm:space-y-6">
     <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50 hover:text-water-900" onClick={() => navigate("/admin/profile")} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
-    <PageHeader compact description="Review the identity and contact information registered to your administrator account." eyebrow="Administrator profile" title="Administrator account information" />
+    <PageHeader compact description="Review the identity and contact information registered to your administrator account." eyebrow="Administrator profile" title="Administrator Account Information" />
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
       <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-water-700">Account</p><h2 className="mt-1 text-xl font-extrabold tracking-tight text-navy-900">Account information</h2><p className="mt-1 text-sm leading-6 text-slate-600">Credentials and role assigned to your WaterWise administrator account.</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2"><InformationRow Icon={AtSign} label="Username" value={account?.username ?? account?.name ?? "Administrator"} /><InformationRow Icon={Mail} label="Email address" value={account?.email ?? "Not available"} /><InformationRow Icon={ShieldCheck} label="Account role" value={roleLabel} /></div>

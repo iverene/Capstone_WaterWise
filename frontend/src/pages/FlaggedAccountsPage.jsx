@@ -172,7 +172,7 @@ export default function FlaggedAccountsPage() {
       <PageHeader
         description="Review residents with three or more outstanding monthly bills for disconnection action."
         eyebrow="Account monitoring"
-        title="Flagged accounts"
+        title="Flagged Accounts"
       />
 
       <section aria-label="Flagged account summary" className="grid gap-2 sm:grid-cols-2 sm:gap-3">

@@ -37,7 +37,7 @@ export default function AdminDashboardPage() {
       <PageHeader
         description="Review recorded consumption using historical water data."
         eyebrow="Operations overview"
-        title="Water operations overview"
+        title="Water Operations Overview"
       />
 
       <DashboardPeriodFilter

@@ -28,8 +28,6 @@ import {
 } from "../services/consumerPortal.service";
 import NotificationPage from "../pages/NotificationPage";
 import Header from "./Header";
-import ChangePasswordModal from "./ChangePasswordModal";
-import ChangeEmailModal from "./ChangeEmailModal";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import NotificationBadgeTrigger from "./NotificationBadgeTrigger";
 import PWAInstallButton from "./PWAInstallButton";
@@ -121,9 +119,6 @@ export default function AppLayout({ children }) {
   const [account, setAccount] = useState(getStoredAccount);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-  const [isPasswordEmailOnly, setIsPasswordEmailOnly] = useState(false);
-  const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isNotificationLoading, setIsNotificationLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
@@ -339,16 +334,24 @@ export default function AppLayout({ children }) {
   }, [isNotificationOpen]);
 
   useEffect(() => {
-    const openPasswordChange = (event) => {
-      setIsPasswordEmailOnly(Boolean(event.detail?.emailOnly));
-      setIsChangePasswordOpen(true);
+    // The change-email page announces success through this event (replacing
+    // the old modal's onSuccess): sync the header account state and storage.
+    const syncEmailChanged = (event) => {
+      const nextEmail = event.detail?.email;
+      if (!nextEmail) return;
+      setAccount((current) => (current ? { ...current, email: nextEmail } : current));
+      try {
+        window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify({ ...getStoredAccount(), email: nextEmail }));
+      } catch {
+        // Storage may be unavailable; the profile page still shows the update.
+      }
     };
-    const openEmailChange = () => setIsChangeEmailOpen(true);
-    window.addEventListener("waterwise:open-change-password", openPasswordChange);
-    window.addEventListener("waterwise:open-change-email", openEmailChange);
+    const requestLogout = () => setIsLogoutConfirmOpen(true);
+    window.addEventListener("waterwise:email-changed", syncEmailChanged);
+    window.addEventListener("waterwise:request-logout", requestLogout);
     return () => {
-      window.removeEventListener("waterwise:open-change-password", openPasswordChange);
-      window.removeEventListener("waterwise:open-change-email", openEmailChange);
+      window.removeEventListener("waterwise:email-changed", syncEmailChanged);
+      window.removeEventListener("waterwise:request-logout", requestLogout);
     };
   }, []);
 
@@ -576,7 +579,6 @@ export default function AppLayout({ children }) {
             </div>
           ) : null
         }
-        onLogout={() => setIsLogoutConfirmOpen(true)}
         onProfile={
           activeRole === "consumer"
             ? () => navigate("/consumer/profile-details")
@@ -634,29 +636,6 @@ export default function AppLayout({ children }) {
         onCancel={() => setIsLogoutConfirmOpen(false)}
         onConfirm={handleLogout}
       />
-
-      {isChangePasswordOpen && (
-        <ChangePasswordModal
-          emailOnly={isPasswordEmailOnly}
-          isOpen
-          onClose={() => setIsChangePasswordOpen(false)}
-          onSuccess={(successMessage) => toast.success("Password changed", successMessage)}
-        />
-      )}
-
-      {isChangeEmailOpen && (
-        <ChangeEmailModal
-          accountRole={activeRole}
-          isOpen
-          onClose={() => setIsChangeEmailOpen(false)}
-          onSuccess={(result) => {
-            setAccount((current) => ({ ...current, email: result.email }));
-            window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify({ ...getStoredAccount(), email: result.email }));
-            window.dispatchEvent(new CustomEvent("waterwise:email-changed", { detail: { email: result.email } }));
-            toast.success("Email changed", result.message);
-          }}
-        />
-      )}
 
       <Modal
         description={selectedNotificationPresentation.label}
