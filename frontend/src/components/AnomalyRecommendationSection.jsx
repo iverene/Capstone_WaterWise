@@ -196,31 +196,27 @@ export default function AnomalyRecommendationSection() {
           </article>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <h3 className="mb-3 font-bold text-navy-900">Recommendations by Purok</h3>
+            <h3 className="mb-3 font-bold text-navy-900">Puroks Ranked by Consumption</h3>
             {purokItems.length > 0 ? (
-              <ul className="grid gap-2">
+              <ul className="divide-y divide-slate-100 border-y border-slate-100">
                 {purokItems.map((item) => {
                   const expanded = expandedPurok === item.purok;
-                  const preview = item.result?.recommendations?.[0]?.title;
                   return (
-                    <li key={item.purok} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <li key={item.purok}>
                       <button
                         aria-expanded={expanded}
-                        className="flex min-h-16 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
+                        className="flex min-h-16 w-full items-center gap-3 px-1 py-1 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
                         onClick={() => setExpandedPurok(expanded ? null : item.purok)}
                         type="button"
                       >
                         {Number.isFinite(item.rank) ? (
-                          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-300 font-mono text-sm font-extrabold tabular-nums text-slate-700">
-                            {item.rank + 1}
+                          <span aria-hidden="true" className="w-7 shrink-0 font-mono text-xs font-extrabold tabular-nums text-slate-400">
+                            {item.rank + 1}.
                           </span>
                         ) : (
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300" aria-hidden="true" />
                         )}
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold text-navy-900">{item.purok}</span>
-                          <span className="mt-0.5 block truncate text-xs text-slate-500">{preview ?? "No recommendations yet"}</span>
-                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-navy-900">{item.purok}</span>
                         {item.value !== null && (
                           <span className="shrink-0 font-mono text-sm font-extrabold tabular-nums text-navy-900">
                             {item.value.toLocaleString("en-PH", { maximumFractionDigits: 1 })}
@@ -230,7 +226,7 @@ export default function AnomalyRecommendationSection() {
                         <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
                       </button>
                       {expanded && (
-                        <div className="border-t border-slate-100 p-4">
+                        <div className="px-1 pb-4">
                           <RecommendationDetails recommendation={item.result} summary={item.result?.summary} />
                         </div>
                       )}
