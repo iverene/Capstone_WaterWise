@@ -2,7 +2,9 @@ import { apiRequest } from "./apiClient";
 import {
   ACCOUNT_STORAGE_KEY,
   clearSession,
+  getPersistentMeterReaderUser,
   getStoredAccount,
+  refreshMeterReaderPersistence,
 } from "./authToken";
 import { disableCurrentPushNotifications } from "./pushNotifications";
 
@@ -262,6 +264,9 @@ export async function getCurrentAccount(options) {
     if (value !== undefined && value !== null && value !== "") user[key] = value;
   }
   window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  // Keep the meter-reader offline identity fresh on every successful online
+  // verify (rolling 7-day grace). No token/password is persisted.
+  refreshMeterReaderPersistence(user);
   return { user };
 }
 
@@ -302,6 +307,15 @@ export async function hasVerifiedSession() {
   ) {
     return true;
   }
+  // Meter-reader PWA offline: allow reopened workspace without re-login when
+  // within offline grace. Online sync still requires the HttpOnly cookie;
+  // a real 401 later forces login. This restores the deployed behavior where
+  // clearing the tab + tapping the PWA does not ask for login before recording.
+  if (stored.role === "meter-reader") {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (getPersistentMeterReaderUser()?.id === stored.id) return true;
+    }
+  }
   if (verifyInFlight) {
     try {
       return await verifyInFlight;
@@ -315,7 +329,12 @@ export async function hasVerifiedSession() {
       if (!user?.id) return false;
       verifiedSessionCache = { at: Date.now(), userId: user.id, role: user.role, ok: true };
       return true;
-    } catch {
+    } catch (error) {
+      // Offline (no response) with a valid persistent meter-reader identity:
+      // stay in the workspace and queue readings; sync when back online.
+      if (!error?.response && stored.role === "meter-reader") {
+        if (getPersistentMeterReaderUser()?.id === stored.id) return true;
+      }
       return false;
     } finally {
       verifyInFlight = null;
