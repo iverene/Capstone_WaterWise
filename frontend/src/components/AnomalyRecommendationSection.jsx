@@ -44,7 +44,7 @@ export default function AnomalyRecommendationSection() {
   const [recommendations, setRecommendations] = useState(
     EMPTY_RECOMMENDATIONS,
   );
-  const [rankOrder, setRankOrder] = useState([]);
+  const [rankEntries, setRankEntries] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("monthly");
@@ -64,15 +64,18 @@ export default function AnomalyRecommendationSection() {
         ...(recommendationResponse?.data ?? {}),
       });
       const rankingData = rankingResponse?.data?.ranking ?? rankingResponse?.data ?? rankingResponse ?? [];
-      setRankOrder(
+      setRankEntries(
         Array.isArray(rankingData)
-          ? rankingData.map((item) => String(item?.purok ?? ""))
+          ? rankingData.map((item) => ({
+            name: String(item?.purok ?? ""),
+            value: Number(item?.consumption ?? item?.value ?? 0),
+          }))
           : [],
       );
     } catch (error) {
       if (!isCanceledRequest(error)) {
         setRecommendations(EMPTY_RECOMMENDATIONS);
-        setRankOrder([]);
+        setRankEntries([]);
         setErrorMessage(
           error.response?.data?.message ??
             "Unable to load recommendations.",
@@ -105,16 +108,18 @@ export default function AnomalyRecommendationSection() {
       (source ?? []).map((item) => item?.purok).filter((name) => name != null && String(name).trim() !== ""),
     )];
     const rankOf = (name) => {
-      const index = rankOrder.findIndex((entry) => entry === name);
+      const index = rankEntries.findIndex((entry) => entry.name === name);
       return index >= 0 ? index : Number.POSITIVE_INFINITY;
     };
+    const valueOf = (name) => rankEntries.find((entry) => entry.name === name)?.value ?? null;
     names.sort((a, b) => rankOf(a) - rankOf(b) || String(a).localeCompare(String(b)));
     return names.map((name) => ({
       purok: name,
       rank: rankOf(name),
       result: source.find((item) => item?.purok === name) ?? null,
+      value: valueOf(name),
     }));
-  }, [period, rankOrder, recommendations]);
+  }, [period, rankEntries, recommendations]);
 
   return (
     <section
@@ -190,28 +195,38 @@ export default function AnomalyRecommendationSection() {
             </div>
           </article>
 
-          <div>
-            <h3 className="mb-3 font-bold text-navy-900">Ranked Puroks</h3>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <h3 className="mb-3 font-bold text-navy-900">Recommendations by Purok</h3>
             {purokItems.length > 0 ? (
               <ul className="grid gap-2">
                 {purokItems.map((item) => {
                   const expanded = expandedPurok === item.purok;
+                  const preview = item.result?.recommendations?.[0]?.title;
                   return (
-                    <li key={item.purok} className="overflow-hidden rounded-xl border border-slate-200">
+                    <li key={item.purok} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                       <button
                         aria-expanded={expanded}
-                        className="flex min-h-12 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
+                        className="flex min-h-16 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600"
                         onClick={() => setExpandedPurok(expanded ? null : item.purok)}
                         type="button"
                       >
                         {Number.isFinite(item.rank) ? (
-                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-mono text-xs font-extrabold tabular-nums ${item.rank === 0 ? "bg-water-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-300 font-mono text-sm font-extrabold tabular-nums text-slate-700">
                             {item.rank + 1}
                           </span>
                         ) : (
                           <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-300" aria-hidden="true" />
                         )}
-                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-navy-900">{item.purok}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold text-navy-900">{item.purok}</span>
+                          <span className="mt-0.5 block truncate text-xs text-slate-500">{preview ?? "No recommendations yet"}</span>
+                        </span>
+                        {item.value !== null && (
+                          <span className="shrink-0 font-mono text-sm font-extrabold tabular-nums text-navy-900">
+                            {item.value.toLocaleString("en-PH", { maximumFractionDigits: 1 })}
+                            <span className="ml-1 text-[10px] font-bold text-slate-500">m³</span>
+                          </span>
+                        )}
                         <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
                       </button>
                       {expanded && (
