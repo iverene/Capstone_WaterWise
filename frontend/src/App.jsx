@@ -20,6 +20,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ChangeEmailPage from "./pages/ChangeEmailPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import UsageMetrics from "./pages/UsageMetrics";
 import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
