@@ -3,6 +3,7 @@ import { Check, Eye, EyeOff, LoaderCircle, Mail, ShieldCheck } from "lucide-reac
 import { useNavigate } from "react-router";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
+import AccountBackButton from "../components/AccountBackButton";
 import { useToast } from "../components/Toast";
 import {
   changePasswordWithCurrent,
@@ -10,7 +11,7 @@ import {
   resetPassword,
   verifyPasswordResetOtp,
 } from "../services/auth.service";
-import { getStoredAccount } from "../services/authToken";
+import { getStoredAccount, clearSession } from "../services/authToken";
 
 const formatCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 const PASSWORD_OTP_SESSION_KEY = "waterwise:password-otp-challenge";
@@ -116,8 +117,19 @@ export default function ChangePasswordPage() {
       const result = method === "current"
         ? await changePasswordWithCurrent(currentPassword, newPassword)
         : await resetPassword(resetToken, newPassword);
-      toast.success("Password changed", result.message);
-      navigate(backPath);
+      // Backend clears the HttpOnly session cookie on password change, so
+      // staying on a protected page would bounce as generic "Session expired".
+      // Clear local session, flag the reason, and go straight to login where
+      // a password-specific success notice is shown instead.
+      clearSession();
+      try {
+        window.sessionStorage.setItem("waterwise:password-changed", "1");
+        window.sessionStorage.removeItem("waterwise:session-expired");
+        window.sessionStorage.removeItem("waterwise:session-inactive");
+      } catch {
+        // Storage failures must not block the login redirect.
+      }
+      navigate("/login", { replace: true, state: { passwordChanged: true, message: result.message } });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -186,7 +198,10 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <PageHeader eyebrow="Account Security" title="Change Password" />
+      <div>
+        <AccountBackButton fallbackPath={backPath} />
+        <PageHeader eyebrow="Account Security" title="Change Password" />
+      </div>
 
       <div className="mx-auto w-full max-w-md">
       {method === "email" && !challengeToken && (

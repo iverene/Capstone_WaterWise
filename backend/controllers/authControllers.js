@@ -39,6 +39,10 @@ import {
   verifyTrustedDevice,
 } from "../models/trustedDeviceModels.js";
 import {
+  getSessionCookieName,
+  sessionCookieOptions,
+} from "../models/sessionCookieModels.js";
+import {
   clearSessionActivity,
   getInactivityTimeoutMs,
   touchSessionActivity,
@@ -122,6 +126,19 @@ function clearTrustedDeviceCookie(res, role, req) {
   else delete flipped.partitioned;
   res.clearCookie(getTrustedDeviceCookieName(), flipped);
   res.clearCookie(getTrustedDeviceCookieName(), { ...flipped, path: "/api/auth" });
+}
+
+function setSessionCookie(res, token, req) {
+  res.cookie(getSessionCookieName(), token, sessionCookieOptions(req));
+}
+
+function clearSessionCookie(res, req) {
+  const options = sessionCookieOptions(req);
+  res.clearCookie(getSessionCookieName(), options);
+  const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
+  if (flipped.secure) flipped.partitioned = true;
+  else delete flipped.partitioned;
+  res.clearCookie(getSessionCookieName(), flipped);
 }
 
 function createAccessToken(user, passwordHash) {
@@ -403,9 +420,10 @@ export async function login(req, res) {
         if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
         const passwordHash = await getPasswordHash(user.id, user.role);
         await touchSessionActivity(user.role, user.id);
+        const sessionToken = createAccessToken(user, passwordHash);
+        setSessionCookie(res, sessionToken, req);
         return res.status(200).json({
           success: true,
-          token: createAccessToken(user, passwordHash),
           user,
           trustedDevice: true,
         });
@@ -443,7 +461,9 @@ export async function login(req, res) {
     if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
     const loginPasswordHash = await getPasswordHash(user.id, user.role);
     await touchSessionActivity(user.role, user.id);
-    return res.status(200).json({ success: true, token: createAccessToken(user, loginPasswordHash), user });
+    const loginSessionToken = createAccessToken(user, loginPasswordHash);
+    setSessionCookie(res, loginSessionToken, req);
+    return res.status(200).json({ success: true, user });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
       success: false,
@@ -462,8 +482,52 @@ export async function login(req, res) {
   }
 }
 
-export function currentAccount(req, res) {
-  return res.status(200).json({ success: true, user: req.user });
+export async function currentAccount(req, res) {
+  try {
+    const account = await getPasswordResetAccountById(req.user.id, req.user.role);
+    if (!account || account.status !== "active") {
+      return res.status(401).json({
+        success: false,
+        message: "This account is no longer active. Please sign in again.",
+      });
+    }
+    let username = account.username;
+    let email = account.email;
+    // Login sets name = username; enrich consumer with composed full name so
+    // new tabs without stored session still display the real name instead of
+    // falling back to a generic label.
+    let name = account.username;
+    if (req.user.role === "consumer") {
+      const { data: profile } = await supabase
+        .from("consumers")
+        .select("first_name, middle_name, last_name, username, email")
+        .eq("id", req.user.id)
+        .maybeSingle();
+      if (profile) {
+        const composed = [profile.first_name, profile.middle_name, profile.last_name]
+          .map((part) => String(part ?? "").trim().replace(/\s+/g, " "))
+          .filter(Boolean)
+          .join(" ");
+        username = profile.username ?? username;
+        email = profile.email ?? email;
+        name = composed || profile.username || name;
+      }
+    }
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: req.user.id,
+        username,
+        email,
+        name,
+        role: req.user.role,
+        status: account.status,
+        created_at: req.user.created_at,
+      },
+    });
+  } catch {
+    return res.status(500).json({ success: false, message: "Unable to load the current account." });
+  }
 }
 
 export async function postSessionActivity(req, res) {
@@ -584,9 +648,10 @@ export async function verifyAdminLoginOtp(req, res) {
     const dfp = req.get("x-device-fingerprint");
     if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
     await touchSessionActivity(user.role, user.id);
+    const otpSessionToken = createAccessToken(user, account.password);
+    setSessionCookie(res, otpSessionToken, req);
     return res.status(200).json({
       success: true,
-      token: createAccessToken(user, account.password),
       user,
       trustedDeviceExpiresAt: trustedDevice.expiresAt.toISOString(),
     });
@@ -772,7 +837,11 @@ export async function completeConsumerEmailChange(req, res) {
       : req.user.role === "meter-reader"
         ? await updateMeterReader(req.user.id, { email: newEmail })
         : await updateConsumer(req.user.id, { email: newEmail });
-    return res.status(200).json({ success: true, message: "Your email address has been changed successfully.", email: updated.email });
+    // Email is part of the account identity: end the session so the user
+    // signs in again with the updated credentials instead of hitting a 401
+    // that surfaces as a generic "Session expired" notice.
+    clearSessionCookie(res, req);
+    return res.status(200).json({ success: true, message: "Your email address has been changed successfully. Please sign in again.", email: updated.email });
   } catch (error) {
     const isTokenError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
     return res.status(error.statusCode ?? (isTokenError ? 400 : 500)).json({ success: false, message: isTokenError ? "This email change session is invalid or expired." : error.message || "Unable to change email." });
@@ -902,6 +971,7 @@ export async function changeAuthenticatedPassword(req, res) {
       await revokeAdminTrustedDevices(req.user.id);
       clearTrustedDeviceCookie(res, req.user.role, req);
     }
+    clearSessionCookie(res, req);
     return res.status(200).json({ success: true, message: "Your password has been changed successfully." });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -1025,6 +1095,7 @@ export async function logout(req, res) {
     const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
     await supabase.from(table).update({ device_fingerprint_hash: null }).eq("id", id);
     await clearSessionActivity(role, id);
+    clearSessionCookie(res, req);
     // Trusted admin browsers stay trusted across explicit logout so the next
     // sign-in on the same browser can skip OTP until expiry, manual revoke,
     // or password change. Only the short-lived JWT/session is ended here.

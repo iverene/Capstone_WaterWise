@@ -6,6 +6,7 @@ import {
   JWT_ISSUER,
 } from "../config/auth.js";
 import { supabase } from "../config/supabase.js";
+import { readSessionToken } from "../models/sessionCookieModels.js";
 import {
   getInactivityTimeoutMs,
   isSessionIdle,
@@ -30,12 +31,15 @@ function hashPasswordState(passwordHash) {
 
 export async function authenticate(req, res, next) {
   const authorization = req.get("authorization") ?? "";
-  const [scheme, token] = authorization.split(" ");
+  const [scheme, bearerToken] = authorization.split(" ");
+  const cookieToken = readSessionToken(req);
+  const token = scheme === "Bearer" && bearerToken ? bearerToken : cookieToken || "";
+  const authMethod = scheme === "Bearer" && bearerToken ? "bearer" : cookieToken ? "cookie" : "none";
 
-  if (scheme !== "Bearer" || !token) {
+  if (!token) {
     return res.status(401).json({
       success: false,
-      message: "A Bearer authentication token is required.",
+      message: "Authentication is required. Please sign in again.",
     });
   }
 
@@ -82,7 +86,17 @@ export async function authenticate(req, res, next) {
     }
     // Device binding is mandatory once a fingerprint is enrolled: a missing
     // or mismatched header must not silently bypass the check.
+    // Fingerprint-as-CSRF: cookie sessions must always present the custom
+    // X-Device-Fingerprint header (simple cross-site forms cannot set custom
+    // headers due to CORS preflight). Bearer sessions keep legacy best-effort
+    // behavior during the dual-support transition.
     const storedHash = data?.device_fingerprint_hash;
+    if (authMethod === "cookie" && !requestFingerprint) {
+      return res.status(401).json({
+        success: false,
+        message: "Session device verification is required. Please sign in again.",
+      });
+    }
     if (storedHash) {
       if (!requestFingerprint) {
         return res.status(401).json({

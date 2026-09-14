@@ -3,7 +3,6 @@ import {
   ACCOUNT_STORAGE_KEY,
   clearSession,
   getStoredAccount,
-  storeSession,
 } from "./authToken";
 import { disableCurrentPushNotifications } from "./pushNotifications";
 
@@ -11,12 +10,13 @@ export { ACCOUNT_STORAGE_KEY };
 
 export async function login(credentials) {
   try {
-    const result = await apiRequest("/auth/login", {
+    // No session write here: the caller (Login) validates the role has a
+    // workspace destination first, then stores. Storing before validation
+    // left stale sessions behind for unknown roles.
+    return await apiRequest("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
     });
-    if (result.token && result.user) storeSession(result);
-    return result;
   } catch (error) {
     throw new Error(
       error.response?.data?.message ??
@@ -29,12 +29,12 @@ export async function login(credentials) {
 
 export async function verifyAdminLoginOtp(challengeToken, otp) {
   try {
-    const result = await apiRequest("/auth/admin/verify-login-otp", {
+    // No session write here either (see login above): validated + stored by
+    // the Login caller after the destination check.
+    return await apiRequest("/auth/admin/verify-login-otp", {
       method: "POST",
       body: JSON.stringify({ challengeToken, otp }),
     });
-    storeSession(result);
-    return result;
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to verify the admin sign-in code.", { cause: error });
   }
@@ -252,22 +252,91 @@ export async function resetPassword(token, password) {
 
 export async function getCurrentAccount(options) {
   const result = await apiRequest("/auth/me", options);
-  const storedAccount = getStoredAccount();
-  const user = { ...storedAccount, ...result.user };
+  const storedAccount = getStoredAccount() ?? {};
+  const incoming = result.user ?? {};
+  // Defensive merge: never blank a stored name/username/email with
+  // undefined/null from a sparse response. Backend now enriches /auth/me,
+  // but this guards old sessions and partial payloads.
+  const user = { ...storedAccount };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value !== undefined && value !== null && value !== "") user[key] = value;
+  }
   window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
   return { user };
+}
+
+// Cached async session verification for the cookie-only world. The sync
+// hasAuthenticatedSession() trusts tab storage, so an expired/invalid
+// HttpOnly cookie still bounced /login -> workspace -> 401 -> /login.
+// Verify against GET /auth/me instead, memoized per account for 5 minutes
+// (plus in-flight dedupe for StrictMode double-mounts).
+const VERIFY_CACHE_TTL_MS = 5 * 60 * 1000;
+let verifiedSessionCache = { at: 0, userId: null, role: null, ok: false };
+let verifyInFlight = null;
+
+export function clearVerifiedSessionCache() {
+  verifiedSessionCache = { at: 0, userId: null, role: null, ok: false };
+  verifyInFlight = null;
+}
+
+export function noteSessionStored(user) {
+  if (user?.id && user?.role) {
+    // A fresh login just proved the session server-side; seed the cache so
+    // the next guard check skips an extra /auth/me round trip.
+    verifiedSessionCache = { at: Date.now(), userId: user.id, role: user.role, ok: true };
+  } else {
+    clearVerifiedSessionCache();
+  }
+  verifyInFlight = null;
+}
+
+export async function hasVerifiedSession() {
+  const stored = getStoredAccount();
+  if (!stored?.id || !stored?.role) return false;
+  const now = Date.now();
+  if (
+    verifiedSessionCache.ok &&
+    verifiedSessionCache.userId === stored.id &&
+    verifiedSessionCache.role === stored.role &&
+    now - verifiedSessionCache.at < VERIFY_CACHE_TTL_MS
+  ) {
+    return true;
+  }
+  if (verifyInFlight) {
+    try {
+      return await verifyInFlight;
+    } catch {
+      return false;
+    }
+  }
+  verifyInFlight = (async () => {
+    try {
+      const { user } = await getCurrentAccount();
+      if (!user?.id) return false;
+      verifiedSessionCache = { at: Date.now(), userId: user.id, role: user.role, ok: true };
+      return true;
+    } catch {
+      return false;
+    } finally {
+      verifyInFlight = null;
+    }
+  })();
+  return verifyInFlight;
 }
 
 export async function logout() {
   const account = getStoredAccount();
   try {
     await apiRequest("/auth/logout", { method: "POST" });
-  } catch {}
+  } catch {
+    // Logout endpoint best-effort; clear local session regardless.
+  }
   try {
     if (account?.role === "consumer") {
       await disableCurrentPushNotifications();
     }
   } finally {
+    clearVerifiedSessionCache();
     clearSession();
   }
 }
