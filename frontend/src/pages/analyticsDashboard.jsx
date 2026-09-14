@@ -1,5 +1,6 @@
-import { BrainCircuit, Info, TrendingUp } from "lucide-react";
+import { BrainCircuit, Info } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import AnalyticsDescriptivePanel from "../components/AnalyticsDescriptivePanel";
 import AdminOverallConsumptionCard from "../components/AdminOverallConsumptionCard";
 import AdminMonthlyConsumptionCard from "../components/AdminMonthlyConsumptionCard";
 import AdminYearlyConsumptionCard from "../components/AdminYearlyConsumptionCard";
@@ -14,16 +15,16 @@ import PageHeader from "../components/PageHeader";
 
 const TABS = [
   {
+    id: "descriptive",
+    label: "Descriptive",
+  },
+  {
     id: "prediction",
     label: "Prediction",
-    description: "Forecast overall and per-purok water demand.",
-    Icon: TrendingUp,
   },
   {
     id: "decision-support",
     label: "Decision Support",
-    description: "Review priorities, anomalies, and recommended actions.",
-    Icon: BrainCircuit,
   },
 ];
 
@@ -32,7 +33,7 @@ export default function AnalyticsDashboard() {
   const requestedTab = searchParams.get("tab");
   const activeTab = TABS.some((tab) => tab.id === requestedTab)
     ? requestedTab
-    : "prediction";
+    : "descriptive";
 
   const selectTab = (tabId) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -58,25 +59,25 @@ export default function AnalyticsDashboard() {
       <PageHeader
         description="Understand expected demand, identify unusual consumption, and turn system data into practical barangay actions."
         eyebrow="Operational intelligence"
-        title="Water Analytics"
+        title="Analytics"
       />
 
       <div
         aria-label="Analytics workspaces"
-        className="grid grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-card"
+        className="mb-5 flex gap-1 overflow-x-auto border-b border-slate-200 sm:gap-2"
         onKeyDown={handleTabKeyDown}
         role="tablist"
       >
-        {TABS.map(({ description, Icon, id, label }) => {
+        {TABS.map(({ id, label }) => {
           const selected = id === activeTab;
           return (
             <button
               aria-controls={`analytics-panel-${id}`}
               aria-selected={selected}
-              className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-1 sm:justify-start sm:px-4 ${
+              className={`relative whitespace-nowrap px-3 py-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-1 sm:px-4 ${
                 selected
-                  ? "bg-water-600 text-white shadow-card"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-navy-900"
+                  ? "text-water-700"
+                  : "text-slate-500 hover:text-navy-900"
               }`}
               id={`analytics-tab-${id}`}
               key={id}
@@ -85,21 +86,24 @@ export default function AnalyticsDashboard() {
               tabIndex={selected ? 0 : -1}
               type="button"
             >
-              <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
-              <span className="min-w-0 text-left">
-                <span className="block">{label}</span>
-                <span
-                  className={`hidden truncate text-xs font-medium sm:block ${
-                    selected ? "text-water-50" : "text-slate-500"
-                  }`}
-                >
-                  {description}
-                </span>
-              </span>
+              {label}
+              {selected && <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-water-600" />}
             </button>
           );
         })}
       </div>
+
+      {activeTab === "descriptive" && (
+        <section
+          aria-labelledby="analytics-tab-descriptive"
+          className="outline-none"
+          id="analytics-panel-descriptive"
+          role="tabpanel"
+          tabIndex={0}
+        >
+          <AnalyticsDescriptivePanel />
+        </section>
+      )}
 
       {activeTab === "prediction" && (
         <section
