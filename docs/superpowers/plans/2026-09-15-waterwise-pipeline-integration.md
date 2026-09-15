@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Integrate the verified `waterwise-pipeline-prototype` into the main repo as a pinned `pipeline/` submodule with versioned marts DDL, hardened DAG paths, remapped `stg_*` models, and a validated same-DB marts-only end-to-end run.
+**Goal:** Integrate the verified `waterwise-pipeline-prototype` into the main repo as a pinned `pipeline/` submodule with versioned marts DDL, hardened DAG paths, verified `stg_*` outputs, and a validated same-DB marts-only end-to-end run.
 
 **Architecture:** Submodule owns all Python/dbt/Airflow code and its own venv; main repo owns the submodule pointer, a versioned `backend/db/marts_analytics_migration.sql`, a read-only `backend/models/martsModels.js`, root `.gitignore`, and the contract note. Least-privilege Postgres roles enforce the OLTP-read-only / mart-write-only boundary.
 
@@ -13,7 +13,7 @@
 - Work ONLY on branch `feature/pipeline-analytics-demo`. Do NOT merge to `main` when finished.
 - PowerShell 5.1 shell: chain dependent commands with `cmd1; if ($?) { cmd2 }`. Never use `&&`.
 - Never commit secrets: `pipeline/.env`, `backend/.env` are gitignored. Commit only `pipeline/.env.example`.
-- Pipeline is read-only on `consumers`, `consumption`, `billing`, `payments`; writes ONLY to `mart_*` + `pipeline_run_log`.
+- Pipeline is read-only on `consumers`, `consumption`, `billing`, `payments`; writes ONLY to `mart_*` tables (incl. `mart_pipeline_execution_logs`).
 - `PIPELINE_ROOT = Path(__file__).resolve().parents[2]` for `pipeline/airflow/dags/*.py`. No hardcoded home dirs.
 - Python binary resolution order: `PIPELINE_PYTHON_BIN` env var, then `<VENV>/Scripts/python.exe` (Windows), then `<VENV>/bin/python` (Linux).
 - `log_run` task uses `trigger_rule="all_done"`. `retries=2` on extract/load, `retries=0` on dbt run/test.
@@ -26,9 +26,9 @@
 
 - Modify (new file): `.gitignore` (repo root) — root hygiene; covers `pipeline/.env`, OS cruft.
 - Create (in submodule `pipeline/`): `.env.example` — documents `PIPELINE_PYTHON_BIN`, `PIPELINE_VENV`, `SUPABASE_DB_URL_RO`, `SUPABASE_DB_URL_MART`, `DBT_PROFILES_DIR`.
-- Create: `backend/db/marts_analytics_migration.sql` — 5× `mart_*` + `pipeline_run_log`, RLS, `USAGE` + table grants, idempotent roles.
+- Create: `backend/db/marts_analytics_migration.sql` — 5× `mart_*` + `mart_pipeline_execution_logs`, RLS, `USAGE` + table grants, idempotent roles.
 - Modify (in submodule): `pipeline/airflow/dags/waterwise_batch_pipeline.py` — path/env hardening.
-- Modify (in submodule): `pipeline/dbt_waterwise/models/staging/stg_consumers.sql`, `stg_consumption.sql`, `stg_billing.sql`, `stg_payments.sql` — column remaps (exact filenames confirmed in Task 5 Step 1; if names differ, adapt and record).
+- Modify (in submodule): `pipeline/dbt_waterwise/models/staging/stg_consumers.sql`, `stg_consumption.sql`, `stg_billing.sql`, `stg_payments.sql` — verify-only (amended; see Task 5).
 - Create: `backend/models/martsModels.js` — read-only mart queries via existing `backend/config/supabase.js` service_role client.
 - Reference only (never edit in this plan): `backend/db/migration.sql`, `backend/config/supabase.js`, `CONTEXT.md`.
 
@@ -132,8 +132,8 @@ Expected: commit succeeds; `git status --short` shows only the untracked `pipeli
 - Test: apply + verification queries in Steps 5–7 (psql with a superuser/service connection string, or Supabase SQL editor)
 
 **Interfaces:**
-- Consumes: column list from `scripts/supabase_marts_ddl.sql` in `pipeline/` (Task 1 output). If that file's mart column definitions differ from the generic shapes below, use its exact column definitions and record the deviation in the commit message.
-- Produces: empty `mart_*` ×5 + `pipeline_run_log` tables with RLS + grants, consumed by Tasks 6–8
+- Consumes: column list from `scripts/supabase_marts_ddl.sql` in `pipeline/` (Task 1 output). Ground truth (verified 2026-09-15): six tables — `mart_purok_monthly_reports`, `mart_delinquent_accounts_summary`, `mart_system_consumption_summary`, `mart_monthly_financial_summary`, `mart_consumer_monthly_benchmarks`, `mart_pipeline_execution_logs` (run_id text PK, started_at, finished_at, rows_extracted, rows_transformed, rows_loaded, status, error_message). DuckDB-side model names are unprefixed (`load.py` strips `mart_`); Supabase targets are prefixed. If the checked-out SHA differs, use its exact definitions and record the deviation.
+- Produces: six populated-by-pipeline tables with RLS + grants, consumed by Tasks 6–8
 
 - [ ] **Step 1: Read the prototype DDL source of truth**
 
@@ -171,7 +171,7 @@ GRANT SELECT, INSERT, UPDATE ON public.mart_purok_monthly_reports TO waterwise_m
 GRANT SELECT, INSERT, UPDATE ON public.mart_delinquent_accounts_summary TO waterwise_mart_writer;
 GRANT SELECT, INSERT, UPDATE ON public.mart_consumer_monthly_benchmarks TO waterwise_mart_writer;
 GRANT SELECT, INSERT, UPDATE ON public.mart_monthly_financial_summary TO waterwise_mart_writer;
-GRANT SELECT, INSERT ON public.pipeline_run_log TO waterwise_mart_writer;
+GRANT SELECT, INSERT ON public.mart_pipeline_execution_logs TO waterwise_mart_writer;
 
 -- Harden new tables: RLS on, no anon/authenticated access (mirrors backend/db/migration.sql convention).
 ALTER TABLE public.mart_system_consumption_summary ENABLE ROW LEVEL SECURITY;
@@ -179,16 +179,16 @@ ALTER TABLE public.mart_purok_monthly_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mart_delinquent_accounts_summary ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mart_consumer_monthly_benchmarks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.mart_monthly_financial_summary ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.pipeline_run_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mart_pipeline_execution_logs ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.mart_system_consumption_summary FROM anon, authenticated;
 REVOKE ALL ON public.mart_purok_monthly_reports FROM anon, authenticated;
 REVOKE ALL ON public.mart_delinquent_accounts_summary FROM anon, authenticated;
 REVOKE ALL ON public.mart_consumer_monthly_benchmarks FROM anon, authenticated;
 REVOKE ALL ON public.mart_monthly_financial_summary FROM anon, authenticated;
-REVOKE ALL ON public.pipeline_run_log FROM anon, authenticated;
+REVOKE ALL ON public.mart_pipeline_execution_logs FROM anon, authenticated;
 ```
 
-Table-name note: if the prototype DDL names marts differently (e.g. with a `marts.` schema rather than `mart_` prefix), use its exact names throughout and update Tasks 6–8 accordingly.
+Table-name note: the six names above are the prototype DDL's exact names (verified). If a future prototype SHA renames them, use its exact names throughout and update Tasks 6–8 accordingly.
 
 - [ ] **Step 3: Syntax-check the file without a database**
 
@@ -197,7 +197,7 @@ Expected: all three patterns match at least once each (this is a SQL file, so `n
 
 - [ ] **Step 4: Commit the migration file (unapplied)**
 
-Run: `git add backend/db/marts_analytics_migration.sql; if ($?) { git commit -m "feat(db): versioned marts + pipeline_run_log DDL with least-privilege grants" }`
+Run: `git add backend/db/marts_analytics_migration.sql; if ($?) { git commit -m "feat(db): versioned marts + execution-log DDL with least-privilege grants" }`
 Expected: commit succeeds; nothing applied to any database yet.
 
 - [ ] **Step 5: Apply to the live Supabase project (creates EMPTY tables only — no OLTP writes)**
@@ -206,7 +206,7 @@ Run the file in the Supabase SQL editor (or `psql` with an admin connection stri
 
 ```sql
 SELECT tablename FROM pg_tables WHERE schemaname = 'public'
-AND tablename IN ('mart_system_consumption_summary','mart_purok_monthly_reports','mart_delinquent_accounts_summary','mart_consumer_monthly_benchmarks','mart_monthly_financial_summary','pipeline_run_log');
+AND tablename IN ('mart_system_consumption_summary','mart_purok_monthly_reports','mart_delinquent_accounts_summary','mart_consumer_monthly_benchmarks','mart_monthly_financial_summary','mart_pipeline_execution_logs');
 ```
 
 Expected: 6 rows. If mart names were adapted in Step 2, assert those names instead.
@@ -279,17 +279,21 @@ Add `PIPELINE_ROOT / "scripts"` to `sys.path` using `PIPELINE_ROOT` (replacing a
 
 Apply exactly: `ExternalPythonOperator` tasks (extract, load, log_run) get `python=PIPELINE_PYTHON`; dbt `BashOperator` tasks get `cwd=str(DBT_PROJECT_DIR)` plus `env={**os.environ, "DBT_PROFILES_DIR": os.environ.get("DBT_PROFILES_DIR", str(PIPELINE_ROOT))}` with no inline `cd`; `log_run` gets `trigger_rule="all_done"`; extract and load get `retries=2, retry_delay=timedelta(minutes=2)`; dbt run and dbt test get `retries=0`. Import `timedelta` from `datetime` if not already imported.
 
-- [ ] **Step 4: Compile-check the DAG**
+- [ ] **Step 4: Per-task credential split without touching scripts**
+
+Ground truth: `scripts/extract.py` and `scripts/load.py` both read a single `SUPABASE_DB_URL` env var. Do NOT edit the scripts. Instead, give each `ExternalPythonOperator` task its own env override: extract gets `env={**os.environ, "SUPABASE_DB_URL": os.environ["SUPABASE_DB_URL_RO"]}`; load and log_run get `env={**os.environ, "SUPABASE_DB_URL": os.environ["SUPABASE_DB_URL_MART"]}`. Fail fast at DAG parse time if the needed var is missing: `os.environ["SUPABASE_DB_URL_RO"]` / `os.environ["SUPABASE_DB_URL_MART"]` (bracket access, so a missing key raises immediately with a clear name).
+
+- [ ] **Step 5: Compile-check the DAG**
 
 Run (from the submodule root, using the pipeline venv python): `pipeline-python -m py_compile airflow/dags/waterwise_batch_pipeline.py` — concretely: `& "$env:PIPELINE_PYTHON_BIN" -m py_compile pipeline/airflow/dags/waterwise_batch_pipeline.py` (or the `PIPELINE_VENV` fallback binary from Task 2). Run from repo root `C:\Users\Iverene Grace\Projects\Capstone_WaterWise`.
 Expected: exit 0, no output. Fix any `SyntaxError` before continuing.
 
-- [ ] **Step 5: Airflow DAG dry-run parse test**
+- [ ] **Step 6: Airflow DAG dry-run parse test**
 
 Run: `airflow dags test waterwise_batch_pipeline 2026-09-15` (replace with the DAG's actual `dag_id` recorded in Step 1 if different; a parse-only alternative is `airflow dags show waterwise_batch_pipeline`).
 Expected: DAG parses with 6 tasks (extract, dbt_run, dbt_test, load, log_run + any pre-existing sensor). Do NOT trigger a live scheduled run here — full execution is Task 8.
 
-- [ ] **Step 6: Commit + push inside the submodule, bump pointer in superproject**
+- [ ] **Step 7: Commit + push inside the submodule, bump pointer in superproject**
 
 Run: `git -C pipeline add airflow/dags/waterwise_batch_pipeline.py .env.example; if ($?) { git -C pipeline commit -m "refactor(airflow): env-relative paths, cross-platform python, fail-closed log_run" }; if ($?) { git -C pipeline push }; if ($?) { git add pipeline; if ($?) { git commit -m "chore: bump pipeline pointer (hardened DAG)" } }`
 Expected: submodule push succeeds, superproject commit records the new gitlink SHA. Verify with `git -C pipeline rev-parse HEAD` and `git ls-tree HEAD pipeline`.
@@ -299,89 +303,36 @@ Expected: submodule push succeeds, superproject commit records the new gitlink S
 ### Task 5: Remap the four `stg_*` models to the real OLTP schema
 
 **Files:**
-- Modify (in submodule): the four staging models (filenames confirmed first; expected `pipeline/dbt_waterwise/models/staging/stg_*.sql`)
-- Test: `dbt parse` + `dbt test --select staging` equivalent in Steps 4–5
+- Modify (in submodule): the four staging models (exact names confirmed: `stg_consumers.sql`, `stg_consumption.sql`, `stg_billing.sql`, `stg_payments.sql` under `pipeline/dbt_waterwise/models/staging/`)
+- Test: `dbt parse` + `dbt test` in Steps 3–4
 
 **Interfaces:**
-- Consumes: real columns from `backend/db/migration.sql` (Task 3 context)
-- Produces: canonical `stg_*` outputs (`consumer_id`, `purok_id`, `reading_id`, `consumption_m3`, `bill_id`, `billing_period_start`, `amount_due`, `payment_id`, `bill_id`, `consumer_id`, `amount_paid`) consumed unchanged by downstream `int_*`/`marts_*`
+- Consumes: real OLTP columns from `backend/db/migration.sql` and the prototype's own verified `stg_*` outputs (consumer_id, purok_no, billing_id, consumption_cbm, total_bill, payment_id — see Step 2)
+- Produces: UNCHANGED `stg_*` outputs (verify-and-preserve; see amendment note below) consumed by downstream `int_*`/`marts_*`
 
-- [ ] **Step 1: Confirm staging filenames and current SELECTs**
+> **Amendment 2026-09-15 (human-approved verify-and-preserve):** ground truth shows the prototype's `stg_*` outputs already match the real OLTP schema (`user_id→consumer_id` alias, `lower(status)`, type casts) and the canonical names from `CONTEXT.md §3` (`bill_id`, `amount_due`, `consumption_m3`, `purok_id`, `reading_id`, `amount_paid`, `meter_serial_number`) appear NOWHERE in `pipeline/dbt_waterwise/models/`. Renaming would break the verified graph. This task therefore VERIFIES instead of remapping: keep all `stg_*` SQL byte-identical unless `dbt parse`/`dbt test` against real extracts reveals a genuine gap. The `ref('stg_billing')` join idea is withdrawn — `stg_payments` stays join-free (enrichment already lives in `int_billing_payments`).
 
-Run: `Get-ChildItem pipeline/dbt_waterwise/models -Recurse -Filter 'stg_*'`
-Expected: four files. Read each in full. If any filename differs from `stg_consumers.sql`, `stg_consumption.sql`, `stg_billing.sql`, `stg_payments.sql`, use the real names everywhere below.
+- [ ] **Step 1: Read the four staging models and record their output column lists**
 
-- [ ] **Step 2: Write `stg_consumers`**
+Read `pipeline/dbt_waterwise/models/staging/stg_consumers.sql`, `stg_consumption.sql`, `stg_billing.sql`, `stg_payments.sql` in full. Record each output alias. Expected baseline: `stg_consumers` → `consumer_id, username, first_name, middle_name, last_name, purok_no, consumer_status`; `stg_consumption` → `consumption_id, consumer_id, reading_date, year_month, previous_reading, present_reading, consumption_cbm, is_initial, is_reset`; `stg_billing` → `billing_id, consumption_id, consumer_id, billing_date, due_date, year_month, total_bill, remaining_balance, billing_status`; `stg_payments` → `payment_id, billing_id, total_paid, payment_date, payment_timestamp, payment_method, reference_number`. Sources are `read_parquet('../data/raw/*.parquet')` — do NOT migrate to `source()`/`ref()` in this task.
 
-```sql
-select
-    id as consumer_id,
-    purok_no as purok_id,
-    cast(null as varchar) as meter_serial_number,
-    status,
-    created_at
-from {{ source('waterwise', 'consumers') }}
-```
+- [ ] **Step 2: Cross-check each output against the real OLTP schema — change nothing unless a gap is proven**
 
-Keep the `meter_serial_number` NULL cast only if any downstream model references it (check with a search in Step 4); otherwise omit that line. Adjust the `source()` name to whatever the project already uses (check `dbt_waterwise/models/staging/sources.yml` or `dbt_project.yml` first — keep the existing source name, only change the SELECT list).
+For each `stg_*` output column, confirm the underlying Parquet column exists in `backend/db/migration.sql` (`consumers`: id, username, first_name, middle_name, last_name, purok_no, status; `consumption`: id, consumer_id, reading_date, previous_reading, present_reading, consumption; `billing`: id, consumption_id, user_id, billing_date, due_date, total_bill, remaining_balance, status; `payments`: id, billing_id, total_paid, payment_date, payment_method, reference_number, created_at). Known non-issues (do NOT "fix"): `previous_reading is null as is_initial` (column is NOT NULL in OLTP, so always false — harmless); `payment_date` derived via `timezone('UTC', created_at)` (matches pipeline convention); `year_month` derived via `date_trunc('month', …)` (matches `load.py` conflict targets). If and only if a referenced column is genuinely absent from OLTP, fix that single line minimally and document it.
 
-- [ ] **Step 3: Write `stg_consumption`, `stg_billing`, `stg_payments`**
+- [ ] **Step 3: Prove no canonical-name references exist (guard against silent drift)**
 
-```sql
--- stg_consumption
-select
-    id as reading_id,
-    consumer_id,
-    reading_date,
-    previous_reading,
-    present_reading,
-    consumption as consumption_m3
-from {{ source('waterwise', 'consumption') }}
-```
+Run (from repo root): `Select-String -Path 'pipeline/dbt_waterwise/models/**/*.sql' -Pattern 'meter_serial_number| as bill_id|amount_due|consumption_m3|purok_id|reading_id|amount_paid|billing_period'`
+Expected: zero matches. Any match is a FAIL — investigate before continuing (it means someone renamed outputs without updating downstream).
 
-```sql
--- stg_billing
-select
-    id as bill_id,
-    user_id as consumer_id,
-    consumption_id,
-    billing_date as billing_period_start,
-    due_date as billing_period_end,
-    total_bill as amount_due,
-    due_date,
-    status
-from {{ source('waterwise', 'billing') }}
-```
+- [ ] **Step 4: `dbt parse` clean (full graph, real logic, DuckDB)**
 
-```sql
--- stg_payments (consumer resolved via billing lineage to keep graph acyclic)
-select
-    p.id as payment_id,
-    p.billing_id as bill_id,
-    b.user_id as consumer_id,
-    p.payment_date,
-    p.total_paid as amount_paid,
-    p.payment_method
-from {{ source('waterwise', 'payments') }} as p
-left join {{ ref('stg_billing') }} as b on b.bill_id = p.billing_id
-```
+Run (from `pipeline/dbt_waterwise` with the pipeline venv active): `dbt parse`
+Expected: parse clean with no model errors. `dbt test` on staging requires built relations/real extracts and runs in Task 8 — this step gates on parse only. On parse failure caused by a genuine OLTP gap found in Step 2, apply the minimal single-line fix, re-run parse, and document the change.
 
-Same source-name rule as Step 2: keep the project's existing `source()` identifiers. If staging models currently select `*`, replace with these explicit lists. `billing_period_end = due_date` is the documented assumption from the approved spec.
+- [ ] **Step 5: Commit only if changed; otherwise record verification with an empty commit**
 
-- [ ] **Step 4: Prove no dangling references to old names**
-
-Run (from repo root): `Select-String -Path 'pipeline/dbt_waterwise/models/**/*.sql' -Pattern 'meter_serial_number|consumer_id|bill_id|amount_due|consumption_m3|billing_period' | Select-Object Filename,LineNumber,Line`
-Expected: references resolve to the new aliases or the intentional `meter_serial_number` NULL cast. Any `FROM consumers/ billing` raw-table reference outside `stg_*` is a layering violation — move it into the appropriate `stg` model.
-
-- [ ] **Step 5: `dbt parse` + staging tests green**
-
-Run (from `pipeline/dbt_waterwise` with the pipeline venv active): `dbt parse; if ($?) { dbt test --select staging }`
-Expected: parse clean; staging tests pass. Full `dbt run`/`dbt test` happens in Task 8 — this step only gates the remap.
-
-- [ ] **Step 6: Commit + push inside the submodule, bump pointer in superproject**
-
-Run: `git -C pipeline add dbt_waterwise/models/staging/; if ($?) { git -C pipeline commit -m "refactor(dbt): remap stg models to real OLTP schema" }; if ($?) { git -C pipeline push }; if ($?) { git add pipeline; if ($?) { git commit -m "chore: bump pipeline pointer (stg remap)" } }`
-Expected: push + pointer bump succeed, mirroring Task 4 Step 6.
+If Step 2/4 produced fixes: run `git -C pipeline add dbt_waterwise/models/staging/; if ($?) { git -C pipeline commit -m "fix(dbt): align stg outputs to real OLTP schema" }; if ($?) { git -C pipeline push }; if ($?) { git add pipeline; if ($?) { git commit -m "chore: bump pipeline pointer (stg alignment)" } }`. If nothing changed (expected): run `git commit --allow-empty -m "verify(dbt): stg outputs already match real OLTP schema, no changes needed"` in the superproject to record the verification. Either way the pointer/outcome is committed, mirroring Task 4 Step 7.
 
 ---
 
@@ -417,12 +368,12 @@ const MART_TABLES = {
 };
 
 export async function getSystemConsumptionSummary(limit = 24) {
-  return supabase.from(MART_TABLES.systemConsumption).select("*").order("month", { ascending: false }).limit(limit);
+  return supabase.from(MART_TABLES.systemConsumption).select("*").order("year_month", { ascending: false }).limit(limit);
 }
 
-export async function getPurokMonthlyReports(purokId = null, limit = 100) {
+export async function getPurokMonthlyReports(purokNo = null, limit = 100) {
   let query = supabase.from(MART_TABLES.purokMonthly).select("*").limit(limit);
-  if (purokId !== null) query = query.eq("purok_id", purokId);
+  if (purokNo !== null) query = query.eq("purok_no", purokNo);
   return query;
 }
 
@@ -435,11 +386,11 @@ export async function getConsumerBenchmarks(consumerId, limit = 24) {
 }
 
 export async function getMonthlyFinancialSummary(limit = 24) {
-  return supabase.from(MART_TABLES.financial).select("*").order("month", { ascending: false }).limit(limit);
+  return supabase.from(MART_TABLES.financial).select("*").order("year_month", { ascending: false }).limit(limit);
 }
 ```
 
-If the prototype DDL (Task 3 Step 1) used different mart table or column names (`month`, `purok_id`, `consumer_id` assumed above), adjust the names to match exactly — the Task 3 table names win.
+Ground-truth column names (from `pipeline/scripts/supabase_marts_ddl.sql`, verified): time grain is `year_month` (date), purok key is `purok_no` (int), consumer key is `consumer_id` (int). If the checked-out SHA's DDL differs, match it exactly — the DDL wins over this listing.
 
 - [ ] **Step 3: Syntax-check**
 
@@ -474,7 +425,7 @@ Expected: commit succeeds; no routes modified.
 
 - [ ] **Step 1: Prove RO cannot write**
 
-Run with the RO connection: `INSERT INTO public.pipeline_run_log (success) VALUES (false);`
+Run with the RO connection: `INSERT INTO public.mart_pipeline_execution_logs (run_id, status) VALUES ('__smoke_reject__', 'failed');`
 Expected: `permission denied` error. Any success is a FAIL — fix grants (Task 3) before continuing.
 
 - [ ] **Step 2: Prove MART writer is confined to marts + log**
@@ -482,12 +433,12 @@ Expected: `permission denied` error. Any success is a FAIL — fix grants (Task 
 Run with the MART connection, in order:
 
 ```sql
-INSERT INTO public.pipeline_run_log (success) VALUES (false) RETURNING id;
-UPDATE public.mart_system_consumption_summary SET id = id WHERE false;
+INSERT INTO public.mart_pipeline_execution_logs (run_id, status) VALUES ('__smoke_ok__', 'success') RETURNING run_id;
+UPDATE public.mart_system_consumption_summary SET year_month = year_month WHERE false;
 INSERT INTO public.consumers (username) VALUES ('__smoke_reject__');
 ```
 
-Expected: statement 1 succeeds (capture the id, delete it afterwards with an admin connection); statement 2 succeeds (zero rows matched, no error); statement 3 fails with `permission denied`. Clean up the smoke log row via admin: `DELETE FROM public.pipeline_run_log WHERE id = <captured id>;`
+Expected: statement 1 succeeds (capture the id, delete it afterwards with an admin connection); statement 2 succeeds (zero rows matched, no error); statement 3 fails with `permission denied`. Clean up the smoke log row via admin: `DELETE FROM public.mart_pipeline_execution_logs WHERE run_id = '__smoke_ok__';`
 
 ---
 
@@ -497,7 +448,7 @@ Expected: statement 1 succeeds (capture the id, delete it afterwards with an adm
 **Test:** the chain below IS the test
 
 **Interfaces:**
-- Consumes: Tasks 1–7 outputs (pinned DAG, remapped stg, empty marts, proven roles, baseline counts from Task 3 Step 7)
+- Consumes: Tasks 1–7 outputs (pinned DAG, verified stg, empty marts, proven roles, baseline counts from Task 3 Step 7)
 - Produces: populated marts, `success=true` log row, validation record
 
 - [ ] **Step 1: Manual `extract` dry-run (zero writes)**
@@ -508,7 +459,7 @@ Expected: counts match exactly. Any mismatch is a FAIL — stop, do not run dbt.
 - [ ] **Step 2: `dbt run` — 11 models green**
 
 Run: `dbt run` from `pipeline/dbt_waterwise` (pipeline venv).
-Expected: `Completed successfully` for all 11 models. Fix remap errors (Task 5) on failure; never proceed to tests on a partial run.
+Expected: `Completed successfully` for all 11 models. Fix genuine OLTP-gap errors (Task 5) on failure; never proceed to tests on a partial run.
 
 - [ ] **Step 3: `dbt test` — 19 tests pass (hard gate)**
 
@@ -532,7 +483,7 @@ Expected: identical counts after run 1 and run 2 (`ON CONFLICT DO UPDATE`, no du
 - [ ] **Step 5: Prove OLTP untouched + `log_run` recorded success**
 
 Re-run the Task 3 Step 7 count query.
-Expected: the four OLTP numbers are byte-identical to baseline. Then confirm: `SELECT id, success, created_at FROM public.pipeline_run_log ORDER BY created_at DESC LIMIT 1;` shows `success=true`.
+Expected: the four OLTP numbers are byte-identical to baseline. Then confirm: `SELECT run_id, status, finished_at FROM public.mart_pipeline_execution_logs ORDER BY finished_at DESC NULLS LAST LIMIT 1;` shows `status='success'`.
 
 - [ ] **Step 6: Record the validation (commit the record, not data)**
 
@@ -543,7 +494,7 @@ Expected: working tree clean (validation writes only to the database, never to t
 
 ## Self-Review
 
-**1. Spec coverage:** §1 submodule+DDL+models → Tasks 1, 3, 6. §2 stg remap (+NULL-cast guard, `ref('stg_billing')`, `billing_period_end=due_date`) → Task 5 Steps 2–4. §3 flow + `.env` + binary fallback + `cwd` + two-tier gitignore → Tasks 2, 4, 8. §4 fail-closed gate + `all_done` + retries + RLS/roles → Tasks 3, 4, 7. §5 order (prototype-first, pointer bump) + role smoke + double-load idempotency → Tasks 4–8 ordering. Kickoff checkpoints: schema USAGE → Task 3 Step 2; service_role bypass proof → Task 6 Step 4; SHA pin → Task 1. No spec section left without a task.
+**1. Spec coverage:** §1 submodule+DDL+models → Tasks 1, 3, 6. §2 stg contract (amended 2026-09-15 to verify-and-preserve; prototype outputs already match OLTP) → Task 5 Steps 1–5. §3 flow + `.env` + binary fallback + `cwd` + per-task credential split + two-tier gitignore → Tasks 2, 4, 8. §4 fail-closed gate + `all_done` + retries + RLS/roles → Tasks 3, 4, 7. §5 order (prototype-first, pointer bump) + role smoke + double-load idempotency → Tasks 4–8 ordering. Kickoff checkpoints: schema USAGE → Task 3 Step 2; service_role bypass proof → Task 6 Step 4; SHA pin → Task 1. Ground-truth corrections applied: log table `mart_pipeline_execution_logs` (not `pipeline_run_log`); mart grain/key columns `year_month`/`purok_no`/`consumer_id`; scripts keep singular `SUPABASE_DB_URL` with DAG per-task env override; deps file is `requirements.txt`. No spec section left without a task.
 
 **2. Placeholder scan:** No TBD/TODO; every short-SHA/SHA reference is produced by a concrete command in its own task; mart/table names defer to the prototype DDL via an explicit read-first step with a STOP condition rather than invented values.
 

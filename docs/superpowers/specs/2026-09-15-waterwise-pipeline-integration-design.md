@@ -22,9 +22,13 @@ Blueprint: `CONTEXT.md` (corrected by this spec where it conflicts with real sch
 - Backend (Node) and pipeline (Python) environments fully isolated: `requirements-pipeline.txt` lives in the submodule; nothing Python enters `backend/`.
 - DAG path fix: `PIPELINE_ROOT = Path(__file__).resolve().parents[2]`; loads `pipeline/.env`; `ExternalPythonOperator(python=<resolved binary>)` + `BashOperator` for dbt with explicit env. No `~/airflow-venv` literals.
 
-## 2. Upstream column-remap contract (`stg_*`)
+## 2. Upstream column contract (`stg_*`) — AMENDED 2026-09-15 (human-approved verify-and-preserve)
 
-Real schema (`backend/db/migration.sql`) wins. Renames happen in `stg_*` only; OLTP untouched:
+Ground truth from the pinned submodule (SHA `f98b37f5`) supersedes the remap table below: the prototype's `stg_*` outputs already match the real OLTP schema, and the `CONTEXT.md §3` canonical names (`consumer_id` as PK alias except where noted, `purok_id`, `meter_serial_number`, `reading_id`, `bill_id`, `amount_due`, `billing_period_*`, `amount_paid`) appear NOWHERE in `pipeline/dbt_waterwise/models/` (verified by grep). Renaming would break the verified `int_*`/`marts_*` graph, so `stg_*` SQL stays byte-identical (verify-only).
+
+Actual verified outputs: `stg_consumers` → `consumer_id, username, first_name, middle_name, last_name, purok_no, consumer_status` (`lower(status)`); `stg_consumption` → `consumption_id, consumer_id, reading_date, year_month, previous_reading, present_reading, consumption_cbm, is_initial, is_reset`; `stg_billing` → `billing_id, consumption_id, consumer_id` (from `user_id`), `billing_date, due_date, year_month, total_bill, remaining_balance, billing_status` (`lower(status)`); `stg_payments` → `payment_id, billing_id, total_paid, payment_date` (from `created_at`), `payment_timestamp, payment_method, reference_number`, join-free (enrichment lives in `int_billing_payments`). Sources are `read_parquet('../data/raw/*.parquet')`, not `source()` refs. Log table is `mart_pipeline_execution_logs` (`run_id, started_at, finished_at, rows_extracted, rows_transformed, rows_loaded, status, error_message`), not `pipeline_run_log`. Mart grain/key columns are `year_month`/`purok_no`/`consumer_id`.
+
+Original remap proposal (kept for audit trail, DO NOT IMPLEMENT):
 
 - `stg_consumers` ← `public.consumers`: `id AS consumer_id`, `purok_no AS purok_id`, `status`, `created_at`. Include `CAST(NULL AS VARCHAR) AS meter_serial_number` only if any intermediate/benchmark model references it, so the dbt graph never breaks on the missing column.
 - `stg_consumption` ← `public.consumption`: `id AS reading_id`, `consumer_id`, `reading_date`, `previous_reading`, `present_reading`, `consumption AS consumption_m3`.
