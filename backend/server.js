@@ -91,6 +91,7 @@ app.use(express.json({ limit: "1mb" }));
 
 const dataMutationMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ignoredChangePaths = [
+  "/api/auth/logout",
   "/api/auth/login",
   "/api/auth/forgot-password",
   "/api/auth/verify-reset-otp",

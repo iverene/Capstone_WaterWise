@@ -12,10 +12,10 @@ import {
   FiShield,
 } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router";
-import { fetchTrustedDevices, login, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
+import { fetchTrustedDevices, hasVerifiedSession, login, noteSessionStored, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import OtpInput from "../components/OtpInput";
-import { getStoredAccount, hasAuthenticatedSession } from "../services/authToken";
+import { getStoredAccount, storeSession, clearSession } from "../services/authToken";
 
 const accountDestinations = {
   admin: "/admin/dashboard",
@@ -38,6 +38,7 @@ export default function Login() {
   const [maskedEmail, setMaskedEmail] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
+  const [otpError, setOtpError] = useState("");
   const [identifierError, setIdentifierError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,27 +49,75 @@ export default function Login() {
   const [otpSecondsLeft, setOtpSecondsLeft] = useState(300);
 
   useEffect(() => {
-    if (!hasAuthenticatedSession()) return;
-    const account = getStoredAccount();
-    const destination = accountDestinations[account?.role];
-    if (destination) navigate(destination, { replace: true });
+    // Async server verify (cached 5 min): the sync storage check trusted
+    // expired/invalid HttpOnly cookies and bounced /login -> workspace ->
+    // 401 -> /login. Only redirect when /auth/me actually succeeds.
+    let cancelled = false;
+    // A persistent HttpOnly cookie may outlive the tab's stored identity.
+    // Ask the server even when storage is empty (including older PWA builds).
+    hasVerifiedSession().then((ok) => {
+      if (!ok || cancelled) return;
+      const account = getStoredAccount();
+      const destination = accountDestinations[account?.role];
+      if (destination) navigate(destination, { replace: true });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   useEffect(() => {
     const wasExpired = location.state?.sessionExpired === true;
     const wasInactive = location.state?.sessionInactive === true;
+    const wasPasswordChanged = location.state?.passwordChanged === true;
+    const wasEmailChanged = location.state?.emailChanged === true;
+    const stateMessage = typeof location.state?.message === "string" ? location.state.message : "";
     let flagExpired = false;
     let flagInactive = false;
+    let flagPasswordChanged = false;
+    let flagEmailChanged = false;
+    let flagDeviceMismatch = false;
+    let flagAccountInactive = false;
     try {
       // Full-page reloads (e.g. a 401 from the API layer) drop router state,
       // so the reason is also persisted in sessionStorage flags.
       flagExpired = window.sessionStorage.getItem("waterwise:session-expired") === "1";
       flagInactive = window.sessionStorage.getItem("waterwise:session-inactive") === "1";
+      flagPasswordChanged = window.sessionStorage.getItem("waterwise:password-changed") === "1";
+      flagEmailChanged = window.sessionStorage.getItem("waterwise:email-changed") === "1";
+      flagDeviceMismatch = window.sessionStorage.getItem("waterwise:device-mismatch") === "1";
+      flagAccountInactive = window.sessionStorage.getItem("waterwise:account-inactive") === "1";
     } catch {
       // Ignore storage failures.
     }
     // Persistent until the user taps anywhere; guarded for StrictMode remounts.
-    if ((wasExpired || flagExpired || wasInactive || flagInactive) && !sessionNoticeShownRef.current) {
+    // Password/email changes take priority over generic expiry: the session
+    // was ended deliberately after a credential change, not timed out.
+    if ((wasPasswordChanged || flagPasswordChanged) && !sessionNoticeShownRef.current) {
+      sessionNoticeShownRef.current = true;
+      toast.success("Password changed", stateMessage || "Your password has been changed successfully. Please sign in with your new password.", {
+        dismissOnInteract: true,
+        duration: 0,
+      });
+    } else if ((wasEmailChanged || flagEmailChanged) && !sessionNoticeShownRef.current) {
+      sessionNoticeShownRef.current = true;
+      toast.success("Email changed", stateMessage || "Your email address has been changed successfully. Please sign in again.", {
+        dismissOnInteract: true,
+        duration: 0,
+      });
+    } else if (flagDeviceMismatch && !sessionNoticeShownRef.current) {
+      sessionNoticeShownRef.current = true;
+      toast.error("New device detected", "Your session is bound to the device you signed in with. Please sign in again on this device.", {
+        dismissOnInteract: true,
+        duration: 0,
+      });
+    } else if (flagAccountInactive && !sessionNoticeShownRef.current) {
+      sessionNoticeShownRef.current = true;
+      toast.error("Account inactive", "This account is no longer active. Please contact the Sucol Water System office.", {
+        dismissOnInteract: true,
+        duration: 0,
+      });
+    } else if ((wasExpired || flagExpired || wasInactive || flagInactive) && !sessionNoticeShownRef.current) {
       sessionNoticeShownRef.current = true;
       if (wasInactive || flagInactive) {
         toast.warning("Signed out", "No activity for some time, so you were signed out. Please sign in again.", {
@@ -82,12 +131,16 @@ export default function Login() {
         });
       }
     }
-    if (wasExpired || wasInactive) {
+    if (wasExpired || wasInactive || wasPasswordChanged || wasEmailChanged) {
       navigate(".", { replace: true, state: null });
     }
     try {
       window.sessionStorage.removeItem("waterwise:session-inactive");
       window.sessionStorage.removeItem("waterwise:session-expired");
+      window.sessionStorage.removeItem("waterwise:password-changed");
+      window.sessionStorage.removeItem("waterwise:email-changed");
+      window.sessionStorage.removeItem("waterwise:device-mismatch");
+      window.sessionStorage.removeItem("waterwise:account-inactive");
     } catch {
       // Ignore storage failures.
     }
@@ -140,17 +193,27 @@ export default function Login() {
     if (adminChallengeToken) {
       if (!/^\d{6}$/.test(otp)) {
         setMessage("Enter the 6-digit verification code.");
+        setOtpError("Enter the 6-digit verification code.");
         return;
       }
       setIsSubmitting(true);
       setMessage("");
+      setOtpError("");
       try {
         const result = await verifyAdminLoginOtp(adminChallengeToken, otp);
+        const destination = accountDestinations[result.user?.role];
+        if (!destination) {
+          clearSession();
+          throw new Error("This account does not have access to a WaterWise workspace.");
+        }
+        storeSession(result);
+        noteSessionStored(result.user);
         toast.success("Admin verified", "Welcome to the WaterWise admin portal.");
         confirmTrustedCookie();
-        navigate(accountDestinations[result.user.role]);
+        navigate(destination, { replace: true });
       } catch (error) {
         setMessage(error.message);
+        setOtpError(error.message);
       } finally {
         setIsSubmitting(false);
       }
@@ -199,6 +262,7 @@ export default function Login() {
         setOtpExpiresAt(Date.now() + 5 * 60 * 1000);
         setPassword("");
         setMessage(result.message);
+        setOtpError("");
         return;
       }
       const authenticatedRole = result.user?.role === "tenant"
@@ -207,11 +271,14 @@ export default function Login() {
       const destination = accountDestinations[authenticatedRole];
 
       if (!destination) {
+        clearSession();
         throw new Error("This account does not have access to a WaterWise workspace.");
       }
 
+      storeSession(result);
+      noteSessionStored(result.user);
       toast.success("Signed in", `Welcome back, ${result.user?.username ?? "WaterWise user"}.`);
-      navigate(destination);
+      navigate(destination, { replace: true });
     } catch (error) {
       const status = error.cause?.response?.status;
       const errorField = error.cause?.response?.data?.field;
@@ -297,14 +364,23 @@ export default function Login() {
     if (!/^\d{6}$/.test(otpValue)) return;
     setIsSubmitting(true);
     setMessage("");
+    setOtpError("");
     try {
       const result = await verifyAdminLoginOtp(adminChallengeToken, otpValue);
+      const destination = accountDestinations[result.user?.role];
+      if (!destination) {
+        clearSession();
+        throw new Error("This account does not have access to a WaterWise workspace.");
+      }
+      storeSession(result);
+      noteSessionStored(result.user);
       setOtpSuccess(true);
       toast.success("Admin verified", "Welcome to the WaterWise admin portal.");
       confirmTrustedCookie();
-      setTimeout(() => navigate(accountDestinations[result.user.role]), 600);
+      setTimeout(() => navigate(destination, { replace: true }), 600);
     } catch (error) {
       setMessage(error.message);
+      setOtpError(error.message);
       setOtp("");
     } finally {
       setIsSubmitting(false);
@@ -315,6 +391,7 @@ export default function Login() {
     if (isResending || otpSecondsLeft > 0) return;
     setIsResending(true);
     setMessage("");
+    setOtpError("");
     try {
       const result = await resendAdminLoginOtp(adminChallengeToken);
       setAdminChallengeToken(result.challengeToken);
@@ -330,6 +407,7 @@ export default function Login() {
         setOtpExpiresAt(Date.now() + retryAfterSeconds * 1000);
       }
       setMessage(error.message);
+      setOtpError(error.message);
     } finally {
       setIsResending(false);
     }
@@ -455,8 +533,8 @@ export default function Login() {
                   <OtpInput
                     disabled={isSubmitting || otpSecondsLeft === 0}
                     id="admin-login-otp"
-                    invalid={Boolean(message)}
-                    onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpSuccess(false); }}
+                    invalid={Boolean(otpError)}
+                    onChange={(nextOtp) => { setOtp(nextOtp); setMessage(""); setOtpError(""); setOtpSuccess(false); }}
                     onAutoVerify={handleAutoVerifyOtp}
                     success={otpSuccess}
                     value={otp}
@@ -493,7 +571,7 @@ export default function Login() {
               </p>
             )}
             {adminChallengeToken && (
-              <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); }} type="button">Back to sign in</button>
+              <button className="w-full text-sm font-bold text-water-700 hover:text-water-900" disabled={isSubmitting || isResending} onClick={() => { setAdminChallengeToken(""); setMaskedEmail(""); setOtp(""); setOtpExpiresAt(null); setOtpSecondsLeft(300); setMessage(""); setOtpError(""); }} type="button">Back to sign in</button>
             )}
           </form>
         </div>

@@ -20,7 +20,7 @@ router.get(
   authorizeOwnerOrRoles("consumerId", "consumer", "admin"),
   listConsumerBillings
 );
-router.get("/:id", authorizeRoles("admin"), showBilling);
+router.get("/:id", authorizeRoles("admin"), showBilling); // Intentionally admin-only: consumers must use the list endpoint below (GET /consumer/:consumerId) so single-record access always carries an owner check. Do not add "consumer" here without enforcing billing.user_id === req.user.id (IDOR).
 router.post("/", authorizeRoles("admin"), generateMonthlyBilling);
 
 export default router;

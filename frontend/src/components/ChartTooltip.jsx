@@ -3,6 +3,7 @@ const defaultValueFormatter = (value) =>
 
 export default function ChartTooltip({
   active,
+  hideConnectedPrediction = false,
   label,
   labelFormatter,
   payload,
@@ -11,9 +12,14 @@ export default function ChartTooltip({
   valueFormatter = defaultValueFormatter,
   valueLabel,
 }) {
-  const entries = (payload ?? []).filter(
-    (entry) => entry.value !== null && entry.value !== undefined,
-  );
+  const entries = (payload ?? []).filter((entry) => {
+    if (entry.value === null || entry.value === undefined) return false;
+    // Trend charts duplicate the last historical value into the prediction
+    // series so the dashed forecast segment connects. Hide that duplicate
+    // everywhere except the actual forecast point (marked isPrediction).
+    if (hideConnectedPrediction && entry.dataKey === "predicted" && !entry.payload?.isPrediction) return false;
+    return true;
+  });
   if (!active || !entries.length) return null;
 
   const record = entries[0].payload ?? {};

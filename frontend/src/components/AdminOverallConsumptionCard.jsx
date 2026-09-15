@@ -89,14 +89,15 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
       compact={compact}
       description={
         recordCount > 0
-          ? `Baseline calculated from ${recordCount} historical ${recordCount === 1 ? "record" : "records"}`
-          : "Recorded consumption used as the forecasting baseline"
+          ? <>Baseline calculated from {recordCount} historical {recordCount === 1 ? "record" : "records"}</>
+          : "No History Yet"
       }
       error={error}
       icon={Database}
-      label="Historical baseline"
+      label="Historical Baseline"
       loading={loading}
       onRefresh={loadOverallConsumption}
+      showRefreshButton={false}
       testId="overall-consumption-card"
       value={Number(consumption ?? 0).toLocaleString("en-PH", {
         maximumFractionDigits: 2,

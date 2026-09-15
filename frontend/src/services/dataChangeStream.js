@@ -1,4 +1,4 @@
-import { clearSession, getAccessToken } from "./authToken";
+import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 import { API_BASE_URL } from "./apiClient";
 
@@ -21,6 +21,7 @@ function parseEventBlock(block) {
 }
 
 function handleStreamUnauthorized() {
+  if (isLoggingOut() || !getStoredAccount()) return;
   // Mirror apiClient 401 handling so an expired/revoked/mismatched SSE
   // session ends the session instead of retrying every 3s forever.
   try {
@@ -40,27 +41,29 @@ export function subscribeToDataChanges(onChange) {
   let retryTimer;
 
   const connect = async () => {
-    const token = getAccessToken();
-    if (controller.signal.aborted) return;
-    if (!token) {
+    const account = getStoredAccount();
+    if (controller.signal.aborted || isLoggingOut()) return;
+    if (!account) {
       // No session (logged out / login page): don't spam retries. A new
       // subscription is created on `waterwise-session-changed` after login.
       return;
     }
     try {
-      const headers = { Accept: "text/event-stream", Authorization: `Bearer ${token}` };
+      const headers = { Accept: "text/event-stream" };
       try {
         const fingerprint = await getDeviceFingerprint();
         if (fingerprint) headers["X-Device-Fingerprint"] = fingerprint;
       } catch {
-        // Fingerprint is best-effort; the backend enforces it only when
-        // a fingerprint is already enrolled for the account.
+        // Fingerprint is best-effort for Bearer; mandatory for cookie auth
+        // (backend enforces it as CSRF protection).
       }
       const response = await fetch(`${API_BASE_URL}/changes/stream`, {
         headers,
+        credentials: "include",
         signal: controller.signal,
       });
-      if (response.status === 401 || response.status === 403) {
+      if (controller.signal.aborted || isLoggingOut()) return;
+      if (response.status === 401) {
         handleStreamUnauthorized();
         return;
       }

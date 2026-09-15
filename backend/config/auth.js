@@ -23,7 +23,7 @@ export function getJwtSecret() {
 
 const DEFAULT_ACCESS_TOKEN_DURATION_BY_ROLE = {
   consumer: "4h",
-  "meter-reader": "2h",
+  "meter-reader": "8h",
   admin: "1h",
   "super-admin": "30m",
 };

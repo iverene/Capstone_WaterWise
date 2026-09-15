@@ -276,9 +276,9 @@ export default function PaymentProcessingPage() {
       <PageHeader description="Select a resident with an outstanding balance, then securely record their payment." eyebrow="Payment administration" title="Payment Processing" />
 
       <section aria-label="Payment summary" className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
-        <KPI compact className="col-span-2 sm:col-span-1" description="Across recorded transactions" icon={Banknote} title="All-time collected" value={`₱${totalCollected.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
-        <KPI compact description="Completed payment records" icon={ReceiptText} title="All transactions" value={payments.length} />
-        <KPI compact description="Transactions with no balance" icon={CheckCircle2} title="Bills fully paid" value={fullyPaid} />
+        <KPI compact className="col-span-2 sm:col-span-1" description="On Record" icon={Banknote} title="All-Time Collected" value={`₱${totalCollected.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
+        <KPI compact description="Completed" icon={ReceiptText} title="All Transactions" value={payments.length} />
+        <KPI compact description="No Balance" icon={CheckCircle2} title="Bills Fully Paid" value={fullyPaid} />
       </section>
 
       {error && !isPaymentModalOpen && (

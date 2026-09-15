@@ -23,12 +23,21 @@ const parsePaymentAmount = (value) => {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw createError("Payment amount must be greater than zero.");
   }
-  return Number(amount.toFixed(2));
+  const roundedAmount = Number(amount.toFixed(2));
+  if (roundedAmount <= 0) {
+    throw createError("Payment amount must be at least 0.01.");
+  }
+  return roundedAmount;
 };
 
 const parsePaymentDate = (value) => {
   const date = value ?? new Date().toISOString().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+  if (
+    typeof date !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    Number.isNaN(Date.parse(`${date}T00:00:00Z`)) ||
+    new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date
+  ) {
     throw createError("A valid payment date is required.");
   }
   return date;

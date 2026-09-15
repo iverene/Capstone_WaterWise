@@ -180,14 +180,14 @@ export default function FlaggedAccountsPage() {
           compact
           description="Residents with at least 3 outstanding bills"
           icon={AlertTriangle}
-          title="For disconnection"
+          title="For Disconnection"
           value={flaggedAccounts.length}
         />
         <KPI
           compact
           description="Combined balance of flagged accounts"
           icon={WalletCards}
-          title="Outstanding balance"
+          title="Outstanding Balance"
           value={currency(totalOutstanding)}
         />
       </section>

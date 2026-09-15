@@ -6,6 +6,7 @@ const ACTIVITY_WRITE_THROTTLE_MS = 60 * 1000;
 const ACTIVITY_CACHE_TTL_SECONDS = 6 * 60 * 60;
 
 const memoryActivityByAccount = new Map();
+const lastPersistedActivityByAccount = new Map();
 
 function accountKey(role, userId) {
   return `${role}:${Number(userId)}`;
@@ -107,7 +108,7 @@ export async function getLastSessionActivity(role, userId) {
 
 export async function touchSessionActivity(role, userId, timestamp = Date.now()) {
   const key = accountKey(role, userId);
-  const previous = memoryActivityByAccount.get(key);
+  const previous = lastPersistedActivityByAccount.get(key);
   memoryActivityByAccount.set(key, timestamp);
 
   if (Number.isFinite(previous) && timestamp - previous < ACTIVITY_WRITE_THROTTLE_MS) {
@@ -117,7 +118,9 @@ export async function touchSessionActivity(role, userId, timestamp = Date.now())
   if (redis) {
     await writeCache(cacheKey(role, userId), timestamp, ACTIVITY_CACHE_TTL_SECONDS);
   }
-  await writeDatabaseActivity(role, userId, timestamp);
+  if (await writeDatabaseActivity(role, userId, timestamp)) {
+    lastPersistedActivityByAccount.set(key, timestamp);
+  }
   return timestamp;
 }
 
@@ -135,6 +138,7 @@ export async function isSessionIdle(role, userId, now = Date.now()) {
 export async function clearSessionActivity(role, userId) {
   const key = accountKey(role, userId);
   memoryActivityByAccount.delete(key);
+  lastPersistedActivityByAccount.delete(key);
   if (redis) {
     try {
       await redis.del(cacheKey(role, userId));
@@ -147,4 +151,5 @@ export async function clearSessionActivity(role, userId) {
 
 export function clearInMemorySessionActivity() {
   memoryActivityByAccount.clear();
+  lastPersistedActivityByAccount.clear();
 }

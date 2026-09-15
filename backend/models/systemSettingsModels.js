@@ -7,9 +7,14 @@ export async function getSystemSetting(key) {
     .from("system_settings")
     .select(SETTINGS_FIELDS)
     .eq("setting_key", key)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    const notFound = new Error("Setting not found.");
+    notFound.statusCode = 404;
+    throw notFound;
+  }
   return data;
 }
 

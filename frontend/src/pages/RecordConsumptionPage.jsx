@@ -338,7 +338,7 @@ export default function RecordConsumptionPage() {
                 value: recordStatus,
               },
             ]}
-            title="Resident filters"
+            title="Resident Filters"
           />
         </div>
       </div>

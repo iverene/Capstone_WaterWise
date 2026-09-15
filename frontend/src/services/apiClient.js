@@ -1,5 +1,5 @@
 import axios from "axios";
-import { clearSession, getAccessToken, getStoredAccount } from "./authToken";
+import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
 import { clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 
@@ -54,7 +54,7 @@ apiClient.defaults.adapter = async (config) => {
   }
 
   const requestKey = getRequestKey(config);
-  if (requestKey.split("?")[0] === "/auth/admin/trusted-devices") {
+  if (["/auth/me", "/auth/admin/trusted-devices"].includes(requestKey.split("?")[0])) {
     return networkAdapter(config);
   }
   const account = getStoredAccount();
@@ -76,10 +76,9 @@ apiClient.defaults.adapter = async (config) => {
 };
 
 apiClient.interceptors.request.use(async (config) => {
-  const token = getAccessToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  // Cookie-only auth: HttpOnly waterwise_session is sent automatically via
+  // withCredentials. Never attach a readable Bearer token. Fingerprint is
+  // mandatory CSRF protection for cookie sessions (backend enforces it).
   try {
     const fingerprint = await getDeviceFingerprint();
     config.headers["X-Device-Fingerprint"] = fingerprint;
@@ -108,17 +107,34 @@ apiClient.interceptors.response.use(
     const isPublicAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(
       window.location.pathname,
     );
-    if (status === 401 && !isPublicAuthPage && !isPublicAuthRequest) {
+    if (status === 401 && !isLoggingOut() && !isPublicAuthPage && !isPublicAuthRequest) {
       // Expired, idle-timed-out, revoked (password change), deactivated, or
       // device-mismatch sessions must end here instead of leaving the user
-      // stuck: the stored token is no longer valid server-side. The flag lets
-      // the login page explain why the redirect happened (full reload drops
-      // router state).
+      // stuck: the stored session is no longer valid server-side. The reason
+      // is persisted so the login page can explain it (full reload drops
+      // router state). Message-matched because the backend sends no stable
+      // `code` for these reasons (only SESSION_INACTIVE has one).
+      const responseMessage = String(error.response?.data?.message ?? "");
       const isInactive = error.response?.data?.code === "SESSION_INACTIVE";
+      const isPasswordChanged = /password was changed/i.test(responseMessage);
+      const isDeviceMismatch = /device (mismatch|verification)/i.test(responseMessage);
+      const isDeactivated = /no longer active/i.test(responseMessage);
       try {
-        window.sessionStorage.setItem("waterwise:session-expired", "1");
+        window.sessionStorage.removeItem("waterwise:session-inactive");
+        window.sessionStorage.removeItem("waterwise:session-expired");
+        window.sessionStorage.removeItem("waterwise:password-changed");
+        window.sessionStorage.removeItem("waterwise:device-mismatch");
+        window.sessionStorage.removeItem("waterwise:account-inactive");
         if (isInactive) {
           window.sessionStorage.setItem("waterwise:session-inactive", "1");
+        } else if (isPasswordChanged) {
+          window.sessionStorage.setItem("waterwise:password-changed", "1");
+        } else if (isDeviceMismatch) {
+          window.sessionStorage.setItem("waterwise:device-mismatch", "1");
+        } else if (isDeactivated) {
+          window.sessionStorage.setItem("waterwise:account-inactive", "1");
+        } else {
+          window.sessionStorage.setItem("waterwise:session-expired", "1");
         }
         window.sessionStorage.removeItem("waterwise:last-activity-at");
       } catch {

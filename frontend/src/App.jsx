@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RouteAccessError from "./components/RouteAccessError";
 import SessionInactivityGuard from "./components/SessionInactivityGuard";
 import {
   getStoredAccount as getSessionAccount,
-  clearSession,
-  getAccessTokenExpiresAt,
   hasAuthenticatedSession,
 } from "./services/authToken";
 import BillingLedger from "./pages/BillingLedger";
@@ -20,6 +18,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ChangeEmailPage from "./pages/ChangeEmailPage";
+import NotFoundPage from "./pages/NotFoundPage";
 import UsageMetrics from "./pages/UsageMetrics";
 import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
@@ -146,27 +145,8 @@ function MockPortalPage() {
 }
 
 function SessionExpiryGuard() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const expiresAt = getAccessTokenExpiresAt();
-    if (!expiresAt) return undefined;
-    const isPublicRoute = ["/login", "/forgot-password", "/reset-password"].includes(location.pathname);
-    const expireNow = () => {
-      clearSession();
-      // The explanation toast is shown on the login page (single toast site).
-      if (!isPublicRoute) navigate("/login", { replace: true, state: { sessionExpired: true } });
-    };
-    const remainingMs = expiresAt - Date.now();
-    if (remainingMs <= 0) {
-      expireNow();
-      return undefined;
-    }
-    const timer = window.setTimeout(expireNow, remainingMs);
-    return () => window.clearTimeout(timer);
-  }, [location.pathname, navigate]);
-
+  // Cookie-only: no readable JWT exp. Backend 401 + apiClient interceptor
+  // handle expiry/inactivity (clearSession + redirect to /login).
   return null;
 }
 
@@ -520,7 +500,7 @@ export function AppRoutes() {
         }
         path="/consumer/:section"
       />
-      <Route element={<Navigate replace to="/login" />} path="*" />
+      <Route element={<NotFoundPage />} path="*" />
     </Routes>
   );
 }

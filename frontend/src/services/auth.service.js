@@ -1,8 +1,12 @@
 import { apiRequest } from "./apiClient";
 import {
   ACCOUNT_STORAGE_KEY,
+  beginLogout,
+  isLoggingOut,
   clearSession,
+  getPersistentMeterReaderUser,
   getStoredAccount,
+  refreshMeterReaderPersistence,
   storeSession,
 } from "./authToken";
 import { disableCurrentPushNotifications } from "./pushNotifications";
@@ -11,12 +15,13 @@ export { ACCOUNT_STORAGE_KEY };
 
 export async function login(credentials) {
   try {
-    const result = await apiRequest("/auth/login", {
+    // No session write here: the caller (Login) validates the role has a
+    // workspace destination first, then stores. Storing before validation
+    // left stale sessions behind for unknown roles.
+    return await apiRequest("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
     });
-    if (result.token && result.user) storeSession(result);
-    return result;
   } catch (error) {
     throw new Error(
       error.response?.data?.message ??
@@ -29,12 +34,12 @@ export async function login(credentials) {
 
 export async function verifyAdminLoginOtp(challengeToken, otp) {
   try {
-    const result = await apiRequest("/auth/admin/verify-login-otp", {
+    // No session write here either (see login above): validated + stored by
+    // the Login caller after the destination check.
+    return await apiRequest("/auth/admin/verify-login-otp", {
       method: "POST",
       body: JSON.stringify({ challengeToken, otp }),
     });
-    storeSession(result);
-    return result;
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to verify the admin sign-in code.", { cause: error });
   }
@@ -251,23 +256,129 @@ export async function resetPassword(token, password) {
 }
 
 export async function getCurrentAccount(options) {
+  if (isLoggingOut()) throw new Error("Sign-out is in progress.");
   const result = await apiRequest("/auth/me", options);
-  const storedAccount = getStoredAccount();
-  const user = { ...storedAccount, ...result.user };
-  window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  if (isLoggingOut()) throw new Error("Sign-out is in progress.");
+  const storedAccount = getStoredAccount() ?? {};
+  const incoming = result.user;
+  if (!incoming?.id || !incoming?.role) {
+    throw new Error("The session response did not contain a valid account.");
+  }
+  // Defensive merge: never blank a stored name/username/email with
+  // undefined/null from a sparse response. Backend now enriches /auth/me,
+  // but this guards old sessions and partial payloads.
+  const sameAccount = storedAccount.id === incoming.id && storedAccount.role === incoming.role;
+  const user = sameAccount ? { ...storedAccount } : {};
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value !== undefined && value !== null && value !== "") user[key] = value;
+  }
+  if (sameAccount) {
+    window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  } else {
+    // Restart account-scoped listeners after cookie-only recovery and clear
+    // stale account caches if another tab has changed the signed-in account.
+    storeSession({ user });
+  }
+  // Keep the meter-reader offline identity fresh on every successful online
+  // verify (rolling 7-day grace). No token/password is persisted.
+  refreshMeterReaderPersistence(user);
   return { user };
+}
+
+// Cached async session verification for the cookie-only world. The sync
+// hasAuthenticatedSession() trusts tab storage, so an expired/invalid
+// HttpOnly cookie still bounced /login -> workspace -> 401 -> /login.
+// Verify against GET /auth/me instead, memoized per account for 5 minutes
+// (plus in-flight dedupe for StrictMode double-mounts).
+const VERIFY_CACHE_TTL_MS = 5 * 60 * 1000;
+let verifiedSessionCache = { at: 0, userId: null, role: null, ok: false };
+let verifyInFlight = null;
+
+export function clearVerifiedSessionCache() {
+  verifiedSessionCache = { at: 0, userId: null, role: null, ok: false };
+  verifyInFlight = null;
+}
+
+export function noteSessionStored(user) {
+  if (user?.id && user?.role) {
+    // A fresh login just proved the session server-side; seed the cache so
+    // the next guard check skips an extra /auth/me round trip.
+    verifiedSessionCache = { at: Date.now(), userId: user.id, role: user.role, ok: true };
+  } else {
+    clearVerifiedSessionCache();
+  }
+  verifyInFlight = null;
+}
+
+export async function hasVerifiedSession() {
+  if (isLoggingOut()) return false;
+  const stored = getStoredAccount();
+  const now = Date.now();
+  if (
+    verifiedSessionCache.ok &&
+    verifiedSessionCache.userId === stored?.id &&
+    verifiedSessionCache.role === stored?.role &&
+    now - verifiedSessionCache.at < VERIFY_CACHE_TTL_MS
+  ) {
+    return true;
+  }
+  // Meter-reader PWA offline: allow reopened workspace without re-login when
+  // within offline grace. Online sync still requires the HttpOnly cookie;
+  // a real 401 later forces login. This restores the deployed behavior where
+  // clearing the tab + tapping the PWA does not ask for login before recording.
+  if (stored?.role === "meter-reader") {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (getPersistentMeterReaderUser()?.id === stored.id) return true;
+    }
+  }
+  if (verifyInFlight) {
+    try {
+      return await verifyInFlight;
+    } catch {
+      return false;
+    }
+  }
+  verifyInFlight = (async () => {
+    try {
+      const { user } = await getCurrentAccount();
+      if (!user?.id) return false;
+      verifiedSessionCache = { at: Date.now(), userId: user.id, role: user.role, ok: true };
+      return true;
+    } catch (error) {
+      // Offline (no response) with a valid persistent meter-reader identity:
+      // stay in the workspace and queue readings; sync when back online.
+      if (isLoggingOut()) return false;
+      const status = error?.response?.status;
+      if ((!error?.response || status >= 500) && stored?.role === "meter-reader") {
+        if (getPersistentMeterReaderUser()?.id === stored.id) return true;
+      }
+      if (status === 401) {
+        clearVerifiedSessionCache();
+        clearSession();
+      }
+      return false;
+    } finally {
+      verifyInFlight = null;
+    }
+  })();
+  return verifyInFlight;
 }
 
 export async function logout() {
   const account = getStoredAccount();
+  beginLogout();
   try {
-    await apiRequest("/auth/logout", { method: "POST" });
-  } catch {}
-  try {
-    if (account?.role === "consumer") {
-      await disableCurrentPushNotifications();
+    try {
+      if (account?.role === "consumer") {
+        // Subscription removal needs the cookie that /auth/logout clears.
+        await disableCurrentPushNotifications();
+      }
+    } finally {
+      // Always attempt server logout, even if push cleanup fails.
+      await apiRequest("/auth/logout", { method: "POST" });
     }
   } finally {
+    clearVerifiedSessionCache();
     clearSession();
   }
 }

@@ -9,11 +9,7 @@ import {
 import Dropdown from "./Dropdown";
 import KPI from "./KPI";
 import { useToast } from "./Toast";
-import {
-  clearSession,
-  getAccessToken,
-  getAccessTokenExpiresAt,
-} from "../services/authToken";
+import { clearSession, getStoredAccount } from "../services/authToken";
 import {
   downloadReportPDF,
   generateReport,
@@ -131,9 +127,8 @@ export default function ReportGenerator({ onGenerated }) {
   const generate = async () => {
     if (!validate()) return;
 
-    const token = getAccessToken();
-    const expiresAt = getAccessTokenExpiresAt(token);
-    if (!token || !expiresAt || expiresAt <= Date.now()) {
+    // Cookie-only: backend 401 handles expiry. Just require stored account.
+    if (!getStoredAccount()) {
       toast.error("Session expired", "Your session has expired. Please sign in again.");
       clearSession();
       return;

@@ -8,7 +8,6 @@ import {
   Line,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
 } from "recharts";
@@ -120,6 +119,7 @@ function YearlyConsumptionTrend() {
           year: String(finalPredictionYear),
           consumption: null,
           predicted: Number.isFinite(predictedValue) ? predictedValue : 0,
+          isPrediction: true,
         },
       ];
 
@@ -149,21 +149,11 @@ function YearlyConsumptionTrend() {
 
   return (
     <section data-testid="yearly-consumption-trend"
-    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card sm:p-6">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">
-            Annual outlook
-          </p>
-
-          <h2 className="mt-1 text-xl font-extrabold tracking-tight text-navy-900">
-            Yearly Consumption Trend
-          </h2>
-
-          <p className="mt-1 text-sm leading-6 text-slate-500">
-            Up to five historical years with one projected year.
-          </p>
-        </div>
+    className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h2 className="text-[15px] font-extrabold tracking-tight text-navy-900">
+          Yearly Consumption Forecast
+        </h2>
 
         <button
           type="button"
@@ -171,7 +161,7 @@ function YearlyConsumptionTrend() {
           disabled={loading}
           aria-label="Refresh yearly trend"
           title="Refresh yearly trend"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 disabled:opacity-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 disabled:opacity-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -192,28 +182,23 @@ function YearlyConsumptionTrend() {
       )}
 
       {!loading && !error && chartData.length > 0 && (
-        <div className="h-72 w-full sm:h-80" aria-label="Yearly historical consumption and forecast chart" role="img">
+        <div className="h-60 w-full" aria-label="Yearly historical consumption and forecast chart" role="img">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={chartData}
               margin={{
                 top: 10,
-                right: 20,
-                left: 10,
+                right: 8,
+                left: 0,
                 bottom: 0,
               }}
             >
               <defs>
                 <linearGradient id="yearlyTrendFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#0284C7" stopOpacity={0.16} />
+                  <stop offset="0%" stopColor="#0284C7" stopOpacity={0.35} />
                   <stop offset="100%" stopColor="#0284C7" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid
-                stroke="#DCE5EA"
-                strokeDasharray="3 3"
-                vertical={false}
-              />
 
               <XAxis
                 dataKey="year"
@@ -222,7 +207,6 @@ function YearlyConsumptionTrend() {
                 tick={{
                   fill: "#64748b",
                   fontSize: 12,
-                  fontWeight: 600,
                 }}
               />
 
@@ -231,57 +215,55 @@ function YearlyConsumptionTrend() {
                 tickLine={false}
                 tick={{
                   fill: "#64748b",
-                  fontSize: 12,
-                  fontWeight: 600,
+                  fontSize: 11,
                 }}
                 tickFormatter={(value) => formatValue(value)}
-                width={60}
+                width={56}
               />
 
-              <Tooltip content={<ChartTooltip valueFormatter={formatValue} />} cursor={{ stroke: "#94A3B8", strokeWidth: 1 }} />
+              <Tooltip content={<ChartTooltip hideConnectedPrediction unit="" valueFormatter={(value) => `${formatValue(value)} m³`} />} cursor={{ stroke: "#bae6fd" }} />
 
               <Legend
                 wrapperStyle={{
-                  paddingTop: "20px",
-                  fontSize: "13px",
+                  fontSize: "12px",
                 }}
               />
 
               <Area
-                type="linear"
+                type="monotone"
                 dataKey="consumption"
                 name="Historical"
                 stroke="#0284C7"
                 strokeWidth={2.5}
                 fill="url(#yearlyTrendFill)"
-                dot={{ r: 3.5, fill: "#ffffff", stroke: "#0284C7", strokeWidth: 2 }}
+                dot={{ r: 3, fill: "#0284C7", stroke: "#ffffff", strokeWidth: 2 }}
                 activeDot={{
-                  r: 7,
+                  r: 5,
                   fill: "#0284C7",
                   stroke: "#ffffff",
-                  strokeWidth: 3,
+                  strokeWidth: 2,
                 }}
                 connectNulls={false}
               />
 
               <Line
-                type="linear"
+                type="monotone"
                 dataKey="predicted"
                 name="Prediction"
                 stroke="#0B2B40"
                 strokeWidth={2.5}
                 strokeDasharray="8 6"
                 dot={{
-                  r: 5,
+                  r: 4,
                   fill: "#ffffff",
                   stroke: "#0B2B40",
-                  strokeWidth: 3,
+                  strokeWidth: 2,
                 }}
                 activeDot={{
-                  r: 7,
+                  r: 6,
                   fill: "#0B2B40",
                   stroke: "#ffffff",
-                  strokeWidth: 3,
+                  strokeWidth: 2,
                 }}
                 connectNulls={false}
               />

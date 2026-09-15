@@ -241,8 +241,8 @@ function ConsumerManagementPage() {
       </div>
 
       <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3">
-        <KPI compact description="Registered community accounts" icon={FiUsers} title="Total residents" value={consumers.length} />
-        <KPI compact description="Accounts ready for service" icon={FiCheckCircle} title="Active accounts" value={consumers.filter((item) => item.status?.toLowerCase() === "active").length} />
+        <KPI compact description="Community" icon={FiUsers} title="Total Residents" value={consumers.length} />
+        <KPI compact description="Service-Ready" icon={FiCheckCircle} title="Active Accounts" value={consumers.filter((item) => item.status?.toLowerCase() === "active").length} />
       </section>
 
       <Modal

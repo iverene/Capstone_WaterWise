@@ -276,6 +276,14 @@
   }
 }
 
+/* Recharts makes chart primitives focusable, which paints the browser's
+   default (black) focus outline on click. Charts remain keyboard-navigable;
+   only the click outline is suppressed. */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus {
+  outline: none;
+}
+
 @media print {
   @page {
     size: A4 portrait;
