@@ -37,7 +37,7 @@ GRANT SELECT, INSERT, UPDATE ON public.mart_purok_monthly_reports TO waterwise_m
 GRANT SELECT, INSERT, UPDATE ON public.mart_delinquent_accounts_summary TO waterwise_mart_writer;
 GRANT SELECT, INSERT, UPDATE ON public.mart_consumer_monthly_benchmarks TO waterwise_mart_writer;
 GRANT SELECT, INSERT, UPDATE ON public.mart_monthly_financial_summary TO waterwise_mart_writer;
-GRANT SELECT, INSERT ON public.mart_pipeline_execution_logs TO waterwise_mart_writer;
+GRANT SELECT, INSERT, UPDATE ON public.mart_pipeline_execution_logs TO waterwise_mart_writer;
 
 -- Harden new tables: RLS on, no anon/authenticated access (mirrors backend/db/migration.sql convention).
 ALTER TABLE public.mart_system_consumption_summary ENABLE ROW LEVEL SECURITY;
@@ -52,3 +52,21 @@ REVOKE ALL ON public.mart_delinquent_accounts_summary FROM anon, authenticated;
 REVOKE ALL ON public.mart_consumer_monthly_benchmarks FROM anon, authenticated;
 REVOKE ALL ON public.mart_monthly_financial_summary FROM anon, authenticated;
 REVOKE ALL ON public.mart_pipeline_execution_logs FROM anon, authenticated;
+
+-- Reader policies for extract (idempotent; mirrors the option-(a) writer policies).
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'consumers' AND policyname = 'waterwise_extractor_ro_read') THEN
+        CREATE POLICY waterwise_extractor_ro_read ON public.consumers FOR SELECT TO waterwise_extractor_ro USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'consumption' AND policyname = 'waterwise_extractor_ro_read') THEN
+        CREATE POLICY waterwise_extractor_ro_read ON public.consumption FOR SELECT TO waterwise_extractor_ro USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'billing' AND policyname = 'waterwise_extractor_ro_read') THEN
+        CREATE POLICY waterwise_extractor_ro_read ON public.billing FOR SELECT TO waterwise_extractor_ro USING (true);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'payments' AND policyname = 'waterwise_extractor_ro_read') THEN
+        CREATE POLICY waterwise_extractor_ro_read ON public.payments FOR SELECT TO waterwise_extractor_ro USING (true);
+    END IF;
+END;
+$$;
