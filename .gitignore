@@ -1,0 +1,13 @@
+# Pipeline local secrets (belt-and-braces; pipeline/.gitignore also covers these)
+pipeline/.env
+.env
+
+# Pipeline runtime artifacts (in case anyone runs outside the submodule)
+*.duckdb
+*.parquet
+airflow/logs/
+*.log
+
+# OS cruft
+.DS_Store
+Thumbs.db
