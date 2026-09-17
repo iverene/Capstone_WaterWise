@@ -39,31 +39,7 @@ import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation
 import { clearApiCache } from "./services/apiCache";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
 
-const portalRoutes = [
-  { label: "Dashboard", path: "/admin/dashboard" },
-  { label: "Profile", path: "/admin/profile" },
-  { label: "Account information", path: "/admin/account-information" },
-  { label: "Staff management", path: "/admin/staff-management" },
-  { label: "System settings", path: "/admin/settings" },
-  { label: "Residents", path: "/admin/consumers" },
-  { label: "Readings", path: "/admin/readings" },
-  { label: "Billing", path: "/admin/billings" },
-  { label: "Payments", path: "/admin/payments" },
-  { label: "Flagged Accounts", path: "/admin/flagged-accounts" },
-  { label: "Events", path: "/admin/events" },
-  { label: "Announcements", path: "/admin/announcements" },
-  { label: "Record Consumption Entry", path: "/meter-reader/readings-entry" },
-  { label: "Profile", path: "/meter-reader/profile" },
-  { label: "Account information", path: "/meter-reader/account-information" },
-  { label: "Profile", path: "/consumer/profile-details" },
-  { label: "Account information", path: "/consumer/account-information" },
-  { label: "Bills", path: "/consumer/billing-ledger" },
-  { label: "Home", path: "/consumer/home" },
-  { label: "Announcements", path: "/consumer/announcements" },
-  { label: "Analytics", path: "/consumer/analytics" },
-  { label: "Analytics", path: "/admin/analytics" },
-  { label: "Reports", path: "/admin/reports" },
-];
+
 
 const roleAccess = {
   admin: {
@@ -116,33 +92,6 @@ roleAccess["super-admin"] = {
   label: "Super Admin",
   paths: [...roleAccess.admin.paths, "/admin/staff-management", "/admin/settings"],
 };
-
-function findRouteLabel(pathname) {
-  return portalRoutes.find((route) => route.path === pathname)?.label ?? "Dashboard";
-}
-
-function MockPortalPage() {
-  const location = useLocation();
-  const pageTitle = findRouteLabel(location.pathname);
-
-  return (
-    <AppLayout>
-      <section className="ww-glass-strong rounded-2xl p-6 sm:p-8">
-        <p className="text-sm font-semibold uppercase tracking-[0.12em] text-water-600">
-          Mock workspace
-        </p>
-        <h2 className="mt-3 text-2xl font-bold leading-tight tracking-[-0.02em] text-navy-900">
-          {pageTitle}
-        </h2>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
-          This canvas is ready for the {pageTitle.toLowerCase()} page view.
-          Data-connected modules can be placed here without changing the shared
-          WaterWise layout shell.
-        </p>
-      </section>
-    </AppLayout>
-  );
-}
 
 function SessionExpiryGuard() {
   // Cookie-only: no readable JWT exp. Backend 401 + apiClient interceptor
@@ -370,27 +319,11 @@ export function AppRoutes() {
             />
       <Route
         element={
-          <RoleRouteGuard requiredRole="admin">
-            <MockPortalPage />
-          </RoleRouteGuard>
-        }
-        path="/admin/:section"
-      />
-      <Route
-        element={
           <RoleRouteGuard requiredRole="meter-reader">
             <Navigate replace to="/meter-reader/readings-entry" />
           </RoleRouteGuard>
         }
         path="/meter-reader"
-      />
-      <Route
-        element={
-          <RoleRouteGuard requiredRole="meter-reader">
-            <MockPortalPage />
-          </RoleRouteGuard>
-        }
-        path="/meter-reader/:section"
       />
       <Route
         element={
@@ -491,14 +424,6 @@ export function AppRoutes() {
           </RoleRouteGuard>
         }
         path="/consumer/usage-metrics"
-      />
-      <Route
-        element={
-          <RoleRouteGuard requiredRole="consumer">
-            <MockPortalPage />
-          </RoleRouteGuard>
-        }
-        path="/consumer/:section"
       />
       <Route element={<NotFoundPage />} path="*" />
     </Routes>
