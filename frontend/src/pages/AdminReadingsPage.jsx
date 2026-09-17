@@ -81,9 +81,7 @@ export default function AdminReadingsPage() {
     const term = query.trim().toLowerCase();
     return residentRows.filter((resident) => {
       const matchesQuery = !term ||
-        [resident.consumerNo, resident.consumerName, resident.purok].some((value) =>
-          String(value).toLowerCase().includes(term),
-        );
+        String(resident.consumerName ?? "").toLowerCase().includes(term);
       return matchesQuery && (purok === "all" || resident.purok === purok);
     });
   }, [purok, query, residentRows]);
@@ -130,7 +128,7 @@ export default function AdminReadingsPage() {
         className="flex flex-col gap-3 sm:flex-row sm:items-center"
         role="search"
       >
-        <Search ariaLabel="Search consumption readings" className="flex-1" onValueChange={setQuery} placeholder="Search consumer number, name, or purok" value={query} />
+        <Search ariaLabel="Search consumption readings by consumer name" className="flex-1" onValueChange={setQuery} placeholder="Search consumer name" value={query} />
         <Filter ariaLabel="Filter by purok" className="w-full sm:w-48" onValueChange={setPurok} options={[{ label: "All puroks", value: "all" }, ...[1, 2, 3, 4, 5].map((number) => ({ label: `Purok ${number}`, value: `Purok ${number}` }))]} value={purok} />
         <Filter ariaLabel="Filter by reading month" className="w-full sm:w-48" onValueChange={setMonth} options={monthOptions.map((option) => ({ label: formatMonthLabel(option), value: option }))} value={activeMonth} />
       </div>
