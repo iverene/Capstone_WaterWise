@@ -63,13 +63,7 @@ export default function ConsumerHome() {
     return () => controller.abort();
   }, [requestVersion]);
 
-  const pageHeader = (
-    <PageHeader
-      description="See your account, water use, upcoming payments, and the latest community updates in one place."
-      descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
-      title={home ? `Welcome home, ${(home.account.name ?? "").split(" ")[0] || "Resident"}` : "Consumer Home"}
-    />
-  );
+  const pageHeader = <PageHeader title="Home" />;
 
   if (error) {
     return (
