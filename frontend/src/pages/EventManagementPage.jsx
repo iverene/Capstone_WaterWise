@@ -217,6 +217,7 @@ export default function EventManagementPage() {
   );
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [dialog, setDialog] = useState({ isOpen: false, event: null, date: todayKey });
+  const [infoDateKey, setInfoDateKey] = useState(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -289,6 +290,7 @@ export default function EventManagementPage() {
   }, [currentMonth]);
 
   const selectedEvents = eventsByDate.get(selectedDate) ?? [];
+  const infoEvents = infoDateKey ? (eventsByDate.get(infoDateKey) ?? []) : [];
   const visibleMonthPrefix = `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}`;
   const monthEventCount = events.filter((event) => event.date?.startsWith(visibleMonthPrefix)).length;
   const nextEvent = [...events]
@@ -308,6 +310,18 @@ export default function EventManagementPage() {
     setDialog({ isOpen: true, event: null, date: date || todayKey });
   const openEditDialog = (event) =>
     setDialog({ isOpen: true, event, date: event.date || selectedDate });
+  const closeInfoPopup = useCallback(() => {
+    setInfoDateKey(null);
+    setDeleteConfirmation(null);
+  }, []);
+
+  const handleDayTap = (key) => {
+    setSelectedDate(key);
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
+    const dayEvents = eventsByDate.get(key) ?? [];
+    if (dayEvents.length === 0) openCreateDialog(key);
+    else setInfoDateKey(key);
+  };
   const closeDialog = useCallback(() => {
     if (!saving) setDialog((current) => ({ ...current, isOpen: false }));
   }, [saving]);
@@ -402,19 +416,27 @@ export default function EventManagementPage() {
         <LoadingSkeleton label="Loading events calendar" variant="calendar" />
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-          <section className="relative order-1 rounded-2xl border border-slate-200 bg-white shadow-card lg:col-span-2" aria-labelledby="calendar-heading">
+          <section className="relative order-2 rounded-2xl border border-slate-200 bg-white shadow-card lg:order-1 lg:col-span-2" aria-labelledby="calendar-heading">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">
                   Calendar period
                 </p>
                 <h2 className="sr-only" id="calendar-heading">
                   {MONTH_NAMES[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                 </h2>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    aria-label="Previous month"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                    onClick={() => changeMonth(-1)}
+                    type="button"
+                  >
+                    <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+                  </button>
                   <Dropdown
                     ariaLabel="Select calendar month"
-                    className="w-40"
+                    className="min-w-0 flex-1 sm:w-40 sm:flex-none"
                     onValueChange={(month) =>
                       selectCalendarPeriod(currentMonth.getFullYear(), Number(month))
                     }
@@ -423,7 +445,7 @@ export default function EventManagementPage() {
                   />
                   <Dropdown
                     ariaLabel="Select calendar year"
-                    className="w-28"
+                    className="w-24 shrink-0 sm:w-28"
                     onValueChange={(year) =>
                       selectCalendarPeriod(Number(year), currentMonth.getMonth())
                     }
@@ -431,33 +453,23 @@ export default function EventManagementPage() {
                     triggerClassName="font-mono tabular-nums"
                     value={currentMonth.getFullYear()}
                   />
+                  <button
+                    aria-label="Next month"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                    onClick={() => changeMonth(1)}
+                    type="button"
+                  >
+                    <ChevronRight aria-hidden="true" className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  aria-label="Previous month"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-                  onClick={() => changeMonth(-1)}
-                  type="button"
-                >
-                  <ChevronLeft aria-hidden="true" className="h-5 w-5" />
-                </button>
-                <button
-                  className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-                  onClick={returnToToday}
-                  type="button"
-                >
-                  Today
-                </button>
-                <button
-                  aria-label="Next month"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-                  onClick={() => changeMonth(1)}
-                  type="button"
-                >
-                  <ChevronRight aria-hidden="true" className="h-5 w-5" />
-                </button>
-              </div>
+              <button
+                className="min-h-11 w-full rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:w-auto"
+                onClick={returnToToday}
+                type="button"
+              >
+                Today
+              </button>
             </div>
 
             <div className="overflow-hidden rounded-b-2xl">
@@ -491,14 +503,14 @@ export default function EventManagementPage() {
                     <button
                       aria-label={`${formatFullDate(date)}${dayEvents.length ? `, ${dayEvents.length} events` : ""}`}
                       aria-pressed={selected}
-                      className={`h-full min-h-20 w-full p-1.5 text-left transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600 sm:min-h-32 sm:p-2 ${
+                      className={`h-full min-h-16 w-full p-1.5 text-left transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600 sm:min-h-28 sm:p-2 ${
                         selected
                           ? "bg-water-50 hover:bg-water-100"
                           : inCurrentMonth
                             ? "bg-white hover:bg-slate-50"
                             : "bg-slate-50/70 hover:bg-slate-100"
                       }`}
-                      onClick={() => setSelectedDate(key)}
+                      onClick={() => handleDayTap(key)}
                       type="button"
                     >
                       <span
@@ -545,8 +557,8 @@ export default function EventManagementPage() {
             </div>
           </section>
 
-          <div className="order-2 grid grid-cols-1 items-start gap-5 lg:col-span-1">
-          <aside className="h-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4" aria-labelledby="selected-day-heading">
+          <div className="contents lg:order-2 lg:grid lg:grid-cols-1 lg:items-start lg:gap-5">
+          <aside className="order-3 hidden h-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4 lg:block" aria-labelledby="selected-day-heading">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">Selected day</p>
@@ -605,7 +617,7 @@ export default function EventManagementPage() {
               )}
             </div>
           </aside>
-          <div aria-label="Event summary" className="flex h-full flex-col gap-2 sm:gap-3">
+          <div aria-label="Event summary" className="order-1 grid h-full grid-cols-2 gap-2 sm:gap-3 lg:flex lg:flex-col">
             <KPI className="flex-1" compact description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
             <KPI
               className="flex-1"
@@ -619,6 +631,44 @@ export default function EventManagementPage() {
           </div>
         </div>
       )}
+
+      <button
+        aria-label="Add event"
+        className="fixed bottom-24 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-water-600 text-white shadow-modal transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 lg:hidden"
+        onClick={() => openCreateDialog(selectedDate)}
+        type="button"
+      >
+        <Plus aria-hidden="true" className="h-6 w-6" />
+      </button>
+
+      <Modal
+        bodyClassName="min-h-0 flex-1 overflow-y-auto"
+        closeLabel="Close day schedule"
+        isOpen={infoDateKey !== null}
+        onClose={closeInfoPopup}
+        showHeader={false}
+        size="md"
+      >
+        <div className="space-y-3">
+          {infoEvents.map((event) => (
+            <EventCard
+              event={event}
+              isConfirmingDelete={deleteConfirmation === event.id}
+              key={event.id}
+              onCancelDelete={() => setDeleteConfirmation(null)}
+              onDelete={() =>
+                deleteConfirmation === event.id
+                  ? deleteEvent(event.id)
+                  : setDeleteConfirmation(event.id)
+              }
+              onEdit={() => {
+                closeInfoPopup();
+                openEditDialog(event);
+              }}
+            />
+          ))}
+        </div>
+      </Modal>
 
       <EventDialog
         defaultDate={dialog.date}
