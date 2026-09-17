@@ -401,8 +401,8 @@ export default function EventManagementPage() {
       {loading ? (
         <LoadingSkeleton label="Loading events calendar" variant="calendar" />
       ) : (
-        <div className="grid grid-cols-1 items-stretch gap-5 lg:grid-cols-3">
-          <section className="relative order-3 rounded-2xl border border-slate-200 bg-white shadow-card lg:col-span-3" aria-labelledby="calendar-heading">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
+          <section className="relative order-1 rounded-2xl border border-slate-200 bg-white shadow-card lg:col-span-2" aria-labelledby="calendar-heading">
             <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">
@@ -545,7 +545,8 @@ export default function EventManagementPage() {
             </div>
           </section>
 
-          <aside className="order-2 h-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4 lg:order-1 lg:col-span-2" aria-labelledby="selected-day-heading">
+          <div className="order-2 grid grid-cols-1 items-start gap-5 lg:col-span-1">
+          <aside className="h-full rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4" aria-labelledby="selected-day-heading">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">Selected day</p>
@@ -604,7 +605,7 @@ export default function EventManagementPage() {
               )}
             </div>
           </aside>
-          <div aria-label="Event summary" className="order-1 flex h-full flex-col gap-2 sm:gap-3 lg:order-2 lg:col-span-1">
+          <div aria-label="Event summary" className="flex h-full flex-col gap-2 sm:gap-3">
             <KPI className="flex-1" compact description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
             <KPI
               className="flex-1"
@@ -614,6 +615,7 @@ export default function EventManagementPage() {
               title="Next Scheduled Event"
               value={nextEvent ? formatFullDate(nextEvent.date) : "None"}
             />
+          </div>
           </div>
         </div>
       )}
