@@ -1,12 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, Clock3, Eye } from "lucide-react";
 import BillingSummaryCard from "../components/BillingSummaryCard";
+import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import Table from "../components/Table";
 import { fetchBillingHistory } from "../services/billingAPI";
+
+const monthKeyOf = (billing) =>
+  String(billing.raw?.billing_date ?? billing.readingDate ?? "").slice(0, 7);
+
+const formatMonthLabel = (monthKey) => {
+  const date = new Date(`${monthKey}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return new Intl.DateTimeFormat("en-PH", { month: "long", timeZone: "UTC" }).format(date);
+};
+
+const purokRank = (value) => {
+  const match = String(value ?? "").match(/(\d+)\s*$/);
+  return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+};
 
 const currency = (value) =>
   `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
@@ -29,6 +44,8 @@ function StatusBadge({ status }) {
 export default function BillingManagementPage() {
   const [billingHistory, setBillingHistory] = useState([]);
   const [query, setQuery] = useState("");
+  const [purok, setPurok] = useState("all");
+  const [month, setMonth] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedResident, setSelectedResident] = useState(null);
@@ -106,19 +123,45 @@ export default function BillingManagementPage() {
     }));
   }, [billingHistory]);
 
+  const purokOptions = useMemo(() => [...new Set(
+    residentRows.map((resident) => resident.purok).filter(Boolean),
+  )].sort((left, right) =>
+    purokRank(left) - purokRank(right) || String(left).localeCompare(String(right)),
+  ), [residentRows]);
+
+  const monthOptions = useMemo(() => [...new Set(
+    billingHistory
+      .map((billing) => monthKeyOf(billing))
+      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+  )].sort((left, right) => right.localeCompare(left)), [billingHistory]);
+  const activeMonth = monthOptions.includes(month) ? month : monthOptions[0] ?? "";
+
   const visibleResidents = useMemo(() => {
     const term = query.trim().toLowerCase();
 
-    return residentRows.filter((resident) => {
-      const matchesQuery =
-        !term ||
-        [resident.consumerName, resident.purok].some((value) =>
-          String(value).toLowerCase().includes(term),
-        );
-
-      return matchesQuery;
-    });
-  }, [query, residentRows]);
+    return residentRows
+      .map((resident) => {
+        const billings = activeMonth
+          ? resident.billings.filter((billing) => monthKeyOf(billing) === activeMonth)
+          : resident.billings;
+        return {
+          ...resident,
+          billings,
+          overallBillCount: billings.length,
+          overallBillTotal: billings.reduce(
+            (total, billing) => total + Number(billing.amountDue || 0),
+            0,
+          ),
+        };
+      })
+      .filter((resident) => {
+        const matchesQuery =
+          !term ||
+          String(resident.consumerName ?? "").toLowerCase().includes(term);
+        return resident.billings.length > 0 && matchesQuery &&
+          (purok === "all" || resident.purok === purok);
+      });
+  }, [activeMonth, purok, query, residentRows]);
 
   return (
     <main className="min-w-0 space-y-5 sm:space-y-6">
@@ -131,15 +174,29 @@ export default function BillingManagementPage() {
 
       <div
         aria-label="Billing table controls"
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
+        className="flex flex-col gap-3 md:flex-row md:items-center"
         role="search"
       >
         <Search
-          ariaLabel="Search billing history"
+          ariaLabel="Search billing history by resident name"
           className="flex-1"
           onValueChange={setQuery}
-          placeholder="Search resident name or purok"
+          placeholder="Search resident name"
           value={query}
+        />
+        <Filter
+          ariaLabel="Filter billing history by purok"
+          className="w-full md:w-44"
+          onValueChange={setPurok}
+          options={[{ label: "All puroks", value: "all" }, ...purokOptions.map((option) => ({ label: option, value: option }))]}
+          value={purok}
+        />
+        <Filter
+          ariaLabel="Filter billing history by month"
+          className="w-full md:w-44"
+          onValueChange={setMonth}
+          options={monthOptions.map((option) => ({ label: formatMonthLabel(option), value: option }))}
+          value={activeMonth}
         />
       </div>
 
@@ -162,7 +219,6 @@ export default function BillingManagementPage() {
           ariaLabel="Resident billing accounts"
           columns={[
             { key: "name", label: "Name" },
-            { key: "purok", label: "Purok" },
             { key: "bills", label: "Overall bills" },
             { key: "action", label: "Action", className: "text-right" },
           ]}
@@ -178,10 +234,14 @@ export default function BillingManagementPage() {
           tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
-              <td className="px-4 py-4 font-extrabold text-navy-900">
-                {resident.consumerName}
+              <td className="px-4 py-4">
+                <span className="block font-extrabold leading-5 text-navy-900">
+                  {resident.consumerName}
+                </span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                  {resident.purok}
+                </span>
               </td>
-              <td className="px-4 py-4 text-slate-600">{resident.purok}</td>
               <td className="px-4 py-4">
                 <p className="font-mono font-extrabold text-navy-900">
                   {resident.overallBillCount} {resident.overallBillCount === 1 ? "bill" : "bills"}
