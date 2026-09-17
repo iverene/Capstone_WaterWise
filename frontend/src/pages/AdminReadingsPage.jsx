@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Droplets, Eye, Gauge, Users } from "lucide-react";
-import MeterReadingTable from "../components/MeterReadingTable";
 import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import KPI from "../components/KPI";
-import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import Table from "../components/Table";
 import { fetchAdminMeterReadings } from "../services/meterReadingAPI";
 
+const formatMonthLabel = (monthKey) => {
+  const date = new Date(`${monthKey}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return new Intl.DateTimeFormat("en-PH", { month: "long", timeZone: "UTC" }).format(date);
+};
+
 export default function AdminReadingsPage() {
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
+  const [month, setMonth] = useState("");
   const [allReadings, setAllReadings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedResident, setSelectedResident] = useState(null);
 
   const loadReadings = useCallback(async () => {
     try {
@@ -82,18 +88,38 @@ export default function AdminReadingsPage() {
     });
   }, [purok, query, residentRows]);
 
-  const visibleReadings = visibleResidents.flatMap((resident) => resident.readings);
+  const monthOptions = useMemo(() => [...new Set(
+    allReadings
+      .map((reading) => String(reading.readingDate ?? "").slice(0, 7))
+      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+  )].sort((left, right) => right.localeCompare(left)), [allReadings]);
+  const activeMonth = monthOptions.includes(month)
+    ? month
+    : monthOptions[0] ?? "";
 
-  const total = visibleReadings.reduce((sum, reading) => sum + Number(reading.consumption || 0), 0);
-  const average = visibleReadings.length ? total / visibleReadings.length : 0;
-  const highest = visibleReadings.reduce((maximum, reading) => Math.max(maximum, Number(reading.consumption || 0)), 0);
+  const displayedRows = visibleResidents
+    .map((resident) => ({
+      ...resident,
+      reading: !activeMonth
+        ? null
+        : resident.readings.find((item) => String(item.readingDate ?? "").startsWith(activeMonth)) ?? null,
+    }))
+    .filter((row) => row.reading)
+    .sort((first, second) =>
+      String(first.purok ?? "").localeCompare(String(second.purok ?? "")) ||
+      String(first.consumerName ?? "").localeCompare(String(second.consumerName ?? "")),
+    );
+
+  const total = displayedRows.reduce((sum, row) => sum + Number(row.reading.consumption || 0), 0);
+  const average = displayedRows.length ? total / displayedRows.length : 0;
+  const highest = displayedRows.reduce((maximum, row) => Math.max(maximum, Number(row.reading.consumption || 0)), 0);
 
   return (
     <main className="min-w-0 space-y-6">
       <PageHeader description="Review meter movements and recorded water use across every purok." title="Consumer Consumption Readings" />
 
       <section aria-label="Reading summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-        <KPI compact description="Current Filters" icon={Users} title="Visible Accounts" value={visibleResidents.length} />
+        <KPI compact description="Current Filters" icon={Users} title="Visible Accounts" value={displayedRows.length} />
         <KPI compact description="Visible Records" icon={Droplets} title="Total Consumption" unit="m³" value={total.toLocaleString()} />
         <KPI compact description="This Reading" icon={Gauge} title="Average Usage" unit="m³" value={average.toFixed(1)} />
         <KPI compact description="Top Record" icon={Gauge} title="Highest Usage" unit="m³" value={highest.toLocaleString()} />
@@ -106,6 +132,7 @@ export default function AdminReadingsPage() {
       >
         <Search ariaLabel="Search consumption readings" className="flex-1" onValueChange={setQuery} placeholder="Search consumer number, name, or purok" value={query} />
         <Filter ariaLabel="Filter by purok" className="w-full sm:w-48" onValueChange={setPurok} options={[{ label: "All puroks", value: "all" }, ...[1, 2, 3, 4, 5].map((number) => ({ label: `Purok ${number}`, value: `Purok ${number}` }))]} value={purok} />
+        <Filter ariaLabel="Filter by reading month" className="w-full sm:w-48" onValueChange={setMonth} options={monthOptions.map((option) => ({ label: formatMonthLabel(option), value: option }))} value={activeMonth} />
       </div>
 
       {error && <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{error}</span><button className="font-bold underline" onClick={loadReadings} type="button">Try again</button></div>}
@@ -113,58 +140,51 @@ export default function AdminReadingsPage() {
         <LoadingSkeleton label="Loading meter readings" variant="table" />
       ) : (
         <Table
-          ariaLabel="Resident reading accounts"
+          ariaLabel="Meter readings"
           columns={[
             { key: "resident", label: "Name" },
-            { key: "purok", label: "Purok" },
+            { key: "previous", label: "Previous Reading", className: "text-center" },
+            { key: "current", label: "Present Reading", className: "text-center" },
+            { key: "usage", label: "Cubic Used", className: "text-center" },
             { key: "action", label: "Action", className: "text-right" },
           ]}
-          data={visibleResidents}
-          emptyDescription="Residents will appear here when meter readings are recorded."
-          emptyTitle="No resident readings found"
-          getRowKey={(resident) => resident.id}
-          rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-3 transition-colors hover:bg-slate-50 md:table-row md:p-0"
-          tableClassName="block w-full text-left text-sm md:table"
-          renderRow={(resident) => (
+          data={displayedRows}
+          emptyDescription="Adjust the search, purok, or month filters to see other records."
+          emptyTitle="No meter readings found"
+          getRowKey={(row) => row.reading.id}
+          renderRow={(row) => (
             <>
-              <td className="font-extrabold leading-5 text-navy-900 md:px-4 md:py-4">
-                {resident.consumerName}
+              <td className="md:px-4 md:py-4">
+                <span className="block font-extrabold leading-5 text-navy-900">
+                  {row.consumerName}
+                </span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                  {row.purok}
+                </span>
               </td>
-              <td className="text-slate-600 md:px-4 md:py-4">{resident.purok}</td>
-              <td className="flex flex-col items-stretch justify-end md:table-cell md:px-4 md:py-4 md:text-right">
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-center">
+                {row.reading.previousReading} m³
+              </td>
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-center">
+                {row.reading.currentReading} m³
+              </td>
+              <td className="font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-center">
+                {row.reading.consumption} m³
+              </td>
+              <td className="md:px-4 md:py-4 md:text-right">
                 <button
-                  className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-water-50 px-2.5 text-sm font-bold text-water-700 hover:bg-water-100 md:min-h-11 md:w-auto md:px-4"
-                  onClick={() => setSelectedResident(resident)}
+                  aria-label={`View all readings for ${row.consumerName}`}
+                  className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                  onClick={() => navigate(`/admin/consumer-readings?consumerNo=${encodeURIComponent(row.consumerNo ?? "")}`)}
                   type="button"
                 >
                   <Eye aria-hidden="true" className="h-4 w-4" />
-                  View readings
                 </button>
               </td>
             </>
           )}
         />
       )}
-
-      <Modal
-        closeLabel="Close resident readings"
-        description={`${selectedResident?.readings.length ?? 0} meter reading records for this resident.`}
-        eyebrow="Resident reading history"
-        isOpen={Boolean(selectedResident)}
-        onClose={() => setSelectedResident(null)}
-        size="xl"
-        title={selectedResident?.consumerName}
-      >
-        <div className="p-4 sm:p-6">
-          <MeterReadingTable
-            readOnly
-            readingDateFirst
-            readings={selectedResident?.readings ?? []}
-            showConsumerDetails={false}
-            showUsage={false}
-          />
-        </div>
-      </Modal>
     </main>
   );
 }
