@@ -6,7 +6,6 @@ import {
   Clock3,
   Search,
   UserRound,
-  WalletCards,
 } from "lucide-react";
 import Dropdown from "./Dropdown";
 
@@ -250,7 +249,6 @@ export default function PaymentForm({
     ) {
       nextErrors.amountReceived = "Electronic payments cannot exceed the current balance.";
     }
-    if (!form.paymentDate) nextErrors.paymentDate = "Select the payment date.";
     if (!form.paymentMethod) nextErrors.paymentMethod = "Select a payment method.";
     if (form.paymentMethod !== "Cash" && !form.referenceNumber.trim()) {
       nextErrors.referenceNumber = "Enter the electronic payment reference number.";
@@ -326,14 +324,7 @@ export default function PaymentForm({
 
       {stage === "details" ? (
         <div className="space-y-6">
-          <section aria-labelledby="resident-selection-heading">
-            <h3 className="text-base font-extrabold text-navy-900" id="resident-selection-heading">
-              1. Select resident
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              The oldest outstanding bill is selected automatically.
-            </p>
-
+          <section>
             {!selectedResident ? (
               <div className="mt-4">
                 <label className="text-sm font-bold text-navy-900" htmlFor="payment-resident-search">
@@ -385,39 +376,41 @@ export default function PaymentForm({
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-water-200 bg-water-50 p-4">
-                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                  <p className="text-sm font-semibold text-slate-600">{selectedResident.purok}</p>
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <p className="font-bold text-navy-900">{selectedResident.name}</p>
+                  <p className="font-mono text-xl font-extrabold tabular-nums text-navy-900">
+                    {currency(selectedBilling?.outstandingBalance)}
+                  </p>
                 </div>
+                <p className="mt-1 text-xs font-semibold text-slate-600">{selectedResident.purok}</p>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-water-200/70 pt-3 text-xs text-slate-600">
+                  <span>
+                    <span className="font-semibold">Invoice </span>
+                    <span className="font-mono font-bold text-water-700">{selectedBilling?.invoiceNumber}</span>
+                  </span>
+                  <span>
+                    <span className="font-semibold">Billing </span>
+                    {selectedBilling?.billingPeriod}
+                  </span>
+                  <span>
+                    <span className="font-semibold">Due </span>
+                    {selectedBilling?.dueDate || "Not available"}
+                  </span>
+                </div>
+                <p className={`mt-2 text-xs font-bold ${
+                  selectedBillIsCurrentMonth ? "text-water-700" : "text-amber-700"
+                }`}>
+                  {selectedBillHasPartialPayment
+                    ? "A partial payment was already made; full remaining balance is required"
+                    : selectedBillIsCurrentMonth
+                    ? "One partial payment is allowed for the current month"
+                    : "Full payment required for a previous month"}
+                </p>
               </div>
             )}
 
             {selectedResident && (
               <div className="mt-4 space-y-4">
-                <div className="rounded-2xl border border-water-200 bg-water-50 p-4">
-                  <p className="text-xs font-bold uppercase tracking-wide text-water-700">
-                    Oldest outstanding bill
-                  </p>
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
-                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
-                      <span className="font-mono font-bold text-water-700">{selectedBilling?.invoiceNumber}</span>
-                      <span className="font-bold text-navy-900">Billing Date: {selectedBilling?.billingPeriod}</span>
-                      <span>Due Date: {selectedBilling?.dueDate || "Not available"}</span>
-                    </p>
-                    <p className="font-mono text-lg font-extrabold text-navy-900">
-                      {currency(selectedBilling?.outstandingBalance)}
-                    </p>
-                  </div>
-                  <p className={`mt-2 text-xs font-bold ${
-                    selectedBillIsCurrentMonth ? "text-water-700" : "text-amber-700"
-                  }`}>
-                    {selectedBillHasPartialPayment
-                      ? "A partial payment was already made; full remaining balance is required"
-                      : selectedBillIsCurrentMonth
-                      ? "One partial payment is allowed for the current month"
-                      : "Full payment required for a previous month"}
-                  </p>
-                </div>
 
                 {residentBills.length > 1 && (
                   <>
@@ -435,7 +428,7 @@ export default function PaymentForm({
                         { label: `Pay all ${residentBills.length} bills`, value: "all", amount: allBillsBalance },
                       ].map((option) => (
                         <label
-                          className={`cursor-pointer rounded-xl border p-4 ${
+                          className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
                             form.paymentScope === option.value
                               ? "border-water-500 bg-water-50 ring-2 ring-water-100"
                               : "border-slate-200 bg-white hover:border-water-300"
@@ -454,8 +447,8 @@ export default function PaymentForm({
                             type="radio"
                             value={option.value}
                           />
-                          <span className="block font-bold text-navy-900">{option.label}</span>
-                          <span className="mt-1 block font-mono text-sm text-slate-600">
+                          <span className="text-sm font-bold text-navy-900">{option.label}</span>
+                          <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-slate-600">
                             {currency(option.amount)}
                           </span>
                         </label>
@@ -487,11 +480,8 @@ export default function PaymentForm({
             )}
           </section>
 
-          <section aria-labelledby="payment-details-heading">
-            <h3 className="text-base font-extrabold text-navy-900" id="payment-details-heading">
-              2. Enter payment details
-            </h3>
-            <div className="mt-4 grid gap-5 sm:grid-cols-2">
+          <section>
+            <div className="grid gap-5 sm:grid-cols-2">
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-sm font-bold text-navy-900" htmlFor="amountReceived">
@@ -548,22 +538,6 @@ export default function PaymentForm({
               </div>
 
               <div>
-                <label className="text-sm font-bold text-navy-900" htmlFor="paymentDate">
-                  Payment date
-                </label>
-                <input
-                  aria-readonly="true"
-                  className={inputClass("paymentDate", true)}
-                  id="paymentDate"
-                  name="paymentDate"
-                  readOnly
-                  type="text"
-                  value={form.paymentDate}
-                />
-                {error("paymentDate")}
-              </div>
-
-              <div className="sm:col-span-2">
                 <label className="text-sm font-bold text-navy-900" htmlFor="paymentMethod">
                   Payment method
                 </label>
@@ -649,15 +623,6 @@ export default function PaymentForm({
         </div>
       ) : (
         <section aria-labelledby="payment-review-heading">
-          <button
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl text-sm font-bold text-slate-600 hover:text-water-700"
-            onClick={() => setStage("details")}
-            type="button"
-          >
-            <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-            Edit payment details
-          </button>
-
           <h3
             className="mt-3 text-xl font-extrabold text-navy-900 outline-none"
             id="payment-review-heading"
@@ -678,7 +643,6 @@ export default function PaymentForm({
             />
             <ReviewRow label="Starting invoice" value={selectedBilling?.invoiceNumber} />
             <ReviewRow label="Starting billing period" value={selectedBilling?.billingPeriod} />
-            <ReviewRow label="Payment date" value={form.paymentDate} />
             <ReviewRow label="Payment method" value={form.paymentMethod} />
             {form.referenceNumber && (
               <ReviewRow label="Reference" value={form.referenceNumber} />
@@ -702,23 +666,21 @@ export default function PaymentForm({
 
           <div className="mt-6 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
             <button
-              className="order-2 min-h-12 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60 sm:order-1"
+              className="order-2 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60 sm:order-1"
               disabled={submitting}
-              onClick={onCancel}
+              onClick={() => setStage("details")}
               type="button"
             >
-              Cancel
+              <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              Back
             </button>
             <button
-              className="order-1 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700 disabled:bg-emerald-300 sm:order-2"
+              className="ww-primary-button order-1 min-h-12 sm:order-2"
               disabled={submitting}
               onClick={confirmPayment}
               type="button"
             >
-              <WalletCards aria-hidden="true" className="h-4 w-4" />
-              {submitting
-                ? "Confirming payment…"
-                : `Confirm ${currency(amountApplied)} payment`}
+              {submitting ? "Confirming…" : "Confirm"}
             </button>
           </div>
         </section>
