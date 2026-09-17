@@ -503,7 +503,7 @@ export default function AdminProfile() {
   return (
     <div className="min-w-0 space-y-5 sm:space-y-6">
       {!isStaffManagementPage ? <>
-      <PageHeader compact description="Review your administrator identity and manage secure account credentials." eyebrow="Administrator profile" title="Administrator Account" />
+      <PageHeader compact description="Review your administrator identity and manage secure account credentials." title="Administrator Account" />
       <AdminProfileBanner account={account} />
 
       <section aria-labelledby="admin-account-settings-heading">
@@ -520,7 +520,7 @@ export default function AdminProfile() {
       </section>}
       </> : <>
       <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2  text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile", { replace: true })} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
-      <PageHeader compact description="Create and manage regular administrator and meter-reader accounts during this verified session." eyebrow="Restricted management" title="Super Admin Staff Management" />
+      <PageHeader compact description="Create and manage regular administrator and meter-reader accounts during this verified session." title="Super Admin Staff Management" />
       {!staffManagementPermission?.token && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Your staff-management permission has expired.</p><button className="mt-3 text-sm font-bold text-water-700" onClick={() => navigate("/admin/profile", { replace: true })} type="button">Return and verify again</button></section>}
       </>}
       {account?.role === "super-admin" && isStaffManagementPage && staffManagementPermission?.token && <section className="min-w-0" aria-labelledby="super-admin-tools-heading">

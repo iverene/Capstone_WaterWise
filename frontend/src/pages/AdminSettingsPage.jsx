@@ -202,7 +202,6 @@ export default function AdminSettingsPage() {
       <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile", { replace: true })} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
       <PageHeader
         description="Manage system-wide configuration. Only the Super Admin can modify these settings."
-        eyebrow="Administration"
         mobileCompact
         onBack={() => navigate("/admin/profile", { replace: true })}
         title="System Settings"

@@ -376,7 +376,7 @@ export default function EventManagementPage() {
 
   return (
     <main className="space-y-5 sm:space-y-6">
-      <PageHeader description="Plan fiestas, assemblies, celebrations, and community activities in one calendar." eyebrow="Community schedule" title="Events Calendar" />
+      <PageHeader description="Plan fiestas, assemblies, celebrations, and community activities in one calendar." title="Events Calendar" />
 
       {error && (
         <div

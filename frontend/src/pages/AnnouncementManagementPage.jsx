@@ -109,7 +109,6 @@ export default function AnnouncementManagementPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <PageHeader
           description="Publish clear service notices and keep residents informed about water-system updates."
-          eyebrow="Community communication"
           title="Announcement Management"
         />
         <div className="hidden pt-8 lg:block">

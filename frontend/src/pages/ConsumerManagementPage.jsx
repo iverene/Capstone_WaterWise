@@ -224,7 +224,7 @@ function ConsumerManagementPage() {
   return (
     <main className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." eyebrow="Resident accounts" title="Resident Management" />
+        <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." title="Resident Management" />
         <div className="hidden shrink-0 pt-8 lg:block">
           <button
             className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"

@@ -56,7 +56,6 @@ export default function AnalyticsDashboard() {
     <main className="space-y-5 sm:space-y-6" data-testid="analytics-dashboard">
       <PageHeader
         description="Understand expected demand, identify unusual consumption, and turn system data into practical barangay actions."
-        eyebrow="Operational intelligence"
         title="Analytics"
       />
 

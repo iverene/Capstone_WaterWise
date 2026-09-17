@@ -124,7 +124,6 @@ export default function BillingManagementPage() {
     <main className="min-w-0 space-y-5 sm:space-y-6">
       <PageHeader
         description="Review billing periods, water usage, account balances, and collection status."
-        eyebrow="Billing administration"
         title="Billing Management"
       />
 

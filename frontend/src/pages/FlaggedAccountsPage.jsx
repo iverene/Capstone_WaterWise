@@ -171,7 +171,6 @@ export default function FlaggedAccountsPage() {
     <main className="min-w-0 space-y-6">
       <PageHeader
         description="Review residents with three or more outstanding monthly bills for disconnection action."
-        eyebrow="Account monitoring"
         title="Flagged Accounts"
       />
 

@@ -98,7 +98,7 @@ export default function Reports() {
 
   return (
     <main className="space-y-6">
-      <PageHeader description="Preview operational data, generate a fixed report snapshot, and retrieve official PDFs from the archive." eyebrow="Decision support" title="Reports" />
+      <PageHeader description="Preview operational data, generate a fixed report snapshot, and retrieve official PDFs from the archive." title="Reports" />
 
       <ReportGenerator onGenerated={loadReports} />
 
