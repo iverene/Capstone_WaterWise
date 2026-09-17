@@ -4,14 +4,34 @@ import LoadingSkeleton from "./LoadingSkeleton";
 import Modal from "./Modal";
 import { useToast } from "./Toast";
 
-function ReceiptRow({ label, testId, value }) {
+const currency = (value) =>
+  `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+
+function ReceiptLine({ label, testId, value }) {
   return (
-    <tr className="border-b border-slate-100">
-      <td className="py-3 pr-4 text-sm font-semibold text-slate-500">{label}</td>
-      <td className="py-3 text-right font-mono text-sm font-bold text-navy-900" data-testid={testId}>
+    <div className="flex items-start justify-between gap-4 border-b border-slate-100 py-3 last:border-0">
+      <dt className="text-sm font-semibold text-slate-500">{label}</dt>
+      <dd
+        className="max-w-[60%] text-right font-mono text-sm font-bold tabular-nums text-navy-900"
+        data-testid={testId}
+      >
         {value}
-      </td>
-    </tr>
+      </dd>
+    </div>
+  );
+}
+
+function ArrearsStat({ label, testId, value }) {
+  return (
+    <div className="rounded-xl bg-white p-3 ring-1 ring-inset ring-slate-200">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p
+        className="mt-1 font-mono text-sm font-extrabold tabular-nums text-navy-900"
+        data-testid={testId}
+      >
+        {currency(value)}
+      </p>
+    </div>
   );
 }
 
@@ -28,7 +48,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         isOpen={isOpen}
         onClose={onClose}
         size="md"
-        title="Consumption receipt"
+        title="Consumption Receipt"
       >
         <LoadingSkeleton className="p-5 sm:p-6" label="Loading consumption receipt" variant="card" />
       </Modal>
@@ -77,21 +97,22 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
 
   return (
     <Modal
+      bodyClassName="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
       closeButtonProps={{ "data-testid": "close-modal" }}
       closeLabel="Close consumption receipt"
       eyebrow="Sucol Water System"
       headerActions={
         <>
-            <button
-              className="flex h-11 items-center gap-2 rounded-xl bg-water-50 px-3 text-sm font-bold text-water-600 transition hover:bg-water-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
-              data-testid="download-official-receipt-image"
-              onClick={handleDownload}
-              type="button"
-            >
-              <FiDownload aria-hidden="true" className="h-4 w-4" />
-              Download
-            </button>
-            <button aria-label="Print official receipt" className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" onClick={handlePrint} type="button"><FiPrinter aria-hidden="true" className="h-4 w-4" /></button>
+          <button
+            aria-label="Download consumption receipt"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+            data-testid="download-official-receipt-image"
+            onClick={handleDownload}
+            type="button"
+          >
+            <FiDownload aria-hidden="true" className="h-4 w-4" />
+          </button>
+          <button aria-label="Print official receipt" className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={handlePrint} type="button"><FiPrinter aria-hidden="true" className="h-4 w-4" /></button>
         </>
       }
       headerActionsProps={{ "data-document-actions": true }}
@@ -100,61 +121,71 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
       onClose={onClose}
       overlayProps={{ "data-print-document-overlay": true, "data-testid": "receipt-modal" }}
       panelProps={{ "data-printable-document": true }}
-      title="Consumption receipt"
+      size="md"
+      title="Consumption Receipt"
     >
-      <>
-        <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <div className="rounded-2xl bg-water-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Name
-            </p>
-            <div className="mt-1 font-bold text-navy-900" data-testid="receipt-meter-name">
-              {meterName}
-            </div>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Run date
-            </p>
-            <div className="mt-1 font-mono text-sm font-bold text-navy-900" data-testid="receipt-run-date">
-              {runDate}
-            </div>
-          </div>
+      <section className="rounded-2xl bg-navy-950 p-5 text-white">
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-200">
+          Total bill
+        </p>
+        <p
+          className="mt-2 font-mono text-3xl font-extrabold tabular-nums text-white"
+          data-testid="receipt-final-total"
+        >
+          {currency(finalTotalBill)}
+        </p>
+        <p className="mt-2 text-sm text-slate-300">
+          {cubicMetersUsed.toLocaleString("en-US")} m³ used · Baseline {currency(baselineBill)}
+        </p>
+      </section>
 
-          <div>
-            <table className="w-full border-collapse">
-              <tbody>
-                <ReceiptRow label="Previous Reading:" testId="telemetry-prev" value={`${previousReading} m³`} />
-                <ReceiptRow label="Present Reading:" testId="telemetry-pres" value={`${presentReading} m³`} />
-                <ReceiptRow label="Cubic Meters Used:" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
-                <ReceiptRow label="Baseline Water Bill:" testId="telemetry-baseline" value={`₱${baselineBill.toFixed(2)}`} />
-              </tbody>
-            </table>
-          </div>
+      <div className="mt-5 grid gap-5 sm:grid-cols-2">
+        <section aria-labelledby="receipt-meter-heading">
+          <h3
+            className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
+            id="receipt-meter-heading"
+          >
+            Meter
+          </h3>
+          <dl className="mt-2">
+            <ReceiptLine label="Name" testId="receipt-meter-name" value={meterName} />
+            <ReceiptLine label="Run date" testId="receipt-run-date" value={runDate} />
+          </dl>
+        </section>
+
+        <section aria-labelledby="receipt-readings-heading">
+          <h3
+            className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
+            id="receipt-readings-heading"
+          >
+            Readings
+          </h3>
+          <dl className="mt-2">
+            <ReceiptLine label="Previous" testId="telemetry-prev" value={`${previousReading} m³`} />
+            <ReceiptLine label="Present" testId="telemetry-pres" value={`${presentReading} m³`} />
+            <ReceiptLine label="Used" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
+            <ReceiptLine label="Baseline bill" testId="telemetry-baseline" value={currency(baselineBill)} />
+          </dl>
+        </section>
+      </div>
+
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="receipt-arrears-heading">
+        <h3
+          className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
+          id="receipt-arrears-heading"
+        >
+          Arrears breakdown
+        </h3>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3" data-testid="arrears-matrix">
+          <ArrearsStat label="Over 30 days" testId="arrears-30" value={arrears30Days} />
+          <ArrearsStat label="Over 60 days" testId="arrears-60" value={arrears60Days} />
+          <ArrearsStat label="Over 90 days" testId="arrears-90" value={arrears90Days} />
         </div>
+      </section>
 
-        <div className="px-4 pb-5 sm:px-6 sm:pb-6">
-          <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-3" data-testid="arrears-matrix">
-            <span className="font-mono text-sm font-bold text-navy-900" data-testid="arrears-30">
-              Over 30 Days: ₱{arrears30Days.toFixed(2)}
-            </span>
-            <span className="font-mono text-sm font-bold text-navy-900" data-testid="arrears-60">
-              Over 60 Days: ₱{arrears60Days.toFixed(2)}
-            </span>
-            <span className="font-mono text-sm font-bold text-navy-900" data-testid="arrears-90">
-              Over 90 Days: ₱{arrears90Days.toFixed(2)}
-            </span>
-          </div>
-
-          <div className="mt-4 flex items-center justify-between rounded-2xl bg-navy-950 p-4 text-white">
-            <strong className="text-sm font-bold text-white">Total Bill Sum:</strong>
-            <span className="font-mono text-xl font-bold text-water-200" data-testid="receipt-final-total">
-              ₱{finalTotalBill.toFixed(2)}
-            </span>
-          </div>
-          <p className="mt-4 text-center text-xs font-medium text-slate-400" data-document-footer>
-            System-generated receipt · Keep this copy for your records
-          </p>
-        </div>
-      </>
+      <p className="mt-5 text-center text-xs font-medium text-slate-400" data-document-footer>
+        System-generated receipt · Keep this copy for your records
+      </p>
     </Modal>
   );
 }
