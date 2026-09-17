@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3 } from "lucide-react";
+import { CheckCircle2, Clock3, ReceiptText } from "lucide-react";
 import { FiDownload, FiPrinter } from "react-icons/fi";
 import { downloadReceiptImage } from "../utils/downloadReceiptImage";
 import Modal from "./Modal";
@@ -21,7 +21,7 @@ function ReceiptLine({ label, testId, value }) {
   );
 }
 
-export default function PaymentReceiptModal({ isOpen, receiptData, onClose }) {
+export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onViewConsumptionReceipt }) {
   const toast = useToast();
   if (!isOpen || !receiptData) return null;
 
@@ -117,7 +117,7 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose }) {
       overlayProps={{ "data-print-document-overlay": true, "data-testid": "receipt-modal-overlay" }}
       panelProps={{ "data-printable-document": true, "data-testid": "receipt-modal-content" }}
       size="md"
-      title="Payment receipt"
+      title="Payment Receipt"
     >
           <section className="rounded-2xl bg-navy-950 p-5 text-white">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -231,6 +231,17 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose }) {
               </p>
             )}
           </section>
+
+          {onViewConsumptionReceipt && (
+            <button
+              className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+              onClick={onViewConsumptionReceipt}
+              type="button"
+            >
+              <ReceiptText aria-hidden="true" className="h-4 w-4" />
+              View consumption receipt
+            </button>
+          )}
 
           <p
             className="mt-5 text-center text-xs font-medium text-slate-400"
