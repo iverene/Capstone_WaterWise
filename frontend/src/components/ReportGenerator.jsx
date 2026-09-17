@@ -7,7 +7,6 @@ import {
   Printer,
 } from "lucide-react";
 import Dropdown from "./Dropdown";
-import KPI from "./KPI";
 import { useToast } from "./Toast";
 import { clearSession, getStoredAccount } from "../services/authToken";
 import {
@@ -35,17 +34,18 @@ const REPORT_TYPES = {
   },
   analytics: {
     label: "Analytics",
-    description: "Consumption indicators and purok comparison.",
-    sections: ["summary", "analytics", "consumption"],
+    description: "Trends, purok comparison, and key findings.",
+    sections: ["summary", "trend", "analytics"],
   },
 };
 
 const SECTION_LABELS = {
-  analytics: "Purok analysis",
+  analytics: "Purok comparison",
   billing: "Billing records",
   consumption: "Consumption records",
   residents: "Resident directory",
   summary: "Executive summary",
+  trend: "Period trend",
 };
 
 const today = new Date().toISOString().slice(0, 10);
@@ -60,22 +60,9 @@ const initialForm = {
 const requestMessage = (error, fallback) =>
   error?.response?.data?.message ?? error.message ?? fallback;
 
-const formatMetricLabel = (key) =>
-  key.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
-
-const formatMetricValue = (key, value) => {
-  const numericValue = Number(value) || 0;
-  if (/amount|balance|billed|collected/i.test(key)) {
-    return `₱${numericValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
-  }
-  if (/consumption/i.test(key)) return `${numericValue.toLocaleString("en-US")} m³`;
-  return numericValue.toLocaleString("en-US");
-};
-
 export default function ReportGenerator({ onGenerated }) {
   const toast = useToast();
   const [form, setForm] = useState(initialForm);
-  const [preview, setPreview] = useState(null);
   const [generatedReport, setGeneratedReport] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
@@ -96,7 +83,6 @@ export default function ReportGenerator({ onGenerated }) {
     });
     setFieldErrors((current) => ({ ...current, [name]: "" }));
     setError("");
-    setPreview(null);
     setGeneratedReport(null);
   };
 
@@ -139,13 +125,6 @@ export default function ReportGenerator({ onGenerated }) {
       setError("");
       const report = await generateReport(form);
       setGeneratedReport(report);
-      setPreview({
-        title: report.title,
-        startDate: report.start_date,
-        endDate: report.end_date,
-        recordCount: report.record_count,
-        summary: report.report_data?.summary ?? {},
-      });
       await Promise.resolve(onGenerated?.()).catch(() => undefined);
       toast.success("Report generated", `${report.title} was saved to the report archive.`);
     } catch (requestError) {
@@ -274,33 +253,6 @@ export default function ReportGenerator({ onGenerated }) {
           {busyAction === "generate" ? "Generating report…" : "Generate report"}
         </button>
       </div>
-
-      {preview && (
-        <section className="mt-6 rounded-2xl border border-water-200 bg-water-50/60 p-4 sm:p-5" aria-labelledby="report-preview-title">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Data preview</p>
-              <h3 className="mt-1 font-extrabold text-navy-900" id="report-preview-title">{preview.title}</h3>
-              <p className="mt-1 font-mono text-xs tabular-nums text-slate-600">{preview.startDate} to {preview.endDate}</p>
-            </div>
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-water-200 bg-white px-3 py-1.5 text-xs font-bold text-water-800">
-              <Check aria-hidden="true" className="h-3.5 w-3.5" />
-              {preview.recordCount.toLocaleString()} matching records
-            </span>
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {Object.entries(preview.summary).map(([key, value]) => (
-              <KPI
-                className="shadow-none sm:p-4"
-                icon={FileText}
-                key={key}
-                title={formatMetricLabel(key)}
-                value={formatMetricValue(key, value)}
-              />
-            ))}
-          </div>
-        </section>
-      )}
 
       {generatedReport && (
         <section className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:p-5" aria-label="Generated report actions">

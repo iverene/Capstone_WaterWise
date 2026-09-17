@@ -9,6 +9,7 @@ const metricLabel = (key) => key.replace(/([A-Z])/g, " $1").replace(/^./, (lette
 const metricValue = (key, value) => {
   const numericValue = Number(value) || 0;
   if (/amount|balance|billed|collected/i.test(key)) return `₱${numericValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+  if (/percent|share/i.test(key)) return `${numericValue.toLocaleString("en-US")}%`;
   if (/consumption/i.test(key)) return `${numericValue.toLocaleString("en-US")} m³`;
   return numericValue.toLocaleString("en-US");
 };
@@ -66,16 +67,41 @@ export default function ReportDetailsModal({ onClose, reportId }) {
                 </div>
               </section>
 
-              <section>
-                <h3 className="font-extrabold text-navy-900">Record preview</h3>
-                <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
-                  {(report.report_data?.records ?? []).slice(0, 5).map((record) => (
-                    <div className="flex items-start gap-3 p-3 text-sm text-slate-600" key={record.id}><FileText aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-water-700" /><span>{recordSummary(record, report.report_type)}</span></div>
-                  ))}
-                  {(report.report_data?.records ?? []).length === 0 && <p className="p-4 text-sm text-slate-500">No source records were included.</p>}
-                </div>
-                {(report.report_data?.records ?? []).length > 5 && <p className="mt-2 text-xs text-slate-500">Showing 5 of {report.record_count.toLocaleString()} records. The PDF contains the complete snapshot.</p>}
-              </section>
+              {report.report_type === "analytics" ? (
+                <>
+                  {Array.isArray(report.report_data?.insights) && report.report_data.insights.length > 0 && (
+                    <section>
+                      <h3 className="font-extrabold text-navy-900">Key findings</h3>
+                      <ul className="mt-3 list-disc space-y-1 rounded-xl border border-slate-200 p-4 pl-8 text-sm leading-6 text-slate-600">
+                        {report.report_data.insights.map((finding, index) => (
+                          <li key={index}>{finding}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                  <section>
+                    <h3 className="font-extrabold text-navy-900">Purok comparison</h3>
+                    <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                      {(report.report_data?.analytics ?? []).slice(0, 6).map((item, index) => (
+                        <div className="flex items-start gap-3 p-3 text-sm text-slate-600" key={item.name ?? index}><FileText aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-water-700" /><span>{index + 1}. {item.name} · {Number(item.totalConsumption).toLocaleString("en-US")} m³</span></div>
+                      ))}
+                      {(report.report_data?.analytics ?? []).length === 0 && <p className="p-4 text-sm text-slate-500">No analytics data were included.</p>}
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">Ranked by period consumption. The PDF contains the full trend and comparison.</p>
+                  </section>
+                </>
+              ) : (
+                <section>
+                  <h3 className="font-extrabold text-navy-900">Record preview</h3>
+                  <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                    {(report.report_data?.records ?? []).slice(0, 5).map((record) => (
+                      <div className="flex items-start gap-3 p-3 text-sm text-slate-600" key={record.id}><FileText aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-water-700" /><span>{recordSummary(record, report.report_type)}</span></div>
+                    ))}
+                    {(report.report_data?.records ?? []).length === 0 && <p className="p-4 text-sm text-slate-500">No source records were included.</p>}
+                  </div>
+                  {(report.report_data?.records ?? []).length > 5 && <p className="mt-2 text-xs text-slate-500">Showing 5 of {report.record_count.toLocaleString()} records. The PDF contains the complete snapshot.</p>}
+                </section>
+              )}
             </div>
           )}
     </Modal>

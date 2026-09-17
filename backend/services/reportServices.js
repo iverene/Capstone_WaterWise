@@ -7,7 +7,7 @@ const REPORT_TYPES = {
   consumption: { label: "Consumption", sections: ["summary", "consumption", "analytics"] },
   billing: { label: "Billing", sections: ["summary", "billing"] },
   residents: { label: "Residents", sections: ["summary", "residents"] },
-  analytics: { label: "Analytics", sections: ["summary", "analytics", "consumption"] },
+  analytics: { label: "Analytics", sections: ["summary", "trend", "analytics"] },
 };
 
 const serviceError = (message, statusCode = 400) => {
@@ -144,13 +144,106 @@ const consumptionByPurok = (records) => {
     .sort((first, second) => second.totalConsumption - first.totalConsumption);
 };
 
+// Deterministic period-trend + insights for Analytics reports only.
+// Uses the same consumption query as Consumption reports (no AI calls,
+// no change to what the recommendation engine collects) — presentation differs.
+const monthlyTrend = (records) => {
+  const totals = new Map();
+  records.forEach((record) => {
+    const period = String(record.readingDate ?? "").slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(period)) return;
+    totals.set(period, round(number(totals.get(period)) + number(record.consumption)));
+  });
+  return [...totals.entries()]
+    .map(([period, totalConsumption]) => ({ period, totalConsumption }))
+    .sort((first, second) => (first.period < second.period ? -1 : first.period > second.period ? 1 : 0));
+};
+
+const buildAnalyticsTrend = (records) => {
+  const monthly = monthlyTrend(records);
+  if (monthly.length < 2) {
+    // A half-vs-half comparison needs at least two months; otherwise the
+    // second half is empty and the math falsely reports -100% (falling).
+    const single = monthly[0] ?? null;
+    return { changePercent: 0, direction: "stable", lowest: single, monthly, peak: single };
+  }
+  let peak = monthly[0];
+  let lowest = monthly[0];
+  monthly.forEach((item) => {
+    if (item.totalConsumption > peak.totalConsumption) peak = item;
+    if (item.totalConsumption < lowest.totalConsumption) lowest = item;
+  });
+  const midpoint = Math.ceil(monthly.length / 2);
+  const firstHalf = monthly.slice(0, midpoint).reduce((sum, item) => sum + number(item.totalConsumption), 0);
+  const secondHalf = monthly.slice(midpoint).reduce((sum, item) => sum + number(item.totalConsumption), 0);
+  const changePercent = firstHalf > 0 ? round(((secondHalf - firstHalf) / firstHalf) * 100) : 0;
+  const direction = changePercent > 5 ? "rising" : changePercent < -5 ? "falling" : "stable";
+  return { changePercent, direction, lowest, monthly, peak };
+};
+
+const buildAnalyticsInsights = ({ analytics, summary, trend }) => {
+  const insights = [];
+  const total = number(summary?.totalConsumption);
+  if (analytics.length) {
+    const top = analytics[0];
+    const topShare = total > 0 ? round((number(top.totalConsumption) / total) * 100) : 0;
+    const bottom = analytics[analytics.length - 1];
+    const ratio = number(bottom?.totalConsumption) > 0
+      ? (number(top.totalConsumption) / number(bottom.totalConsumption)).toFixed(1)
+      : null;
+    insights.push(
+      `${top.name} leads the period with ${number(top.totalConsumption).toLocaleString("en-US")} m3 (${topShare}% of period consumption).`,
+    );
+    if (analytics.length > 1 && ratio !== null) {
+      insights.push(
+        `That is about ${ratio}x the lowest purok (${bottom.name}, ${number(bottom.totalConsumption).toLocaleString("en-US")} m3).`,
+      );
+    }
+    if (number(summary?.topPurokSharePercent) >= 50) {
+      insights.push("Over half of period consumption is concentrated in a single purok — prioritize it for field review.");
+    }
+  }
+  if (trend?.monthly?.length > 1) {
+    insights.push(
+      `Peak month ${trend.peak.period} (${number(trend.peak.totalConsumption).toLocaleString("en-US")} m3); lowest ${trend.lowest.period} (${number(trend.lowest.totalConsumption).toLocaleString("en-US")} m3).`,
+    );
+    const change = Math.abs(number(trend.changePercent));
+    insights.push(
+      trend.direction === "stable"
+        ? "Period consumption is stable between the first and second half of the range."
+        : `Second-half consumption is ${change}% ${trend.direction === "rising" ? "higher" : "lower"} than the first half (${trend.direction} trend).`,
+    );
+  } else if (trend?.monthly?.length === 1) {
+    insights.push(`All readings fall in ${trend.monthly[0].period} — extend the range for a month-to-month trend.`);
+  }
+  if (!insights.length) insights.push("No analytics insights are available for this period.");
+  return insights;
+};
+
 async function buildSnapshot(request) {
   const validated = validateRequest(request);
   let records;
   let summary;
   let analytics = [];
 
-  if (["consumption", "analytics"].includes(validated.type)) {
+  let trend = { changePercent: 0, direction: "stable", lowest: null, monthly: [], peak: null };
+  let insights = [];
+  if (validated.type === "analytics") {
+    records = await consumptionRecords(validated.startDate, validated.endDate);
+    analytics = consumptionByPurok(records);
+    const baseSummary = consumptionSummary(records);
+    const totalPurokConsumption = analytics.reduce((sum, item) => sum + number(item.totalConsumption), 0);
+    const topPurokConsumption = analytics.length ? number(analytics[0].totalConsumption) : 0;
+    summary = {
+      ...baseSummary,
+      purokCount: analytics.length,
+      highestPurokConsumption: round(topPurokConsumption),
+      lowestPurokConsumption: round(analytics.length ? analytics[analytics.length - 1].totalConsumption : 0),
+      topPurokSharePercent: round(totalPurokConsumption ? (topPurokConsumption / totalPurokConsumption) * 100 : 0),
+    };
+    trend = buildAnalyticsTrend(records);
+    insights = buildAnalyticsInsights({ analytics, summary, trend });
+  } else if (validated.type === "consumption") {
     records = await consumptionRecords(validated.startDate, validated.endDate);
     summary = consumptionSummary(records);
     analytics = consumptionByPurok(records);
@@ -170,7 +263,7 @@ async function buildSnapshot(request) {
       puroksRepresented: new Set(records.map((record) => record.purok)).size,
     };
   }
-  return { ...validated, analytics, generatedAt: new Date().toISOString(), recordCount: records.length, records, summary };
+  return { ...validated, analytics, generatedAt: new Date().toISOString(), insights, recordCount: records.length, records, summary, trend };
 }
 
 export async function buildReportPreview(request) {
@@ -178,11 +271,13 @@ export async function buildReportPreview(request) {
   return {
     analytics: snapshot.analytics,
     endDate: snapshot.endDate,
+    insights: snapshot.insights ?? [],
     recordCount: snapshot.recordCount,
     sections: snapshot.sections,
     startDate: snapshot.startDate,
     summary: snapshot.summary,
     title: `${snapshot.template.label} report preview`,
+    trend: snapshot.trend ?? { changePercent: 0, direction: "stable", lowest: null, monthly: [], peak: null },
     type: snapshot.type,
   };
 }
@@ -197,8 +292,10 @@ export async function createPersistentReport(request, adminId) {
     report_data: {
       analytics: snapshot.analytics,
       generatedAt: snapshot.generatedAt,
+      insights: snapshot.insights ?? [],
       records: snapshot.records,
       summary: snapshot.summary,
+      trend: snapshot.trend ?? { changePercent: 0, direction: "stable", lowest: null, monthly: [], peak: null },
     },
     report_type: snapshot.type,
     sections: snapshot.sections,
@@ -328,21 +425,71 @@ export function renderReportPdf(report) {
       Object.entries(data.summary ?? {}).forEach(([key, value]) => {
         const formatted = /amount|balance|billed|collected/i.test(key)
           ? currency(value)
-          : /consumption/i.test(key)
-            ? `${number(value).toLocaleString("en-US")} m3`
-            : number(value).toLocaleString("en-US");
+          : /percent|share/i.test(key)
+            ? `${number(value).toLocaleString("en-US")}%`
+            : /consumption/i.test(key)
+              ? `${number(value).toLocaleString("en-US")} m3`
+              : number(value).toLocaleString("en-US");
         row(`${metricLabel(key)}: ${formatted}`);
       });
     }
 
-    if (sections.includes("analytics")) {
-      heading("Consumption by purok");
-      if (!(data.analytics ?? []).length) row("No analytics data is available for this period.");
-      (data.analytics ?? []).forEach((item, index) => row(`${index + 1}. ${item.name} - ${number(item.totalConsumption).toLocaleString("en-US")} m3`));
+    if (sections.includes("trend") && report.report_type === "analytics") {
+      const trend = data.trend ?? { changePercent: 0, direction: "stable", lowest: null, monthly: [], peak: null };
+      const monthly = Array.isArray(trend.monthly) ? trend.monthly : [];
+      // Omit the section entirely when there are fewer than two months —
+      // a single month cannot produce a month-to-month trend.
+      if (monthly.length >= 2) {
+        heading("Period trend");
+        monthly.forEach((item) => {
+          row(`${item.period} - ${number(item.totalConsumption).toLocaleString("en-US")} m3`);
+        });
+        if (trend.peak && trend.lowest) {
+          row(`Peak: ${trend.peak.period} (${number(trend.peak.totalConsumption).toLocaleString("en-US")} m3) | Lowest: ${trend.lowest.period} (${number(trend.lowest.totalConsumption).toLocaleString("en-US")} m3)`);
+        }
+        const change = Math.abs(number(trend.changePercent));
+        row(
+          trend.direction === "stable"
+            ? "Trend: stable between the first and second half of the range."
+            : `Trend: ${trend.direction} (second half ${change}% ${trend.direction === "rising" ? "higher" : "lower"} than the first half).`,
+        );
+      }
     }
 
-    const recordSection = report.report_type === "billing" ? "billing" : report.report_type === "residents" ? "residents" : "consumption";
-    if (sections.includes(recordSection)) {
+    if (sections.includes("analytics")) {
+      heading(report.report_type === "analytics" ? "Purok comparison" : "Consumption by purok");
+      const analyticsItems = data.analytics ?? [];
+      if (!analyticsItems.length) row("No analytics data is available for this period.");
+      const analyticsTotal = analyticsItems.reduce((sum, item) => sum + number(item.totalConsumption), 0);
+      const average = analyticsItems.length ? analyticsTotal / analyticsItems.length : 0;
+      if (analyticsItems.length) {
+        row(`Highest: ${analyticsItems[0].name} - ${number(analyticsItems[0].totalConsumption).toLocaleString("en-US")} m3`);
+        if (analyticsItems.length > 1) {
+          const lowest = analyticsItems[analyticsItems.length - 1];
+          row(`Lowest: ${lowest.name} - ${number(lowest.totalConsumption).toLocaleString("en-US")} m3`);
+        }
+        if (report.report_type === "analytics") {
+          row(`Average per purok: ${number(round(average)).toLocaleString("en-US")} m3 across ${analyticsItems.length} puroks`);
+        }
+      }
+      analyticsItems.forEach((item, index) => {
+        const share = analyticsTotal ? (number(item.totalConsumption) / analyticsTotal) * 100 : 0;
+        const gap = average ? round(((number(item.totalConsumption) - average) / average) * 100) : 0;
+        if (report.report_type === "analytics") {
+          row(`${index + 1}. ${item.name} - ${number(item.totalConsumption).toLocaleString("en-US")} m3 (${number(share.toFixed(1))}%, ${gap >= 0 ? "+" : ""}${gap}% vs average)`);
+        } else {
+          row(`${index + 1}. ${item.name} - ${number(item.totalConsumption).toLocaleString("en-US")} m3 (${number(share.toFixed(1))}%)`);
+        }
+      });
+      const findings = Array.isArray(data.insights) ? data.insights : [];
+      if (report.report_type === "analytics" && findings.length && (sections.includes("analytics") || sections.includes("trend"))) {
+        heading("Key findings");
+        findings.forEach((finding, index) => row(`${index + 1}. ${finding}`));
+      }
+    }
+
+    const recordSection = report.report_type === "billing" ? "billing" : report.report_type === "residents" ? "residents" : report.report_type === "consumption" ? "consumption" : null;
+    if (recordSection && sections.includes(recordSection)) {
       heading(`${REPORT_TYPES[report.report_type]?.label ?? "Report"} records`);
 
       if (report.report_type === "consumption" || report.report_type === "analytics") {
