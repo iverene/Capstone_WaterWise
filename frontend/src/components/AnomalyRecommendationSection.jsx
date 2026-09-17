@@ -7,7 +7,11 @@ import {
 } from "lucide-react";
 
 import { isCanceledRequest } from "../services/apiClient";
-import { fetchConsumptionRanking } from "../services/consumptionAPI";
+import {
+  fetchAllPuroksMonthlyHistory,
+  fetchAllPuroksYearlyHistory,
+  fetchConsumptionRanking,
+} from "../services/consumptionAPI";
 import { fetchAllRecommendations } from "../services/recommendationAPI";
 import LoadingSkeleton from "./LoadingSkeleton";
 
@@ -40,11 +44,115 @@ function RecommendationDetails({ recommendation, summary }) {
   );
 }
 
+const extractHistoryList = (response) => {
+  const data = response?.data?.data ?? response?.data ?? response ?? [];
+  if (Array.isArray(data)) return data;
+  return (
+    data?.allPuroksMonthly ??
+    data?.allPuroksYearly ??
+    data?.history ??
+    data?.data ??
+    []
+  );
+};
+
+const MONTH_ORDER = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+const getHistoricalArray = (entry) => {
+  if (Array.isArray(entry?.historical)) return entry.historical;
+  if (Array.isArray(entry?.monthly)) return entry.monthly;
+  if (Array.isArray(entry?.yearly)) return entry.yearly;
+  return [];
+};
+
+const toConsumptionNumber = (record) => {
+  const value = Number(
+    record?.consumption ??
+      record?.totalConsumption ??
+      record?.total_consumption ??
+      record?.value ??
+      0,
+  );
+  return Number.isFinite(value) ? value : 0;
+};
+
+const monthIndexOf = (month) => {
+  const normalized = String(month ?? "").trim().toLowerCase();
+  if (!normalized) return -1;
+  const fullIndex = MONTH_ORDER.indexOf(normalized);
+  if (fullIndex >= 0) return fullIndex;
+  return MONTH_ORDER.findIndex((name) => normalized.startsWith(name.slice(0, 3)));
+};
+
+// Display-only: latest recorded month (e.g. September), not a YTD sum.
+// Does not change what the recommendation AI engine collects.
+const getLatestMonthlyValue = (entry) => {
+  const historical = getHistoricalArray(entry);
+  if (historical.length === 0) return 0;
+  let latest = historical[historical.length - 1];
+  let latestIndex = -2;
+  historical.forEach((record) => {
+    const index = monthIndexOf(record?.month ?? record?.label);
+    if (index > latestIndex) {
+      latestIndex = index;
+      latest = record;
+    }
+  });
+  return toConsumptionNumber(latest);
+};
+
+// Display-only: latest recorded year (e.g. this year), not an all-years sum.
+// Does not change what the recommendation AI engine collects.
+const getLatestYearlyValue = (entry) => {
+  const historical = getHistoricalArray(entry);
+  if (historical.length === 0) return 0;
+  let latest = historical[historical.length - 1];
+  let latestYear = Number.NEGATIVE_INFINITY;
+  historical.forEach((record) => {
+    const year = Number(record?.year);
+    if (Number.isFinite(year) && year > latestYear) {
+      latestYear = year;
+      latest = record;
+    }
+  });
+  return toConsumptionNumber(latest);
+};
+
+const buildConsumptionMap = (response, period) => {
+  const list = extractHistoryList(response);
+  const source = Array.isArray(list) ? list : [];
+  const map = {};
+  source.forEach((entry) => {
+    const name = entry?.purok ?? entry?.name;
+    if (name == null || String(name).trim() === "") return;
+    map[String(name)] =
+      period === "monthly" ? getLatestMonthlyValue(entry) : getLatestYearlyValue(entry);
+  });
+  return map;
+};
+
 export default function AnomalyRecommendationSection() {
   const [recommendations, setRecommendations] = useState(
     EMPTY_RECOMMENDATIONS,
   );
   const [rankEntries, setRankEntries] = useState([]);
+  const [periodConsumption, setPeriodConsumption] = useState({
+    monthly: {},
+    yearly: {},
+  });
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("monthly");
@@ -55,9 +163,16 @@ export default function AnomalyRecommendationSection() {
     setErrorMessage("");
 
     try {
-      const [recommendationResponse, rankingResponse] = await Promise.all([
+      const [
+        recommendationResponse,
+        rankingResponse,
+        monthlyHistoryResponse,
+        yearlyHistoryResponse,
+      ] = await Promise.all([
         fetchAllRecommendations({ signal }),
         fetchConsumptionRanking({ signal }).catch(() => null),
+        fetchAllPuroksMonthlyHistory().catch(() => null),
+        fetchAllPuroksYearlyHistory().catch(() => null),
       ]);
       setRecommendations({
         ...EMPTY_RECOMMENDATIONS,
@@ -72,10 +187,17 @@ export default function AnomalyRecommendationSection() {
           }))
           : [],
       );
+      if (!signal?.aborted) {
+        setPeriodConsumption({
+          monthly: buildConsumptionMap(monthlyHistoryResponse, "monthly"),
+          yearly: buildConsumptionMap(yearlyHistoryResponse, "yearly"),
+        });
+      }
     } catch (error) {
       if (!isCanceledRequest(error)) {
         setRecommendations(EMPTY_RECOMMENDATIONS);
         setRankEntries([]);
+        setPeriodConsumption({ monthly: {}, yearly: {} });
         setErrorMessage(
           error.response?.data?.message ??
             "Unable to load recommendations.",
@@ -107,19 +229,45 @@ export default function AnomalyRecommendationSection() {
     const names = [...new Set(
       (source ?? []).map((item) => item?.purok).filter((name) => name != null && String(name).trim() !== ""),
     )];
-    const rankOf = (name) => {
+    const consumptionMap = period === "monthly"
+      ? periodConsumption.monthly ?? {}
+      : periodConsumption.yearly ?? {};
+    const hasPeriodValues = names.some((name) =>
+      Object.prototype.hasOwnProperty.call(consumptionMap, name),
+    );
+    const fallbackRankOf = (name) => {
       const index = rankEntries.findIndex((entry) => entry.name === name);
       return index >= 0 ? index : Number.POSITIVE_INFINITY;
     };
-    const valueOf = (name) => rankEntries.find((entry) => entry.name === name)?.value ?? null;
-    names.sort((a, b) => rankOf(a) - rankOf(b) || String(a).localeCompare(String(b)));
+    const valueOf = (name) => {
+      if (Object.prototype.hasOwnProperty.call(consumptionMap, name)) {
+        const value = Number(consumptionMap[name]);
+        return Number.isFinite(value) ? value : 0;
+      }
+      return rankEntries.find((entry) => entry.name === name)?.value ?? null;
+    };
+    if (hasPeriodValues) {
+      names.sort((a, b) => {
+        const valueA = valueOf(a) ?? Number.NEGATIVE_INFINITY;
+        const valueB = valueOf(b) ?? Number.NEGATIVE_INFINITY;
+        if (valueB !== valueA) return valueB - valueA;
+        return String(a).localeCompare(String(b));
+      });
+      return names.map((name, index) => ({
+        purok: name,
+        rank: index,
+        result: source.find((item) => item?.purok === name) ?? null,
+        value: valueOf(name),
+      }));
+    }
+    names.sort((a, b) => fallbackRankOf(a) - fallbackRankOf(b) || String(a).localeCompare(String(b)));
     return names.map((name) => ({
       purok: name,
-      rank: rankOf(name),
+      rank: fallbackRankOf(name),
       result: source.find((item) => item?.purok === name) ?? null,
       value: valueOf(name),
     }));
-  }, [period, rankEntries, recommendations]);
+  }, [period, periodConsumption, rankEntries, recommendations]);
 
   return (
     <section
