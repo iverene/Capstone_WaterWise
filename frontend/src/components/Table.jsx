@@ -34,6 +34,7 @@ export default function Table({
   emptyTitle = "No records found",
   getRowKey = (row, index) => row?.id ?? index,
   header,
+  mobileLabels = true,
   pageSize = DEFAULT_PAGE_SIZE,
   renderRow,
   rowClassName = "grid grid-cols-2 gap-4 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0",
@@ -72,7 +73,7 @@ export default function Table({
               <tbody className="block divide-y divide-slate-100 md:table-row-group">
                 {pageRows.map((row, index) => (
                   <tr className={typeof rowClassName === "function" ? rowClassName(row) : rowClassName} key={getRowKey(row, startIndex + index)}>
-                    {withMobileColumnLabels(renderRow(row, startIndex + index), columns)}
+                    {mobileLabels ? withMobileColumnLabels(renderRow(row, startIndex + index), columns) : renderRow(row, startIndex + index)}
                   </tr>
                 ))}
               </tbody>
