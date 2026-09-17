@@ -112,7 +112,7 @@ function EventDialog({ defaultDate, event, isOpen, onClose, onSubmit, submitting
       onClose={onClose}
       showCloseButton={false}
       size="md"
-      title={event ? "Edit event" : "Create an event"}
+      title={event ? "Edit Event" : "Create an Event"}
     >
           <EventForm
             defaultDate={defaultDate}

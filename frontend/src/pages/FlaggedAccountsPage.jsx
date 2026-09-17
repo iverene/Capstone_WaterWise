@@ -285,7 +285,7 @@ export default function FlaggedAccountsPage() {
           if (!disconnecting) setSelectedAccount(null);
         }}
         size="sm"
-        title="Confirm disconnection"
+        title="Confirm Disconnection"
       >
         <div className="p-5 sm:p-6">
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4">

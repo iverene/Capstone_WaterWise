@@ -52,7 +52,7 @@ export default function PaymentModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton={Boolean(completedPayment)}
-      title={completedPayment ? "Payment recorded" : "Record payment"}
+      title={completedPayment ? "Payment Recorded" : "Record Payment"}
       zIndexClass="z-40"
     >
           {completedPayment ? (

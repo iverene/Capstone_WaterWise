@@ -633,14 +633,14 @@ export default function PaymentForm({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <button
-              className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 hover:bg-slate-50"
+              className="order-2 min-h-12 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 hover:bg-slate-50 sm:order-1"
               onClick={onCancel}
               type="button"
             >
               Cancel
             </button>
             <button
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white hover:bg-water-700"
+              className="order-1 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white hover:bg-water-700 sm:order-2"
               type="submit"
             >
               Review payment
@@ -664,7 +664,7 @@ export default function PaymentForm({
             ref={reviewHeadingRef}
             tabIndex={-1}
           >
-            Confirm payment
+            Confirm Payment
           </h3>
           <p className="mt-1 text-sm text-slate-500">
             Verify these details before creating the financial transaction.
@@ -702,7 +702,7 @@ export default function PaymentForm({
 
           <div className="mt-6 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)]">
             <button
-              className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60"
+              className="order-2 min-h-12 rounded-xl border border-slate-300 bg-white px-5 font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60 sm:order-1"
               disabled={submitting}
               onClick={onCancel}
               type="button"
@@ -710,7 +710,7 @@ export default function PaymentForm({
               Cancel
             </button>
             <button
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700 disabled:bg-emerald-300"
+              className="order-1 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 font-bold text-white hover:bg-emerald-700 disabled:bg-emerald-300 sm:order-2"
               disabled={submitting}
               onClick={confirmPayment}
               type="button"

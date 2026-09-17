@@ -94,7 +94,7 @@ export default function MeterReadingRecordModal({ isOpen, onClose, recordData })
       onClose={onClose}
       overlayProps={{ "data-print-document-overlay": true, "data-testid": "meter-reading-record-modal" }}
       panelProps={{ "data-printable-document": true }}
-      title="Meter reading record"
+      title="Meter Reading Record"
     >
       <>
         <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-[0.8fr_1.2fr]">

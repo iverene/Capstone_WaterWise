@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
+  ChevronDown,
   Megaphone,
   Pencil,
   Send,
@@ -45,13 +44,33 @@ export default function AnnouncementPage({
   showHeader = true,
   title = "Community updates",
 }) {
-  const [currentPage, setCurrentPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [feedKey, setFeedKey] = useState(announcements);
+  const sentinelRef = useRef(null);
+  if (feedKey !== announcements) {
+    setFeedKey(announcements);
+    setVisibleCount(PAGE_SIZE);
+  }
   const feed = limit ? announcements.slice(0, limit) : announcements;
-  const totalPages = Math.max(1, Math.ceil(feed.length / PAGE_SIZE));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * PAGE_SIZE;
-  const pageRows = limit || !paginate ? feed : feed.slice(startIndex, startIndex + PAGE_SIZE);
-  const endIndex = Math.min(startIndex + pageRows.length, feed.length);
+  const infiniteScroll = !limit && paginate;
+  const visibleRows = infiniteScroll ? feed.slice(0, visibleCount) : feed;
+  const hasMore = infiniteScroll && visibleCount < feed.length;
+
+  useEffect(() => {
+    if (!hasMore) return undefined;
+    const sentinel = sentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === "undefined") return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCount((count) => Math.min(count + PAGE_SIZE, feed.length));
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [feed.length, hasMore]);
   return (
     <section aria-labelledby={showHeader ? "announcement-feed-heading" : undefined}>
       {showHeader && (
@@ -75,7 +94,7 @@ export default function AnnouncementPage({
         </div>
       ) : (
         <div className={layout === "grid" ? "grid items-start gap-4 lg:grid-cols-2" : "space-y-4"}>
-          {pageRows.map((announcement) => (
+          {visibleRows.map((announcement) => (
             <article
               className={`overflow-hidden rounded-2xl border bg-white shadow-card ${
                 announcement.priority === "critical"
@@ -166,42 +185,24 @@ export default function AnnouncementPage({
         </div>
       )}
 
-      {showEndMarker && announcements.length > 0 && (
+      {hasMore && <div aria-hidden="true" className="h-1" ref={sentinelRef} />}
+
+      {hasMore && (
+        <button
+          className="mx-auto flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+          onClick={() => setVisibleCount((count) => Math.min(count + PAGE_SIZE, feed.length))}
+          type="button"
+        >
+          <ChevronDown aria-hidden="true" className="h-4 w-4" />
+          Load older posts
+        </button>
+      )}
+
+      {showEndMarker && announcements.length > 0 && !hasMore && (
         <div className="mt-4 flex items-center justify-center gap-2 py-2 text-xs font-semibold text-slate-400">
           <Send aria-hidden="true" className="h-3.5 w-3.5" />
           End of published updates
         </div>
-      )}
-
-      {announcements.length > 0 && !limit && paginate && (
-        <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-center text-xs font-semibold text-slate-500 sm:text-left">
-            Showing <span className="font-mono tabular-nums text-slate-700">{startIndex + 1}–{endIndex}</span> of <span className="font-mono tabular-nums text-slate-700">{announcements.length}</span>
-          </p>
-          <div className="flex items-center justify-center gap-2">
-            <button
-              aria-label="Previous page"
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:border-water-300 hover:bg-water-50 disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
-              disabled={safePage <= 1}
-              onClick={() => setCurrentPage((page) => page - 1)}
-              type="button"
-            >
-              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
-            </button>
-            <span className="min-w-24 text-center text-xs font-bold text-slate-600">
-              Page <span className="font-mono tabular-nums">{safePage}</span> of <span className="font-mono tabular-nums">{totalPages}</span>
-            </span>
-            <button
-              aria-label="Next page"
-              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition-colors hover:border-water-300 hover:bg-water-50 disabled:cursor-default disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-300 disabled:hover:border-slate-200 disabled:hover:bg-slate-100"
-              disabled={safePage >= totalPages}
-              onClick={() => setCurrentPage((page) => page + 1)}
-              type="button"
-            >
-              <ChevronRight aria-hidden="true" className="h-4 w-4" />
-            </button>
-          </div>
-        </footer>
       )}
     </section>
   );

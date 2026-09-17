@@ -397,7 +397,7 @@ export default function PaymentProcessingPage() {
                     type="button"
                   >
                     <WalletCards aria-hidden="true" className="h-4 w-4" />
-                    Record payment
+                    Record Payment
                   </button>
                 </td>
               </>

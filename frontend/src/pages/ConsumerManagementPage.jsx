@@ -257,7 +257,7 @@ function ConsumerManagementPage() {
         panelRoundedClass="rounded-xl"
         showCloseButton={false}
         size="xl"
-        title={formMode === "edit" ? "Edit resident" : "Add resident"}
+        title={formMode === "edit" ? "Edit Resident" : "Add Resident"}
       >
         <div className={formMode === "add" ? "resident-registration-layout" : ""}>
           {formMode === "add" && <ResidentRegistrationIntro />}
@@ -285,7 +285,7 @@ function ConsumerManagementPage() {
         </div>
       </Modal>
 
-      <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify resident password change">
+      <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify Resident Password Change">
         {passwordChallenge && (
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={confirmPasswordChange}>
           <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{passwordChallenge?.maskedEmail ?? "your email"}</strong>. It expires in 5 minutes.</p>
