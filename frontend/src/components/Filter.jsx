@@ -136,7 +136,7 @@ export default function Filter({
         aria-expanded={isOpen}
         aria-haspopup="dialog"
         aria-label={`${ariaLabel}${activeCount ? `, ${activeCount} active` : ""}`}
-        className={`min-h-11 w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-4 text-sm font-bold text-navy-900 transition-colors hover:border-slate-300 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:text-slate-400 ${showTwoFiltersInline ? "inline-flex sm:hidden" : "inline-flex"}`}
+        className={`min-h-11 w-fit items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-100 px-3 text-sm font-bold text-navy-900 transition-colors hover:border-slate-300 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 disabled:text-slate-400 sm:px-4 ${showTwoFiltersInline ? "inline-flex sm:hidden" : "inline-flex"}`}
         data-testid={dataTestId}
         disabled={allDisabled}
         onClick={() => {
@@ -146,7 +146,7 @@ export default function Filter({
         type="button"
       >
         <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
-        {buttonLabel}
+        <span className="hidden sm:inline">{buttonLabel}</span>
         {activeCount > 0 && (
           <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-water-700 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
             {activeCount}
