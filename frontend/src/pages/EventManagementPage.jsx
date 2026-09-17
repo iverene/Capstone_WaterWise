@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -379,6 +379,18 @@ export default function EventManagementPage() {
     setSelectedDate(toDateKey(nextMonth));
   };
 
+  const touchStartX = useRef(null);
+  const handleTouchStart = (event) => {
+    touchStartX.current = event.touches[0].clientX;
+  };
+  const handleTouchEnd = (event) => {
+    if (touchStartX.current === null) return;
+    const deltaX = event.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(deltaX) < 50) return;
+    changeMonth(deltaX < 0 ? 1 : -1);
+  };
+
   const returnToToday = () => {
     setCurrentMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setSelectedDate(todayKey);
@@ -418,7 +430,12 @@ export default function EventManagementPage() {
         <LoadingSkeleton label="Loading events calendar" variant="calendar" />
       ) : (
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-3">
-          <section className="relative order-2 rounded-2xl border border-slate-200 bg-white shadow-card lg:order-1 lg:col-span-2" aria-labelledby="calendar-heading">
+          <section
+            className="relative order-2 touch-pan-y rounded-2xl border border-slate-200 bg-white shadow-card lg:order-1 lg:col-span-2"
+            aria-labelledby="calendar-heading"
+            onTouchEnd={handleTouchEnd}
+            onTouchStart={handleTouchStart}
+          >
             <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">
@@ -430,7 +447,7 @@ export default function EventManagementPage() {
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     aria-label="Previous month"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                    className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:flex"
                     onClick={() => changeMonth(-1)}
                     type="button"
                   >
@@ -457,16 +474,23 @@ export default function EventManagementPage() {
                   />
                   <button
                     aria-label="Next month"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                    className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:flex"
                     onClick={() => changeMonth(1)}
                     type="button"
                   >
                     <ChevronRight aria-hidden="true" className="h-5 w-5" />
                   </button>
+                  <button
+                    className="min-h-12 shrink-0 rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:hidden"
+                    onClick={returnToToday}
+                    type="button"
+                  >
+                    Today
+                  </button>
                 </div>
               </div>
               <button
-                className="min-h-11 w-full rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:w-auto"
+                className="hidden min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:block"
                 onClick={returnToToday}
                 type="button"
               >
