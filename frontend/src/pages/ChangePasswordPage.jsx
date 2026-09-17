@@ -3,7 +3,6 @@ import { Check, Eye, EyeOff, LoaderCircle, Mail, ShieldCheck } from "lucide-reac
 import { useNavigate } from "react-router";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
-import AccountBackButton from "../components/AccountBackButton";
 import { useToast } from "../components/Toast";
 import {
   changePasswordWithCurrent,
@@ -197,11 +196,8 @@ export default function ChangePasswordPage() {
   );
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <div>
-        <AccountBackButton fallbackPath={backPath} />
-        <PageHeader eyebrow="Account Security" title="Change Password" />
-      </div>
+    <div className="space-y-4 sm:space-y-5">
+      <PageHeader title="Change Password" />
 
       <div className="mx-auto w-full max-w-md">
       {method === "email" && !challengeToken && (
@@ -258,9 +254,9 @@ export default function ChangePasswordPage() {
             <p aria-live="polite" className="sr-only">{requirementsMet.filter(Boolean).length} of {passwordRequirements.length} password requirements met{passwordsMatch ? ", passwords match" : ""}.</p>
             {passwordField("confirm-account-password", "Confirm new password", confirmation, setConfirmation, "new-password")}
             {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
-            <div className="flex items-center gap-2">
+            <div className="flex items-stretch gap-3">
+              <button className="flex min-h-12 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 disabled:opacity-60" disabled={isSubmitting} onClick={() => navigate(backPath)} type="button">Cancel</button>
               <button className="ww-primary-button flex min-h-12 flex-1 items-center justify-center gap-2" disabled={isSubmitting || !canSubmit} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing password…" : "Change password"}</button>
-              <button className="min-h-12 shrink-0 rounded-xl px-5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" disabled={isSubmitting} onClick={() => navigate(backPath)} type="button">Cancel</button>
             </div>
           </form>
         </section>

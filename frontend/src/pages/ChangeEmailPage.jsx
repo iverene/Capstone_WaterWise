@@ -3,7 +3,6 @@ import { Building2, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
-import AccountBackButton from "../components/AccountBackButton";
 import {
   completeConsumerEmailChange,
   requestConsumerEmailChangeOtp,
@@ -34,17 +33,9 @@ function getSavedEmailOtpChallenge() {
   return null;
 }
 
-const profileHomeByRole = {
-  admin: "/admin/profile",
-  "super-admin": "/admin/profile",
-  "meter-reader": "/meter-reader/profile",
-  consumer: "/consumer/profile-details",
-};
-
 export default function ChangeEmailPage() {
   const navigate = useNavigate();
   const accountRole = getStoredAccount()?.role ?? "consumer";
-  const backPath = profileHomeByRole[accountRole] ?? "/login";
 
   const [savedChallenge] = useState(getSavedEmailOtpChallenge);
   const [challengeToken, setChallengeToken] = useState(savedChallenge?.challengeToken ?? "");
@@ -118,11 +109,8 @@ export default function ChangeEmailPage() {
   };
 
   return (
-    <div className="space-y-5 sm:space-y-6">
-      <div>
-        <AccountBackButton fallbackPath={backPath} />
-        <PageHeader eyebrow="Account Security" title="Change Email" />
-      </div>
+    <div className="space-y-4 sm:space-y-5">
+      <PageHeader title="Change Email Address" />
 
       <div className="mx-auto w-full max-w-md">
         {!challengeToken && (
@@ -154,14 +142,14 @@ export default function ChangeEmailPage() {
 
         {emailChangeToken && (
           <section aria-labelledby="new-email-heading">
-            <h2 className="text-base font-extrabold text-navy-900" id="new-email-heading">Enter new email</h2>
+            <h2 className="text-base font-extrabold text-navy-900" id="new-email-heading">Enter new email address</h2>
             <form className="mt-4 space-y-4" onSubmit={changeEmail}>
               <p className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800"><ShieldCheck className="h-5 w-5 shrink-0" />{message}</p>
               <div>
                 <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="new-consumer-email">New email address</label>
                 <input autoComplete="email" className="ww-field mt-1.5 py-2.5 pl-4 pr-4 text-sm sm:mt-2 sm:py-3 sm:text-base" id="new-consumer-email" onChange={(event) => { setNewEmail(event.target.value); setError(""); }} placeholder="name@example.com" type="email" value={newEmail} />
               </div>
-              <button className="ww-primary-button mx-auto flex min-h-12 w-full max-w-xs items-center justify-center gap-2" disabled={isSubmitting} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing email…" : "Save new email"}</button>
+              <button className="ww-primary-button mx-auto flex min-h-12 w-full max-w-xs items-center justify-center gap-2" disabled={isSubmitting} type="submit">{isSubmitting && <LoaderCircle className="h-5 w-5 animate-spin" />}{isSubmitting ? "Changing email address…" : "Save new email address"}</button>
             </form>
           </section>
         )}
