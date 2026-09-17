@@ -55,13 +55,7 @@ export default function UsageMetrics({ usageHistory }) {
   const filteredHistory = activeYear === "all"
     ? displayedHistory
     : displayedHistory.filter((record) => String(record.year) === activeYear);
-  const pageHeader = (
-    <PageHeader
-      description="Understand your monthly water use and review the meter values behind each result."
-      descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
-      title="Analytics"
-    />
-  );
+  const pageHeader = <PageHeader title="Analytics" />;
 
   if (isLoading) {
     return (

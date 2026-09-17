@@ -112,7 +112,7 @@ export default function BillingLedger({
     ledgerAccount?.name,
     historyData,
   );
-  const pageHeader = <PageHeader description="Check the amount due, payment status, billing periods, and remaining balances." descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6" eyebrow="Resident portal" title="Bills and Payment History" />;
+  const pageHeader = <PageHeader title="Bills and Payment History" />;
 
   useEffect(() => {
     if (!ledger || !requestedBillingId || requestedView) return;
@@ -205,15 +205,9 @@ export default function BillingLedger({
       <section className="space-y-4" id="consumer-billing-history">
         <div className="flex items-end justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-water-600">
-              Your records
-            </p>
-            <h3 className="mt-1.5 text-xl font-extrabold tracking-[-0.03em] text-navy-900 sm:text-2xl">
-              Bill history
+            <h3 className="text-xl font-extrabold text-navy-900">
+              Bill History
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Showing {displayedHistoryData.length} of {historyData.length} bill{historyData.length === 1 ? "" : "s"}
-            </p>
           </div>
           <Filter
             ariaLabel="Filter billing history"
