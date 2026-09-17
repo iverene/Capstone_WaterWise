@@ -60,6 +60,15 @@ const initialForm = {
 const requestMessage = (error, fallback) =>
   error?.response?.data?.message ?? error.message ?? fallback;
 
+const toTitleCaseFilename = (title) =>
+  `${String(title ?? "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .split("-")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join("-")
+    .replace(/-To-/g, "-to-") || "Waterwise-Report"}.pdf`;
+
 export default function ReportGenerator({ onGenerated }) {
   const toast = useToast();
   const [form, setForm] = useState(initialForm);
@@ -142,8 +151,9 @@ export default function ReportGenerator({ onGenerated }) {
       setBusyAction("download");
       setError("");
       const pdf = await downloadReportPDF(generatedReport.id);
-      savePdfBlob(pdf, `${generatedReport.title}.pdf`);
-      toast.success("Download started", `${generatedReport.title}.pdf is being saved to your device.`);
+      const filename = toTitleCaseFilename(generatedReport.title);
+      savePdfBlob(pdf, filename);
+      toast.success("Download started", `${filename} is being saved to your device.`);
     } catch (requestError) {
       const message = requestMessage(requestError, "The PDF could not be downloaded.");
       setError(message);
@@ -172,7 +182,7 @@ export default function ReportGenerator({ onGenerated }) {
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-600">Report builder</p>
         <h2 className="mt-1 text-xl font-extrabold text-navy-900">Prepare a report</h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          Select a template and period, verify the matching records, then generate the final PDF.
+          Select a template and period, then generate the final PDF.
         </p>
       </div>
 

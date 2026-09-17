@@ -37,7 +37,13 @@ const dateTime = (value) => {
 };
 
 const safeFilename = (report) =>
-  `${report.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "waterwise-report"}.pdf`;
+  `${String(report.title ?? "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .split("-")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join("-")
+    .replace(/-To-/g, "-to-") || "Waterwise-Report"}.pdf`;
 
 export default function Reports() {
   const toast = useToast();

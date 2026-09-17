@@ -1,7 +1,25 @@
 import PDFDocument from "pdfkit";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { supabase } from "../config/supabase.js";
 import { composeFullName } from "../models/consumerModels.js";
 import { insertGeneratedReport } from "../models/reportModels.js";
+
+const serviceDir = dirname(fileURLToPath(import.meta.url));
+const LOGO_PATH = join(serviceDir, "..", "assets", "Sucol_logo.png");
+
+export const toReportFilename = (title) => {
+  const slug = String(title ?? "")
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "");
+  const titled = slug
+    .split("-")
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : part))
+    .join("-")
+    .replace(/-To-/g, "-to-");
+  return `${titled || "Waterwise-Report"}.pdf`;
+};
 
 const REPORT_TYPES = {
   consumption: { label: "Consumption", sections: ["summary", "consumption", "analytics"] },
@@ -311,67 +329,100 @@ const dateOnly = (value) => String(value ?? "").slice(0, 10) || "Unavailable";
 
 export function renderReportPdf(report) {
   return new Promise((resolve, reject) => {
-    const pdf = new PDFDocument({ bufferPages: true, margin: 44, size: "A4" });
+    const pdf = new PDFDocument({
+      bufferPages: true,
+      margins: { bottom: 44, left: 44, right: 44, top: 30 },
+      size: "A4",
+    });
     const chunks = [];
     pdf.on("data", (chunk) => chunks.push(chunk));
     pdf.on("error", reject);
     pdf.on("end", () => resolve(Buffer.concat(chunks)));
 
-    const PAGE_TOP = 44;
     const PAGE_BOTTOM = 780;
     const TABLE_LEFT = 44;
-    const TABLE_WIDTH = 507;
+    const CONTENT_WIDTH = 507;
+    const BODY_FONT_SIZE = 12;
     const data = report.report_data ?? {};
     const sections = report.sections ?? [];
 
-    const ensureSpace = (height = 32) => {
+    const ensureSpace = (height = 40) => {
       if (pdf.y + height > PAGE_BOTTOM) {
         pdf.addPage();
       }
     };
 
     const heading = (title) => {
-      ensureSpace(48);
-      if (pdf.y > 60) pdf.moveDown(0.5);
-      pdf.font("Helvetica-Bold").fontSize(13).fillColor("#0f172a").text(title);
-      pdf.moveDown(0.15).strokeColor("#bae6fd").lineWidth(1).moveTo(44, pdf.y).lineTo(551, pdf.y).stroke();
-      pdf.moveDown(0.35);
+      ensureSpace(64);
+      if (pdf.y > 170) pdf.moveDown(0.5);
+      pdf.font("Helvetica-Bold").fontSize(14).fillColor("#0b2b40").text(
+        String(title).toUpperCase(),
+        TABLE_LEFT,
+        pdf.y,
+        { align: "center", width: CONTENT_WIDTH },
+      );
+      pdf.moveDown(0.2);
+      pdf.strokeColor("#bae6fd").lineWidth(1).moveTo(150, pdf.y).lineTo(445, pdf.y).stroke();
+      pdf.moveDown(0.4);
     };
 
-    const row = (text) => {
-      ensureSpace(18);
-      pdf.font("Helvetica").fontSize(8).fillColor("#334155").text(text, { lineGap: 1 });
-      pdf.moveDown(0.2);
+    const row = (text, options = {}) => {
+      ensureSpace(26);
+      pdf.font(options.bold ? "Helvetica-Bold" : "Helvetica").fontSize(BODY_FONT_SIZE).fillColor(options.color ?? "#334155").text(
+        text,
+        { align: options.align ?? "left", lineGap: 2 },
+      );
+      pdf.moveDown(0.25);
     };
 
     const drawTable = (columns, rows) => {
-      const HEADER_HEIGHT = 18;
-      const ROW_HEIGHT = 16;
-      const FONT_SIZE = 7.5;
-      const HEADER_FONT_SIZE = 7.5;
+      const HEADER_HEIGHT = 22;
+      const ROW_HEIGHT = 20;
+      const FONT_SIZE = 10;
+      const HEADER_FONT_SIZE = 10;
       const totalWidth = columns.reduce((sum, col) => sum + col.width, 0);
 
-      const drawHeader = (y) => {
-        let x = TABLE_LEFT;
-        pdf.rect(TABLE_LEFT, y, totalWidth, HEADER_HEIGHT).fill("#0b2b40");
-        columns.forEach((col) => {
-          pdf.font("Helvetica-Bold").fontSize(HEADER_FONT_SIZE).fillColor("#ffffff").text(col.label, x + 4, y + 5, { width: col.width - 8, lineBreak: false });
-          x += col.width;
-        });
-        return y + HEADER_HEIGHT;
+      // Measure wrapped text so long headers (e.g. PREV./CURR. READING)
+      // or long cell values grow their row instead of overlapping it.
+      const cellHeight = (text, width, font, size, padding) => {
+        pdf.font(font).fontSize(size);
+        return Math.ceil(pdf.heightOfString(String(text ?? ""), { width })) + padding;
       };
 
-      const drawRow = (rowIndex, y) => {
+      const headerHeight = () => Math.max(
+        HEADER_HEIGHT,
+        ...columns.map((col) => cellHeight(col.label, col.width - 8, "Helvetica-Bold", HEADER_FONT_SIZE, 12)),
+      );
+
+      const rowHeight = (rowIndex) => Math.max(
+        ROW_HEIGHT,
+        ...columns.map((col) => {
+          const value = col.format ? col.format(rows[rowIndex]) : String(rows[rowIndex][col.key] ?? "");
+          return cellHeight(value, col.width - 8, "Helvetica", FONT_SIZE, 10);
+        }),
+      );
+
+      const drawHeader = (y, height) => {
+        let x = TABLE_LEFT;
+        pdf.rect(TABLE_LEFT, y, totalWidth, height).fill("#0b2b40");
+        columns.forEach((col) => {
+          pdf.font("Helvetica-Bold").fontSize(HEADER_FONT_SIZE).fillColor("#ffffff").text(col.label, x + 4, y + 6, { align: "center", width: col.width - 8 });
+          x += col.width;
+        });
+        return y + height;
+      };
+
+      const drawRow = (rowIndex, y, height) => {
         let x = TABLE_LEFT;
         if (rowIndex % 2 === 0) {
-          pdf.rect(TABLE_LEFT, y, totalWidth, ROW_HEIGHT).fill("#f8fafc");
+          pdf.rect(TABLE_LEFT, y, totalWidth, height).fill("#f8fafc");
         }
         columns.forEach((col) => {
           const value = col.format ? col.format(rows[rowIndex]) : String(rows[rowIndex][col.key] ?? "");
-          pdf.font("Helvetica").fontSize(FONT_SIZE).fillColor("#334155").text(value, x + 4, y + 4, { width: col.width - 8, lineBreak: false });
+          pdf.font("Helvetica").fontSize(FONT_SIZE).fillColor("#334155").text(value, x + 4, y + 5, { align: col.align ?? "left", width: col.width - 8 });
           x += col.width;
         });
-        return y + ROW_HEIGHT;
+        return y + height;
       };
 
       const drawBorders = (startY, endY) => {
@@ -393,45 +444,93 @@ export function renderReportPdf(report) {
       }
 
       let y = pdf.y;
-      ensureSpace(HEADER_HEIGHT + ROW_HEIGHT + 10);
+      const firstHeaderHeight = headerHeight();
+      ensureSpace(firstHeaderHeight + ROW_HEIGHT + 10);
       y = pdf.y;
       let contentTop = y;
-      y = drawHeader(y);
+      y = drawHeader(y, firstHeaderHeight);
 
       rows.forEach((rowData, index) => {
-        if (y + ROW_HEIGHT > PAGE_BOTTOM) {
+        const height = rowHeight(index);
+        if (y + height > PAGE_BOTTOM) {
           drawBorders(contentTop, y);
           pdf.addPage();
           y = pdf.y;
           contentTop = y;
-          y = drawHeader(y);
+          y = drawHeader(y, headerHeight());
         }
-        y = drawRow(index, y);
+        y = drawRow(index, y, height);
       });
 
       drawBorders(contentTop, y);
       pdf.y = y;
     };
 
-    pdf.font("Helvetica-Bold").fontSize(10).fillColor("#0284c7").text("WATERWISE | SUCOL WATER SYSTEM");
-    pdf.moveDown(0.3).fontSize(20).fillColor("#0f172a").text(report.title);
-    pdf.moveDown(0.25).font("Helvetica").fontSize(9).fillColor("#64748b");
-    pdf.text(`Reporting period: ${report.start_date} to ${report.end_date}`);
-    pdf.text(`Generated: ${dateOnly(report.created_at)} | Records: ${report.record_count} | Status: ${report.status}`);
+    const headerTop = pdf.y;
+    let headerTextLeft = TABLE_LEFT;
+    if (existsSync(LOGO_PATH)) {
+      pdf.image(LOGO_PATH, TABLE_LEFT, headerTop, { fit: [58, 58] });
+      headerTextLeft = TABLE_LEFT + 70;
+    }
+    const headerTextWidth = CONTENT_WIDTH - (headerTextLeft - TABLE_LEFT);
+    pdf.font("Helvetica-Bold").fontSize(16).fillColor("#0b2b40").text(
+      "SUCOL WATER SYSTEM",
+      headerTextLeft,
+      headerTop + 8,
+      { width: headerTextWidth },
+    );
+    pdf.font("Helvetica").fontSize(11).fillColor("#64748b").text(
+      "Sucol, Balayan, Batangas, 4213",
+      headerTextLeft,
+      pdf.y + 2,
+      { width: headerTextWidth },
+    );
+    pdf.y = Math.max(pdf.y, headerTop + 64);
+    pdf.moveDown(0.3);
+    pdf.strokeColor("#0b2b40").lineWidth(1.5).moveTo(TABLE_LEFT, pdf.y).lineTo(TABLE_LEFT + CONTENT_WIDTH, pdf.y).stroke();
     pdf.moveDown(0.5);
 
+    const reportTypeTitle = `${REPORT_TYPES[report.report_type]?.label ?? "Report"} Report`.toUpperCase();
+    pdf.font("Helvetica-Bold").fontSize(18).fillColor("#0f172a").text(
+      reportTypeTitle,
+      TABLE_LEFT,
+      pdf.y,
+      { align: "center", width: CONTENT_WIDTH },
+    );
+    pdf.moveDown(0.2);
+    pdf.font("Helvetica").fontSize(BODY_FONT_SIZE).fillColor("#334155").text(
+      `${report.start_date} to ${report.end_date}`,
+      TABLE_LEFT,
+      pdf.y,
+      { align: "center", width: CONTENT_WIDTH },
+    );
+    pdf.moveDown(0.5);
+
+    const formatSummaryValue = (key, value) => {
+      if (/amount|balance|billed|collected/i.test(key)) return currency(value);
+      if (/percent|share/i.test(key)) return `${number(value).toLocaleString("en-US")}%`;
+      if (/consumption/i.test(key)) return `${number(value).toLocaleString("en-US")} m3`;
+      return number(value).toLocaleString("en-US");
+    };
+
     if (sections.includes("summary")) {
-      heading("Executive summary");
-      Object.entries(data.summary ?? {}).forEach(([key, value]) => {
-        const formatted = /amount|balance|billed|collected/i.test(key)
-          ? currency(value)
-          : /percent|share/i.test(key)
-            ? `${number(value).toLocaleString("en-US")}%`
-            : /consumption/i.test(key)
-              ? `${number(value).toLocaleString("en-US")} m3`
-              : number(value).toLocaleString("en-US");
-        row(`${metricLabel(key)}: ${formatted}`);
-      });
+      heading("Executive Summary");
+      const summaryEntries = Object.entries(data.summary ?? {});
+      if (!summaryEntries.length) {
+        row("No summary data is available for this period.");
+      } else {
+        drawTable(
+          [
+            { align: "left", key: "metric", label: "PARTICULARS", width: 327 },
+            { align: "right", key: "amount", label: "VALUE", width: 180 },
+          ],
+          summaryEntries.map(([key, value]) => ({
+            amount: formatSummaryValue(key, value),
+            metric: metricLabel(key),
+          })),
+        );
+        pdf.moveDown(0.4);
+      }
     }
 
     if (sections.includes("trend") && report.report_type === "analytics") {
@@ -440,9 +539,9 @@ export function renderReportPdf(report) {
       // Omit the section entirely when there are fewer than two months —
       // a single month cannot produce a month-to-month trend.
       if (monthly.length >= 2) {
-        heading("Period trend");
+        heading("Period Trend");
         monthly.forEach((item) => {
-          row(`${item.period} - ${number(item.totalConsumption).toLocaleString("en-US")} m3`);
+          row(`${item.period} — ${number(item.totalConsumption).toLocaleString("en-US")} m3`);
         });
         if (trend.peak && trend.lowest) {
           row(`Peak: ${trend.peak.period} (${number(trend.peak.totalConsumption).toLocaleString("en-US")} m3) | Lowest: ${trend.lowest.period} (${number(trend.lowest.totalConsumption).toLocaleString("en-US")} m3)`);
@@ -457,86 +556,129 @@ export function renderReportPdf(report) {
     }
 
     if (sections.includes("analytics")) {
-      heading(report.report_type === "analytics" ? "Purok comparison" : "Consumption by purok");
+      const isAnalyticsReport = report.report_type === "analytics";
+      heading(isAnalyticsReport ? "Purok Comparison" : "Consumption by Purok");
       const analyticsItems = data.analytics ?? [];
-      if (!analyticsItems.length) row("No analytics data is available for this period.");
-      const analyticsTotal = analyticsItems.reduce((sum, item) => sum + number(item.totalConsumption), 0);
-      const average = analyticsItems.length ? analyticsTotal / analyticsItems.length : 0;
-      if (analyticsItems.length) {
-        row(`Highest: ${analyticsItems[0].name} - ${number(analyticsItems[0].totalConsumption).toLocaleString("en-US")} m3`);
+      if (!analyticsItems.length) {
+        row("No analytics data is available for this period.");
+      } else {
+        const analyticsTotal = analyticsItems.reduce((sum, item) => sum + number(item.totalConsumption), 0);
+        const average = analyticsTotal / analyticsItems.length;
+        row(`Highest: ${analyticsItems[0].name} — ${number(analyticsItems[0].totalConsumption).toLocaleString("en-US")} m3`, { bold: true });
         if (analyticsItems.length > 1) {
           const lowest = analyticsItems[analyticsItems.length - 1];
-          row(`Lowest: ${lowest.name} - ${number(lowest.totalConsumption).toLocaleString("en-US")} m3`);
+          row(`Lowest: ${lowest.name} — ${number(lowest.totalConsumption).toLocaleString("en-US")} m3`, { bold: true });
         }
-        if (report.report_type === "analytics") {
+        if (isAnalyticsReport) {
           row(`Average per purok: ${number(round(average)).toLocaleString("en-US")} m3 across ${analyticsItems.length} puroks`);
         }
+        const rankingColumns = isAnalyticsReport
+          ? [
+            { align: "center", key: "rank", label: "RANK", width: 52 },
+            { align: "left", key: "name", label: "PUROK", width: 165 },
+            { align: "right", key: "consumption", label: "CONSUMPTION (M3)", width: 130 },
+            { align: "right", key: "share", label: "SHARE", width: 75 },
+            { align: "right", key: "gap", label: "VS AVERAGE", width: 85 },
+          ]
+          : [
+            { align: "center", key: "rank", label: "RANK", width: 52 },
+            { align: "left", key: "name", label: "PUROK", width: 205 },
+            { align: "right", key: "consumption", label: "CONSUMPTION (M3)", width: 140 },
+            { align: "right", key: "share", label: "SHARE", width: 110 },
+          ];
+        drawTable(
+          rankingColumns,
+          analyticsItems.map((item, index) => {
+            const share = analyticsTotal ? (number(item.totalConsumption) / analyticsTotal) * 100 : 0;
+            const gap = average ? round(((number(item.totalConsumption) - average) / average) * 100) : 0;
+            const ranked = {
+              consumption: `${number(item.totalConsumption).toLocaleString("en-US")} m3`,
+              name: item.name,
+              rank: String(index + 1),
+              share: `${number(share.toFixed(1))}%`,
+            };
+            if (isAnalyticsReport) ranked.gap = `${gap >= 0 ? "+" : ""}${gap}%`;
+            return ranked;
+          }),
+        );
+        pdf.moveDown(0.4);
       }
-      analyticsItems.forEach((item, index) => {
-        const share = analyticsTotal ? (number(item.totalConsumption) / analyticsTotal) * 100 : 0;
-        const gap = average ? round(((number(item.totalConsumption) - average) / average) * 100) : 0;
-        if (report.report_type === "analytics") {
-          row(`${index + 1}. ${item.name} - ${number(item.totalConsumption).toLocaleString("en-US")} m3 (${number(share.toFixed(1))}%, ${gap >= 0 ? "+" : ""}${gap}% vs average)`);
-        } else {
-          row(`${index + 1}. ${item.name} - ${number(item.totalConsumption).toLocaleString("en-US")} m3 (${number(share.toFixed(1))}%)`);
-        }
-      });
       const findings = Array.isArray(data.insights) ? data.insights : [];
       if (report.report_type === "analytics" && findings.length && (sections.includes("analytics") || sections.includes("trend"))) {
-        heading("Key findings");
+        heading("Key Findings");
         findings.forEach((finding, index) => row(`${index + 1}. ${finding}`));
       }
     }
 
+    const purokSortKey = (value) => {
+      const match = String(value ?? "").match(/(\d+)\s*$/);
+      return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+    };
+    const byPurokAscending = (first, second) =>
+      purokSortKey(first.purok) - purokSortKey(second.purok) ||
+      String(first.consumerName ?? first.name ?? "").localeCompare(String(second.consumerName ?? second.name ?? "")) ||
+      String(first.readingDate ?? first.billingDate ?? first.createdAt ?? "").localeCompare(
+        String(second.readingDate ?? second.billingDate ?? second.createdAt ?? ""),
+      );
+
     const recordSection = report.report_type === "billing" ? "billing" : report.report_type === "residents" ? "residents" : report.report_type === "consumption" ? "consumption" : null;
     if (recordSection && sections.includes(recordSection)) {
-      heading(`${REPORT_TYPES[report.report_type]?.label ?? "Report"} records`);
+      heading(`${REPORT_TYPES[report.report_type]?.label ?? "Report"} Records`);
 
-      if (report.report_type === "consumption" || report.report_type === "analytics") {
+      if (report.report_type === "consumption") {
         const columns = [
-          { label: "#", key: "index", width: 28 },
-          { label: "Date", key: "readingDate", width: 68 },
-          { label: "Consumer", key: "consumerName", width: 150 },
-          { label: "Purok", key: "purok", width: 62 },
-          { label: "Prev. Reading", key: "previousReading", width: 72 },
-          { label: "Curr. Reading", key: "currentReading", width: 72 },
-          { label: "Usage (m³)", key: "consumption", width: 55 },
+          { align: "center", key: "index", label: "#", width: 30 },
+          { align: "center", key: "readingDate", label: "DATE", width: 70 },
+          { align: "left", key: "consumerName", label: "CONSUMER", width: 148 },
+          { align: "center", key: "purok", label: "PUROK", width: 62 },
+          { align: "right", key: "previousReading", label: "PREV. READING", width: 70 },
+          { align: "right", key: "currentReading", label: "CURR. READING", width: 70 },
+          { align: "right", key: "consumption", label: "USAGE (M3)", width: 57 },
         ];
-        const rows = (data.records ?? []).map((r, i) => ({ ...r, index: i + 1 }));
+        const rows = [...(data.records ?? [])]
+          .sort(byPurokAscending)
+          .map((r, i) => ({ ...r, index: i + 1 }));
         drawTable(columns, rows);
       } else if (report.report_type === "billing") {
         const columns = [
-          { label: "#", key: "index", width: 28 },
-          { label: "Date", key: "billingDate", width: 72 },
-          { label: "Consumer", key: "consumerName", width: 140 },
-          { label: "Purok", key: "purok", width: 62 },
-          { label: "Total Bill", key: "totalBill", width: 70, format: (r) => currency(r.totalBill) },
-          { label: "Balance", key: "remainingBalance", width: 70, format: (r) => currency(r.remainingBalance) },
-          { label: "Status", key: "status", width: 65 },
+          { align: "center", key: "index", label: "#", width: 30 },
+          { align: "center", key: "billingDate", label: "DATE", width: 70 },
+          { align: "left", key: "consumerName", label: "CONSUMER", width: 138 },
+          { align: "center", key: "purok", label: "PUROK", width: 62 },
+          { align: "right", key: "totalBill", label: "TOTAL BILL", width: 72, format: (r) => currency(r.totalBill) },
+          { align: "right", key: "remainingBalance", label: "BALANCE", width: 72, format: (r) => currency(r.remainingBalance) },
+          { align: "center", key: "status", label: "STATUS", width: 63 },
         ];
-        const rows = (data.records ?? []).map((r, i) => ({ ...r, index: i + 1 }));
+        const rows = [...(data.records ?? [])]
+          .sort(byPurokAscending)
+          .map((r, i) => ({ ...r, index: i + 1 }));
         drawTable(columns, rows);
       } else if (report.report_type === "residents") {
         const columns = [
-          { label: "#", key: "index", width: 28 },
-          { label: "Name", key: "name", width: 140 },
-          { label: "Username", key: "username", width: 100 },
-          { label: "Purok", key: "purok", width: 62 },
-          { label: "Status", key: "status", width: 62 },
-          { label: "Registered", key: "createdAt", width: 115, format: (r) => dateOnly(r.createdAt) },
+          { align: "center", key: "index", label: "#", width: 30 },
+          { align: "left", key: "name", label: "NAME", width: 138 },
+          { align: "left", key: "username", label: "USERNAME", width: 100 },
+          { align: "center", key: "purok", label: "PUROK", width: 62 },
+          { align: "center", key: "status", label: "STATUS", width: 62 },
+          { align: "center", key: "createdAt", label: "REGISTERED", width: 115, format: (r) => dateOnly(r.createdAt) },
         ];
-        const rows = (data.records ?? []).map((r, i) => ({ ...r, index: i + 1 }));
+        const rows = [...(data.records ?? [])]
+          .sort(byPurokAscending)
+          .map((r, i) => ({ ...r, index: i + 1 }));
         drawTable(columns, rows);
       }
     }
 
     const pageRange = pdf.bufferedPageRange();
+    // Footer must sit above the printable bottom (page height 842 - bottom
+    // margin 44 = 798); any lower and the text call spills onto a blank page.
+    const FOOTER_Y = 786;
     for (let page = pageRange.start; page < pageRange.start + pageRange.count; page += 1) {
       pdf.switchToPage(page);
-      pdf.font("Helvetica").fontSize(8).fillColor("#94a3b8").text(
+      pdf.font("Helvetica").fontSize(9).fillColor("#94a3b8").text(
         `Official WaterWise administrative report | Page ${page + 1} of ${pageRange.count}`,
         44,
-        792,
+        FOOTER_Y,
         { align: "center", width: 507 },
       );
     }

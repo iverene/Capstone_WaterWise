@@ -2,6 +2,7 @@ import {
   buildReportPreview,
   createPersistentReport,
   renderReportPdf,
+  toReportFilename,
 } from "../services/reportServices.js";
 import {
   getGeneratedReportById,
@@ -57,14 +58,11 @@ export async function downloadReport(req, res) {
   try {
     const report = await getGeneratedReportById(req.params.id);
     const pdf = await renderReportPdf(report);
-    const filename = report.title
-      .replace(/[^a-z0-9]+/gi, "-")
-      .replace(/^-|-$/g, "")
-      .toLowerCase();
+    const filename = toReportFilename(report.title);
     const disposition = req.query.disposition === "inline" ? "inline" : "attachment";
     res.set({
       "Cache-Control": "private, no-store",
-      "Content-Disposition": `${disposition}; filename="${filename || "waterwise-report"}.pdf"`,
+      "Content-Disposition": `${disposition}; filename="${filename}"`,
       "Content-Length": pdf.length,
       "Content-Type": "application/pdf",
     });
