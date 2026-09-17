@@ -49,7 +49,7 @@ const MeterReadingTable = ({
           ...(showUsage ? [{ key: "usage", label: "Cubic Used", className: "text-center" }] : []),
           ...(!readingDateFirst ? [{ key: "date", label: "Reading date" }] : []),
           ...(showStatus ? [{ key: "status", label: "Status" }] : []),
-          ...(onViewReceipt ? [{ key: "receipt", label: "Receipt", className: "text-right" }] : []),
+          ...(onViewReceipt ? [{ key: "receipt", label: "", className: "text-center" }] : []),
           ...(!readOnly ? [{ key: "actions", label: "Actions", className: "text-right" }] : []),
         ]}
         data={readings}
@@ -82,14 +82,15 @@ const MeterReadingTable = ({
                 <td className="flex items-end md:table-cell md:px-4 md:py-4"><ReadingStatus status={reading.status} /></td>
                 )}
                 {onViewReceipt && (
-                  <td className="md:px-4 md:py-4 md:text-right">
+                  <td className="col-span-2 md:col-span-1 md:px-4 md:py-4 md:text-center">
                     <button
                       aria-label={`View consumption receipt for reading on ${reading.readingDate ?? "unknown date"}`}
-                      className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 md:w-auto"
                       onClick={() => onViewReceipt(reading)}
                       type="button"
                     >
                       <ReceiptText aria-hidden="true" className="h-4 w-4" />
+                      View receipt
                     </button>
                   </td>
                 )}

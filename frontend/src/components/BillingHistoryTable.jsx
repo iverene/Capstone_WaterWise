@@ -194,7 +194,7 @@ export default function BillingHistoryTable({
               })}
             </td>
             {onViewReceipt && (
-              <td className="col-span-2 flex items-center justify-end md:col-span-1 md:table-cell md:px-4 md:py-4 md:text-right">
+              <td className="col-span-2 flex items-center justify-center md:col-span-1 md:table-cell md:px-4 md:py-4 md:text-center">
                 <button
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 md:w-auto"
                   onClick={() => onViewReceipt(row)}
