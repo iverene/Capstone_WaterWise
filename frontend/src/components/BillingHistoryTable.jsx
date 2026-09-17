@@ -105,10 +105,10 @@ export default function BillingHistoryTable({
           : []),
         { key: "invoice", label: "Invoice" },
         { key: "period", label: "Billing Period" },
-        { key: "date", label: "Reading Date" },
-        { key: "consumption", label: "Consumption" },
+        { key: "date", label: "Reading Date", className: "text-center" },
+        { key: "consumption", label: "Consumption", className: "text-center" },
         { key: "amount", label: "Total Bill", className: "text-right" },
-        { key: "status", label: "Status" },
+        { key: "status", label: "Status", className: "text-center" },
         { key: "balance", label: "Balance", className: "text-right" },
       ]}
       data={historyData}
@@ -159,13 +159,13 @@ export default function BillingHistoryTable({
               {row.billingPeriod}
             </td>
             <td
-              className="flex flex-col gap-1 font-mono text-slate-600 md:table-cell md:px-4 md:py-4"
+              className="flex flex-col gap-1 font-mono text-slate-600 md:table-cell md:px-4 md:py-4 md:text-center"
               data-testid="row-reading-date"
             >
               {row.readingDate}
             </td>
             <td
-              className="flex flex-col gap-1 font-mono md:table-cell md:px-4 md:py-4"
+              className="flex flex-col gap-1 font-mono md:table-cell md:px-4 md:py-4 md:text-center"
               data-testid="row-consumption"
             >
               {row.cubicMetersConsumed} m³
@@ -178,7 +178,7 @@ export default function BillingHistoryTable({
                 minimumFractionDigits: 2,
               })}
             </td>
-            <td className="flex flex-col gap-1 md:table-cell md:px-4 md:py-4 md:col-span-1">
+            <td className="flex flex-col items-start gap-1 md:table-cell md:items-center md:px-4 md:py-4 md:text-center md:col-span-1">
               <span
                 className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${statusClassName}`}
                 data-status={row.status}

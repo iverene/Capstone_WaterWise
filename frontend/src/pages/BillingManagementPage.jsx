@@ -99,11 +99,6 @@ export default function BillingManagementPage() {
         ) || Number(second.id) - Number(first.id),
       ),
       consumerName: billings[0].consumerName,
-      overallBillCount: billings.length,
-      overallBillTotal: billings.reduce(
-        (total, billing) => total + Number(billing.amountDue || 0),
-        0,
-      ),
       purok: billings[0].purok,
     }));
   }, [billingHistory]);
@@ -129,28 +124,26 @@ export default function BillingManagementPage() {
         const billings = activeMonth
           ? resident.billings.filter((billing) => monthKeyOf(billing) === activeMonth)
           : resident.billings;
-        const over30Days = billings.reduce((total, billing) => {
-          const balance = Number(billing.outstandingBalance ?? 0);
-          if (!(balance > 0) || !billing.dueDate) return total;
-          const overdueDays = Math.floor(
-            (Date.now() - Date.parse(`${billing.dueDate}T00:00:00Z`)) / 86_400_000,
-          );
-          return overdueDays >= 30 ? total + balance : total;
-        }, 0);
+        const currentBill = Number(billings[0]?.amountDue ?? 0);
+        const displayedIds = new Set(billings.map((billing) => billing.id));
+        const over30Days = resident.billings
+          .filter((billing) => !displayedIds.has(billing.id))
+          .reduce((total, billing) => {
+            const balance = Number(billing.outstandingBalance ?? 0);
+            if (!(balance > 0)) return total;
+            const referenceDate = String(billing.dueDate ?? billing.readingDate ?? "").slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) return total;
+            const overdueDays = Math.floor(
+              (Date.now() - Date.parse(`${referenceDate}T00:00:00Z`)) / 86_400_000,
+            );
+            return overdueDays >= 30 ? total + balance : total;
+          }, 0);
         return {
           ...resident,
           billings,
-          overallBillCount: billings.length,
-          overallBillTotal: billings.reduce(
-            (total, billing) => total + Number(billing.amountDue || 0),
-            0,
-          ),
-          currentBill: Number(billings[0]?.amountDue ?? 0),
+          currentBill,
           over30Days,
-          totalOutstanding: billings.reduce(
-            (total, billing) => total + Number(billing.outstandingBalance ?? 0),
-            0,
-          ),
+          totalOutstanding: currentBill + over30Days,
         };
       })
       .filter((resident) => {
@@ -235,7 +228,7 @@ export default function BillingManagementPage() {
           tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
-              <td className="px-4 py-4">
+              <td className="col-span-2 md:col-span-1 md:px-4 md:py-4">
                 <span className="block font-extrabold leading-5 text-navy-900">
                   {resident.consumerName}
                 </span>
@@ -252,7 +245,7 @@ export default function BillingManagementPage() {
               <td className="font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-right">
                 {currency(resident.totalOutstanding)}
               </td>
-              <td className="md:px-4 md:py-4 md:text-right">
+              <td className="justify-self-end md:justify-self-auto md:px-4 md:py-4 md:text-right">
                 <button
                   aria-label={`View all bills for ${resident.consumerName}`}
                   className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"

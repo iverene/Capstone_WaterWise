@@ -61,7 +61,7 @@ export default function ConsumerReadingsPage() {
         Back to readings
       </button>
       <div>
-        <PageHeader title={consumer?.consumerName ?? "Consumer Readings"} />
+        <PageHeader compact title={consumer?.consumerName ?? "Consumer Readings"} />
         {consumer && (
           <p className="mt-1 text-sm text-slate-500">
             {consumer.purok ?? "Unassigned"}
