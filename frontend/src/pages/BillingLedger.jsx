@@ -112,7 +112,7 @@ export default function BillingLedger({
     ledgerAccount?.name,
     historyData,
   );
-  const pageHeader = <PageHeader title="Bills and Payment History" />;
+  const pageHeader = <PageHeader title="Bills and Payments" />;
 
   useEffect(() => {
     if (!ledger || !requestedBillingId || requestedView) return;
