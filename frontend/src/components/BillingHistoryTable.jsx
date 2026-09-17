@@ -118,7 +118,7 @@ export default function BillingHistoryTable({
       getRowKey={(row) => row.invoiceNumber}
       rowClassName={(row) => `grid grid-cols-2 gap-x-4 gap-y-3 p-4 text-navy-900 transition-colors md:table-row md:p-0 ${
         Number(row.id) === Number(highlightedBillingId)
-          ? "bg-water-50 ring-2 ring-inset ring-water-500"
+          ? "bg-water-50"
           : "hover:bg-slate-50"
       }`}
       tableClassName={`block w-full text-left text-sm md:table ${

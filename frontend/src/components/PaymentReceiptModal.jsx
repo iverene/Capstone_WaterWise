@@ -93,13 +93,12 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose }) {
         <>
             <button
               aria-label="Download payment receipt"
-              className="flex h-11 items-center gap-2 rounded-xl bg-water-50 px-3 text-sm font-bold text-water-700 hover:bg-water-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
               data-testid="download-receipt-image"
               onClick={handleDownload}
               type="button"
             >
               <FiDownload aria-hidden="true" className="h-4 w-4" />
-              <span className="hidden sm:inline">Download</span>
             </button>
             <button
               aria-label="Print payment receipt"
