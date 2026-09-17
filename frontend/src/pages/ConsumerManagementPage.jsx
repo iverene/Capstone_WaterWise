@@ -252,7 +252,7 @@ function ConsumerManagementPage() {
         <div className={formMode === "add" ? "resident-registration-layout" : ""}>
           {formMode === "add" && <ResidentRegistrationIntro />}
           <div className={formMode === "add" ? "resident-registration-content" : ""}>
-            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident?s details and create secure sign-in credentials.</p></div><button aria-label="Close resident form" className="resident-registration-close" onClick={closeForm} type="button"><X size={21} /></button></header>}
+            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident's details and create secure sign-in credentials.</p></div><button aria-label="Close resident form" className="resident-registration-close" onClick={closeForm} type="button"><X size={21} /></button></header>}
             {error && (
               <p
                 className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 sm:mx-6"

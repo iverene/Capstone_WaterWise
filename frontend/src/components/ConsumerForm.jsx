@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, UserRoundPlus, LoaderCircle } from "lucide-react";
+import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, LoaderCircle } from "lucide-react";
 import Dropdown from "./Dropdown";
 
 const initialState = {
@@ -383,7 +383,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
             </button>
           )}
           <button aria-busy={submitting} disabled={submitting} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-water-600 px-3 text-sm font-bold text-white transition-colors hover:bg-water-700 disabled:cursor-wait disabled:opacity-60" type="submit">
-            {submitting ? <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" /> : registrationDesign && <UserRoundPlus aria-hidden="true" size={20} />}
+            {submitting && <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" />}
             {submitting ? (initialData ? "Updating resident…" : "Adding resident…") : initialData ? "Update resident" : "Add resident"}
           </button>
         </div>
