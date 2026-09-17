@@ -1,4 +1,5 @@
 import { FiDownload, FiPrinter } from "react-icons/fi";
+import { ReceiptText } from "lucide-react";
 import { downloadReceiptImage } from "../utils/downloadReceiptImage";
 import LoadingSkeleton from "./LoadingSkeleton";
 import Modal from "./Modal";
@@ -35,7 +36,7 @@ function ArrearsStat({ label, testId, value }) {
   );
 }
 
-export default function ConsumptionReceiptModal({ isOpen, loading = false, onClose, receiptData, residentName }) {
+export default function ConsumptionReceiptModal({ isOpen, loading = false, onClose, onViewPaymentReceipt, receiptData, residentName }) {
   const toast = useToast();
   if (!isOpen) return null;
   if (loading || !receiptData) {
@@ -182,6 +183,17 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           <ArrearsStat label="Over 90 days" testId="arrears-90" value={arrears90Days} />
         </div>
       </section>
+
+      {onViewPaymentReceipt && (
+        <button
+          className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+          onClick={onViewPaymentReceipt}
+          type="button"
+        >
+          <ReceiptText aria-hidden="true" className="h-4 w-4" />
+          View payment receipt
+        </button>
+      )}
 
       <p className="mt-5 text-center text-xs font-medium text-slate-400" data-document-footer>
         System-generated receipt · Keep this copy for your records

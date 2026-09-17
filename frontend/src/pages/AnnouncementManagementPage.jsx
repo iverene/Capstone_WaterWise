@@ -106,22 +106,46 @@ export default function AnnouncementManagementPage() {
 
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <PageHeader
-          description="Publish clear service notices and keep residents informed about water-system updates."
-          eyebrow="Community communication"
-          title="Announcement Management"
+      <PageHeader
+        description="Publish clear service notices and keep residents informed about water-system updates."
+        title="Announcement Management"
+      />
+
+      <div
+        aria-label="Announcement list controls"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center"
+        role="search"
+      >
+        <Search
+          ariaLabel="Search announcements"
+          className="flex-1"
+          onValueChange={setQuery}
+          placeholder="Search title, message, or category"
+          tone="emerald"
+          value={query}
         />
-        <div className="hidden pt-8 lg:block">
-          <button
-            className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
-            onClick={() => setIsFormOpen(true)}
-            type="button"
-          >
-            <FiPlus aria-hidden="true" className="h-5 w-5" />
-            Create post
-          </button>
-        </div>
+        <Filter
+          ariaLabel="Filter announcements by category"
+          className="w-full sm:w-52"
+          onValueChange={setCategory}
+          options={[
+            { label: "All categories", value: "all" },
+            ...categories.map((item) => ({ label: item, value: item })),
+          ]}
+          tone="emerald"
+          value={category}
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+          onClick={() => setIsFormOpen(true)}
+          type="button"
+        >
+          <FiPlus aria-hidden="true" className="h-5 w-5" />
+          Create post
+        </button>
       </div>
 
       {error && (
@@ -131,32 +155,6 @@ export default function AnnouncementManagementPage() {
       )}
 
       <div className="min-w-0 space-y-4">
-        <div
-          aria-label="Announcement list controls"
-          className="flex flex-col gap-3 sm:flex-row sm:items-center"
-          role="search"
-        >
-          <Search
-            ariaLabel="Search announcements"
-            className="flex-1"
-            onValueChange={setQuery}
-            placeholder="Search title, message, or category"
-            tone="emerald"
-            value={query}
-          />
-          <Filter
-            ariaLabel="Filter announcements by category"
-            className="w-full sm:w-52"
-            onValueChange={setCategory}
-            options={[
-              { label: "All categories", value: "all" },
-              ...categories.map((item) => ({ label: item, value: item })),
-            ]}
-            tone="emerald"
-            value={category}
-          />
-        </div>
-
         {loading ? (
           <LoadingSkeleton label="Loading announcements" variant="list" />
         ) : (

@@ -3,7 +3,6 @@ import { KeyRound, LogOut, Mail } from "lucide-react";
 import { useNavigate } from "react-router";
 import AdminProfileBanner from "../components/AdminProfileBanner";
 import LoadingSkeleton from "../components/LoadingSkeleton";
-import PageHeader from "../components/PageHeader";
 import { isCanceledRequest } from "../services/apiClient";
 import { fetchMeterReaderProfile } from "../services/meterReaderProfile.service";
 
@@ -40,7 +39,6 @@ export default function MeterReaderProfile() {
   if (error) {
     return (
       <div className="space-y-5 sm:space-y-6">
-        <PageHeader compact description="Review the personal information registered to your account." eyebrow="Meter reader profile" />
         <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
           <span>{error}</span>
           <button className="min-h-11 rounded-xl bg-red-700 px-4 font-bold text-white hover:bg-red-800" onClick={retry} type="button">
@@ -54,7 +52,6 @@ export default function MeterReaderProfile() {
   if (!reader) {
     return (
       <div className="space-y-5 sm:space-y-6">
-        <PageHeader compact description="Review the personal information registered to your account." eyebrow="Meter reader profile" />
         <LoadingSkeleton label="Loading meter reader profile" variant="profile" />
       </div>
     );
@@ -63,8 +60,6 @@ export default function MeterReaderProfile() {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <PageHeader compact description="Review the personal information registered to your account." eyebrow="Meter reader profile" />
-
       <AdminProfileBanner account={reader} displayName={reader.name} roleLabel="Meter Reader" subtitle={"WaterWise Meter Reader"} tagline={<>&ldquo;Every reading counts<br />for a better tomorrow.&rdquo;</>} />
 
 

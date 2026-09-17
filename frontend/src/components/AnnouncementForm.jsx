@@ -141,7 +141,7 @@ export default function AnnouncementForm({
         onClose={closeComposer}
         showCloseButton={false}
         size="md"
-        title={initialData ? "Update announcement" : "Create announcement"}
+        title={initialData ? "Update Announcement" : "Create Announcement"}
       >
               <form className="space-y-5 p-5 sm:p-6" onSubmit={handleSubmit} ref={formRef}>
                 <div>

@@ -202,7 +202,6 @@ export default function AdminSettingsPage() {
       <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile", { replace: true })} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
       <PageHeader
         description="Manage system-wide configuration. Only the Super Admin can modify these settings."
-        eyebrow="Administration"
         mobileCompact
         onBack={() => navigate("/admin/profile", { replace: true })}
         title="System Settings"
@@ -281,7 +280,7 @@ export default function AdminSettingsPage() {
         onClose={cancelEdit}
         showCloseButton={false}
         size="sm"
-        title="Update setting"
+        title="Update Setting"
       >
         <div className="space-y-4 px-5 pb-5 sm:px-6 sm:pb-6">
           {saveError && (
@@ -328,20 +327,20 @@ export default function AdminSettingsPage() {
             {otpChallenge ? (
               <>
                 <button
-                  className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-11"
-                  disabled={verifying}
-                  onClick={cancelEdit}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm"
+                  className="order-1 text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:order-2 sm:text-sm"
                   disabled={saving || verifying || cooldownSeconds > 0}
                   onClick={handleRequestOtp}
                   type="button"
                 >
                   {cooldownSeconds > 0 ? `Resend code in ${formatOtpCountdown(cooldownSeconds)}` : "Resend code"}
+                </button>
+                <button
+                  className="order-2 min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 sm:order-1 sm:min-h-11"
+                  disabled={verifying}
+                  onClick={cancelEdit}
+                  type="button"
+                >
+                  Cancel
                 </button>
               </>
             ) : (

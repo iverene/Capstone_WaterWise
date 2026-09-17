@@ -24,6 +24,8 @@ import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
 import ConsumerManagementPage from "./pages/ConsumerManagementPage";
 import AdminReadingsPage from "./pages/AdminReadingsPage";
+import ConsumerBillsPage from "./pages/ConsumerBillsPage";
+import ConsumerReadingsPage from "./pages/ConsumerReadingsPage";
 import BillingManagementPage from "./pages/BillingManagementPage";
 import EventManagementPage from "./pages/EventManagementPage";
 import AnnouncementManagementPage from "./pages/AnnouncementManagementPage";
@@ -52,6 +54,8 @@ const roleAccess = {
       "/admin/account-information",
       "/admin/consumers",
       "/admin/readings",
+      "/admin/consumer-readings",
+      "/admin/consumer-billings",
       "/admin/billings",
       "/admin/payments",
       "/admin/flagged-accounts",
@@ -293,6 +297,26 @@ export function AppRoutes() {
           <RoleRouteGuard requiredRole="admin">
             <AppLayout>
               <ConsumerManagementPage />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        path="/admin/consumer-readings"
+        element={
+          <RoleRouteGuard requiredRole="admin">
+            <AppLayout>
+              <ConsumerReadingsPage />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        path="/admin/consumer-billings"
+        element={
+          <RoleRouteGuard requiredRole="admin">
+            <AppLayout>
+              <ConsumerBillsPage />
             </AppLayout>
           </RoleRouteGuard>
         }

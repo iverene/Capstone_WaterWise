@@ -112,7 +112,7 @@ export default function BillingLedger({
     ledgerAccount?.name,
     historyData,
   );
-  const pageHeader = <PageHeader title="Bills and Payment History" />;
+  const pageHeader = <PageHeader title="Bills and Payments" />;
 
   useEffect(() => {
     if (!ledger || !requestedBillingId || requestedView) return;
@@ -126,6 +126,12 @@ export default function BillingLedger({
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("view");
     nextParams.delete("paymentId");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const switchReceiptView = (view) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("view", view);
     setSearchParams(nextParams, { replace: true });
   };
 
@@ -206,7 +212,7 @@ export default function BillingLedger({
         <div className="flex items-end justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
             <h3 className="text-xl font-extrabold text-navy-900">
-              Bill History
+              History
             </h3>
           </div>
           <Filter
@@ -259,12 +265,14 @@ export default function BillingLedger({
       <ConsumptionReceiptModal
         isOpen={requestedView === "consumption-receipt" && Boolean(selectedConsumptionReceipt)}
         onClose={closeRelatedModal}
+        onViewPaymentReceipt={selectedBill?.status === "Paid" && selectedPayment ? () => switchReceiptView("payment-receipt") : undefined}
         receiptData={selectedConsumptionReceipt}
         residentName={ledgerAccount.name}
       />
       <PaymentReceiptModal
         isOpen={requestedView === "payment-receipt" && Boolean(selectedPayment)}
         onClose={closeRelatedModal}
+        onViewConsumptionReceipt={selectedConsumptionReceipt ? () => switchReceiptView("consumption-receipt") : undefined}
         receiptData={selectedPayment}
       />
     </div>

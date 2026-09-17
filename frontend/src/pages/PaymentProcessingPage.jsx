@@ -273,7 +273,7 @@ export default function PaymentProcessingPage() {
 
   return (
     <main className="min-w-0 space-y-6">
-      <PageHeader description="Select a resident with an outstanding balance, then securely record their payment." eyebrow="Payment administration" title="Payment Processing" />
+      <PageHeader description="Select a resident with an outstanding balance, then securely record their payment." title="Payment Processing" />
 
       <section aria-label="Payment summary" className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
         <KPI compact className="col-span-2 sm:col-span-1" description="On Record" icon={Banknote} title="All-Time Collected" value={`₱${totalCollected.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} />
@@ -397,7 +397,7 @@ export default function PaymentProcessingPage() {
                     type="button"
                   >
                     <WalletCards aria-hidden="true" className="h-4 w-4" />
-                    Record payment
+                    Record Payment
                   </button>
                 </td>
               </>

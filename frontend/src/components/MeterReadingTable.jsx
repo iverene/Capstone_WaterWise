@@ -1,9 +1,5 @@
-import { useState } from "react";
-import { CheckCircle2, Clock3, Eye, Pencil, Trash2 } from "lucide-react";
-import MeterReadingRecordModal from "./MeterReadingRecordModal";
+import { CheckCircle2, Clock3, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import Table from "./Table";
-
-const WATER_RATE_PER_CUBIC_METER = 15;
 
 function ReadingStatus({ status }) {
   const recorded = status === "Recorded";
@@ -27,53 +23,33 @@ const MeterReadingTable = ({
   readings = [],
   onEdit,
   onDelete,
+  onViewReceipt,
+  pageSize,
   readOnly = false,
   readingDateFirst = false,
   showConsumerDetails = true,
+  showStatus = true,
   showUsage = true,
 }) => {
-  const [selectedRecord, setSelectedRecord] = useState(null);
-
-  const viewRecord = (reading) => {
-    const previousReading = Number(reading.previousReading ?? 0);
-    const presentReading = Number(reading.currentReading ?? 0);
-    const consumption = Number(reading.consumption ?? presentReading - previousReading);
-
-    setSelectedRecord({
-      meterName: reading.consumerName ?? reading.consumerNo ?? "Unknown resident",
-      runDate: reading.readingDate ?? "Not available",
-      previousReading,
-      presentReading,
-      baselineBill: Number(
-        reading.baselineBill ??
-        reading.amountDue ??
-        consumption * WATER_RATE_PER_CUBIC_METER,
-      ),
-      arrears30Days: Number(reading.arrears30Days ?? 0),
-      arrears60Days: Number(reading.arrears60Days ?? 0),
-      arrears90Days: Number(reading.arrears90Days ?? 0),
-    });
-  };
-
   return (
-    <>
       <Table
         ariaLabel="Meter readings"
+        pageSize={pageSize}
         columns={[
           ...(showConsumerDetails
             ? [
                 { key: "account", label: "Account" },
-                { key: "resident", label: "Resident" },
                 { key: "purok", label: "Purok" },
+                { key: "resident", label: "Resident" },
               ]
             : []),
           ...(readingDateFirst ? [{ key: "date", label: "Reading date" }] : []),
-          { key: "previous", label: "Previous", className: "text-right" },
-          { key: "current", label: "Current", className: "text-right" },
-          ...(showUsage ? [{ key: "usage", label: "Usage", className: "text-right" }] : []),
+          { key: "previous", label: "Previous Reading", className: "text-center" },
+          { key: "current", label: "Present Reading", className: "text-center" },
+          ...(showUsage ? [{ key: "usage", label: "Cubic Used", className: "text-center" }] : []),
           ...(!readingDateFirst ? [{ key: "date", label: "Reading date" }] : []),
-          { key: "status", label: "Status" },
-          { key: "record", label: "Reading details" },
+          ...(showStatus ? [{ key: "status", label: "Status" }] : []),
+          ...(onViewReceipt ? [{ key: "receipt", label: "", className: "text-center" }] : []),
           ...(!readOnly ? [{ key: "actions", label: "Actions", className: "text-right" }] : []),
         ]}
         data={readings}
@@ -86,34 +62,38 @@ const MeterReadingTable = ({
                 <td className="flex flex-col font-mono text-navy-900 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Account'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.consumerNo}</td>
                 )}
                 {showConsumerDetails && (
-                <td className="col-span-2 row-start-1 flex flex-col font-bold text-navy-900 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Resident'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.consumerName}</td>
+                <td className="col-span-2 flex flex-col text-slate-600 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Purok'] md:col-span-1 md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.purok}</td>
                 )}
                 {showConsumerDetails && (
-                <td className="flex flex-col text-slate-600 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Purok'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.purok}</td>
+                <td className="col-span-2 flex flex-col font-bold text-navy-900 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Resident'] md:col-span-1 md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.consumerName}</td>
                 )}
                 {readingDateFirst && (
                 <td className="flex flex-col font-mono text-slate-600 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Date'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.readingDate}</td>
                 )}
-                <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Previous'] md:table-cell md:px-4 md:py-4 md:text-right md:before:hidden">{reading.previousReading} m³</td>
-                <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Current'] md:table-cell md:px-4 md:py-4 md:text-right md:before:hidden">{reading.currentReading} m³</td>
+                <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Previous_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.previousReading} m³</td>
+                <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Present_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.currentReading} m³</td>
                 {showUsage && (
-                <td className="flex flex-col font-mono font-bold tabular-nums text-navy-900 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Usage'] md:table-cell md:px-4 md:py-4 md:text-right md:before:hidden">{reading.consumption} m³</td>
+                <td className="flex flex-col font-mono font-bold tabular-nums text-navy-900 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Cubic_Used'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.consumption} m³</td>
                 )}
                 {!readingDateFirst && (
                 <td className="flex flex-col font-mono text-slate-600 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Date'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.readingDate}</td>
                 )}
+                {showStatus && (
                 <td className="flex items-end md:table-cell md:px-4 md:py-4"><ReadingStatus status={reading.status} /></td>
-                <td className="col-span-2 md:table-cell md:px-4 md:py-4 md:text-center">
-                  <button
-                    aria-label={`View meter reading record for ${reading.consumerName ?? reading.consumerNo ?? "resident"}`}
-                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-water-200 bg-water-50 px-3 text-sm font-bold text-water-700 transition-colors hover:bg-water-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 md:w-auto"
-                    onClick={() => viewRecord(reading)}
-                    type="button"
-                  >
-                    <Eye aria-hidden="true" className="h-4 w-4" />
-                    View record
-                  </button>
-                </td>
+                )}
+                {onViewReceipt && (
+                  <td className="col-span-2 md:col-span-1 md:px-4 md:py-4 md:text-center">
+                    <button
+                      aria-label={`View consumption receipt for reading on ${reading.readingDate ?? "unknown date"}`}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 md:w-auto"
+                      onClick={() => onViewReceipt(reading)}
+                      type="button"
+                    >
+                      <ReceiptText aria-hidden="true" className="h-4 w-4" />
+                      View receipt
+                    </button>
+                  </td>
+                )}
                 {!readOnly && (
                   <td className="col-span-2 md:table-cell md:px-4 md:py-4">
                     <div className="flex gap-2 md:justify-end">
@@ -125,12 +105,6 @@ const MeterReadingTable = ({
           </>
         )}
       />
-      <MeterReadingRecordModal
-        isOpen={Boolean(selectedRecord)}
-        onClose={() => setSelectedRecord(null)}
-        recordData={selectedRecord}
-      />
-    </>
   );
 };
 

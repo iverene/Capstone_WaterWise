@@ -52,16 +52,16 @@ export default function PaymentModal({
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton={Boolean(completedPayment)}
-      title={completedPayment ? "Payment recorded" : "Record payment"}
+      title={completedPayment ? "Payment Recorded" : "Record Payment"}
       zIndexClass="z-40"
     >
           {completedPayment ? (
-            <div className="flex min-h-full flex-col justify-center p-5 sm:p-8">
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                <CheckCircle2 aria-hidden="true" className="h-8 w-8" />
+            <div className="flex min-h-full flex-col justify-center p-5 sm:p-6">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                <CheckCircle2 aria-hidden="true" className="h-6 w-6" />
               </span>
               <h3
-                className="mt-5 text-2xl font-extrabold tracking-[-0.03em] text-navy-900 outline-none"
+                className="mt-4 text-xl font-extrabold text-navy-900 outline-none"
                 ref={successHeadingRef}
                 tabIndex={-1}
               >
@@ -98,7 +98,7 @@ export default function PaymentModal({
                 </div>
               </dl>
 
-              <div className={`mt-6 grid gap-3 ${completedPayment.paymentCount > 1 ? "" : "sm:grid-cols-2"}`}>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
                 {(completedPayment.paymentCount ?? 1) <= 1 && (
                   <button
                     className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-4 font-bold text-white hover:bg-water-700"
