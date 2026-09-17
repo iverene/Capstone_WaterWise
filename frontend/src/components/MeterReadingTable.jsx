@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock3, Pencil, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock3, Pencil, ReceiptText, Trash2 } from "lucide-react";
 import Table from "./Table";
 
 function ReadingStatus({ status }) {
@@ -23,6 +23,7 @@ const MeterReadingTable = ({
   readings = [],
   onEdit,
   onDelete,
+  onViewReceipt,
   pageSize,
   readOnly = false,
   readingDateFirst = false,
@@ -48,6 +49,7 @@ const MeterReadingTable = ({
           ...(showUsage ? [{ key: "usage", label: "Cubic Used", className: "text-center" }] : []),
           ...(!readingDateFirst ? [{ key: "date", label: "Reading date" }] : []),
           ...(showStatus ? [{ key: "status", label: "Status" }] : []),
+          ...(onViewReceipt ? [{ key: "receipt", label: "Receipt", className: "text-right" }] : []),
           ...(!readOnly ? [{ key: "actions", label: "Actions", className: "text-right" }] : []),
         ]}
         data={readings}
@@ -78,6 +80,18 @@ const MeterReadingTable = ({
                 )}
                 {showStatus && (
                 <td className="flex items-end md:table-cell md:px-4 md:py-4"><ReadingStatus status={reading.status} /></td>
+                )}
+                {onViewReceipt && (
+                  <td className="md:px-4 md:py-4 md:text-right">
+                    <button
+                      aria-label={`View consumption receipt for reading on ${reading.readingDate ?? "unknown date"}`}
+                      className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                      onClick={() => onViewReceipt(reading)}
+                      type="button"
+                    >
+                      <ReceiptText aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                  </td>
                 )}
                 {!readOnly && (
                   <td className="col-span-2 md:table-cell md:px-4 md:py-4">
