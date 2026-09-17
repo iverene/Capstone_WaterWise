@@ -279,12 +279,14 @@ export default function EventManagementPage() {
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+    const renderedDays = Math.ceil((firstDay.getDay() + daysInMonth) / 7) * 7;
     const calendarStart = new Date(
       currentMonth.getFullYear(),
       currentMonth.getMonth(),
       1 - firstDay.getDay(),
     );
-    return Array.from({ length: 42 }, (_, index) =>
+    return Array.from({ length: renderedDays }, (_, index) =>
       new Date(calendarStart.getFullYear(), calendarStart.getMonth(), calendarStart.getDate() + index),
     );
   }, [currentMonth]);
