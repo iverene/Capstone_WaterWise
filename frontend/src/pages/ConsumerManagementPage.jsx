@@ -221,24 +221,14 @@ function ConsumerManagementPage() {
     setPasswordOtpError("");
   };
 
+  const openAddResident = () => {
+    setSelectedConsumer(null);
+    setFormMode("add");
+  };
+
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." title="Resident Management" />
-        <div className="hidden shrink-0 pt-8 lg:block">
-          <button
-            className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
-            onClick={() => {
-              setSelectedConsumer(null);
-              setFormMode("add");
-            }}
-            type="button"
-          >
-            <FiPlus aria-hidden="true" className="h-5 w-5" />
-            Add Resident
-          </button>
-        </div>
-      </div>
+      <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." title="Resident Management" />
 
       <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3">
         <KPI compact description="Community" icon={FiUsers} title="Total Residents" value={consumers.length} />
@@ -256,7 +246,7 @@ function ConsumerManagementPage() {
         onClose={closeForm}
         panelRoundedClass="rounded-xl"
         showCloseButton={false}
-        size="xl"
+        size={formMode === "add" ? "xl" : "lg"}
         title={formMode === "edit" ? "Edit Resident" : "Add Resident"}
       >
         <div className={formMode === "add" ? "resident-registration-layout" : ""}>
@@ -307,24 +297,22 @@ function ConsumerManagementPage() {
         <Filter ariaLabel="Filter residents by purok" className="w-full sm:w-48" onValueChange={setPurok} options={purokOptions} value={purok} />
       </div>
 
+      <div className="flex justify-end">
+        <button
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+          onClick={openAddResident}
+          type="button"
+        >
+          <FiPlus aria-hidden="true" className="h-5 w-5" />
+          Add Resident
+        </button>
+      </div>
+
       <ConsumerListTable
         consumers={visibleConsumers}
         isLoading={isLoading}
         onEdit={selectConsumer}
       />
-
-      <button
-        aria-label="Add resident"
-        className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-water-600 px-5 font-bold text-white shadow-modal transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 lg:hidden"
-        onClick={() => {
-          setSelectedConsumer(null);
-          setFormMode("add");
-        }}
-        type="button"
-      >
-        <FiPlus aria-hidden="true" className="h-5 w-5" />
-        Add Resident
-      </button>
     </main>
   );
 }
