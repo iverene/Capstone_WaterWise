@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock3, Eye } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Eye } from "lucide-react";
 import BillingSummaryCard from "../components/BillingSummaryCard";
 import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
-import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import Table from "../components/Table";
@@ -26,29 +26,14 @@ const purokRank = (value) => {
 const currency = (value) =>
   `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
-function StatusBadge({ status }) {
-  const config = status === "Paid"
-    ? { Icon: CheckCircle2, classes: "border-emerald-200 bg-emerald-50 text-emerald-700" }
-    : status === "Partially Paid"
-      ? { Icon: Clock3, classes: "border-amber-200 bg-amber-50 text-amber-800" }
-      : { Icon: AlertCircle, classes: "border-red-200 bg-red-50 text-red-700" };
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${config.classes}`}>
-      <config.Icon aria-hidden="true" className="h-3.5 w-3.5" />
-      {status}
-    </span>
-  );
-}
-
 export default function BillingManagementPage() {
+  const navigate = useNavigate();
   const [billingHistory, setBillingHistory] = useState([]);
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
   const [month, setMonth] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedResident, setSelectedResident] = useState(null);
 
   const loadBillingHistory = useCallback(async () => {
     try {
@@ -144,12 +129,26 @@ export default function BillingManagementPage() {
         const billings = activeMonth
           ? resident.billings.filter((billing) => monthKeyOf(billing) === activeMonth)
           : resident.billings;
+        const over30Days = billings.reduce((total, billing) => {
+          const balance = Number(billing.outstandingBalance ?? 0);
+          if (!(balance > 0) || !billing.dueDate) return total;
+          const overdueDays = Math.floor(
+            (Date.now() - Date.parse(`${billing.dueDate}T00:00:00Z`)) / 86_400_000,
+          );
+          return overdueDays >= 30 ? total + balance : total;
+        }, 0);
         return {
           ...resident,
           billings,
           overallBillCount: billings.length,
           overallBillTotal: billings.reduce(
             (total, billing) => total + Number(billing.amountDue || 0),
+            0,
+          ),
+          currentBill: Number(billings[0]?.amountDue ?? 0),
+          over30Days,
+          totalOutstanding: billings.reduce(
+            (total, billing) => total + Number(billing.outstandingBalance ?? 0),
             0,
           ),
         };
@@ -219,7 +218,9 @@ export default function BillingManagementPage() {
           ariaLabel="Resident billing accounts"
           columns={[
             { key: "name", label: "Name" },
-            { key: "bills", label: "Overall bills" },
+            { key: "current", label: "Current Bill", className: "text-right" },
+            { key: "over30", label: "Over 30 Days", className: "text-right" },
+            { key: "total", label: "Total", className: "text-right" },
             { key: "action", label: "Action", className: "text-right" },
           ]}
           data={visibleResidents}
@@ -242,78 +243,29 @@ export default function BillingManagementPage() {
                   {resident.purok}
                 </span>
               </td>
-              <td className="px-4 py-4">
-                <p className="font-mono font-extrabold text-navy-900">
-                  {resident.overallBillCount} {resident.overallBillCount === 1 ? "bill" : "bills"}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {currency(resident.overallBillTotal)} total billed
-                </p>
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-right">
+                {currency(resident.currentBill)}
               </td>
-              <td className="flex flex-col items-stretch justify-end md:table-cell md:px-4 md:py-4 md:text-right">
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-right">
+                {currency(resident.over30Days)}
+              </td>
+              <td className="font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-right">
+                {currency(resident.totalOutstanding)}
+              </td>
+              <td className="md:px-4 md:py-4 md:text-right">
                 <button
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100 md:w-auto md:px-4"
-                  onClick={() => setSelectedResident(resident)}
+                  aria-label={`View all bills for ${resident.consumerName}`}
+                  className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                  onClick={() => navigate(`/admin/consumer-billings?residentId=${encodeURIComponent(resident.id)}`)}
                   type="button"
                 >
                   <Eye aria-hidden="true" className="h-4 w-4" />
-                  View all billings
                 </button>
               </td>
             </>
           )}
         />
       )}
-
-      <Modal
-        closeLabel="Close resident billing history"
-        description={`${selectedResident?.overallBillCount ?? 0} billing records for this resident.`}
-        eyebrow="Resident billing history"
-        isOpen={Boolean(selectedResident)}
-        onClose={() => setSelectedResident(null)}
-        size="xl"
-        title={selectedResident?.consumerName}
-      >
-        <div className="p-4 sm:p-6">
-          <Table
-            ariaLabel={`${selectedResident?.consumerName ?? "Resident"} billing records`}
-            columns={[
-              { key: "period", label: "Billing Period" },
-              { key: "date", label: "Reading Date" },
-              { key: "consumption", label: "Consumption" },
-              { key: "total", label: "Total Bill", className: "text-right" },
-              { key: "balance", label: "Balance", className: "text-right" },
-              { key: "status", label: "Status" },
-            ]}
-            data={selectedResident?.billings ?? []}
-            getRowKey={(billing) => billing.id}
-            rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
-            tableClassName="block w-full text-left text-sm md:table"
-            renderRow={(billing) => (
-              <>
-                <td className="px-4 py-4 font-extrabold text-navy-900">
-                  {billing.billingPeriod}
-                </td>
-                <td className="px-4 py-4 font-mono text-xs text-slate-600">
-                  {billing.readingDate}
-                </td>
-                <td className="px-4 py-4 font-mono text-slate-700">
-                  {billing.cubicMetersConsumed} m³
-                </td>
-                <td className="px-4 py-4 text-right font-mono font-bold tabular-nums text-navy-900">
-                  {currency(billing.amountDue)}
-                </td>
-                <td className="px-4 py-4 text-right font-mono font-bold tabular-nums text-slate-700">
-                  {currency(billing.outstandingBalance)}
-                </td>
-                <td className="px-4 py-4">
-                  <StatusBadge status={billing.status} />
-                </td>
-              </>
-            )}
-          />
-        </div>
-      </Modal>
     </main>
   );
 }
