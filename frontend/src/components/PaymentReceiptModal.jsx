@@ -35,12 +35,6 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
   const paymentStatus = receiptData.statusAfterPayment
     ?? receiptData.paymentStatus
     ?? (remainingBalance === 0 ? "Paid" : "Partially Paid");
-  const currentBillStatus = receiptData.currentBillStatus ?? paymentStatus;
-  const currentBillRemainingBalance = Number(
-    receiptData.currentBillRemainingBalance ?? remainingBalance,
-  );
-  const billStatusChanged = currentBillStatus !== paymentStatus
-    || currentBillRemainingBalance !== remainingBalance;
   const isCash = paymentMethod === "Cash";
   const paid = paymentStatus === "Paid";
   const StatusIcon = paid ? CheckCircle2 : Clock3;
@@ -48,25 +42,18 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
 
   const handleDownload = () => {
     const lines = [
+      ["Date", receiptData.paymentDate ?? "Not available"],
+      ["Invoice", receiptData.invoiceNumber ?? "Not available"],
       ["Transaction Number", transactionNumber],
-      ["Invoice Number", receiptData.invoiceNumber ?? "Not available"],
-      ["Resident", receiptData.name ?? receiptData.consumerName ?? "Not available"],
-      ["Payment Date", receiptData.paymentDate ?? "Not available"],
-      ["Payment Method", paymentMethod],
-      ...(receiptData.referenceNumber
-        ? [["Reference Number", receiptData.referenceNumber]]
-        : []),
+      ["Name", receiptData.name ?? receiptData.consumerName ?? "Not available"],
+      ["Amount", currency(amountPaid)],
       ...(isCash
         ? [
             ["Cash Received", currency(amountTendered)],
-            ["Change Given", currency(changeGiven)],
+            ["Change", currency(changeGiven)],
           ]
         : []),
-      ["Balance After Payment", currency(remainingBalance)],
-      ["Status After Payment", paymentStatus],
-      ["Current Bill Balance", currency(currentBillRemainingBalance)],
-      ["Current Bill Status", currentBillStatus],
-      ["Amount Paid", currency(amountPaid)],
+      ["Status", paymentStatus],
     ];
 
     downloadReceiptImage({
@@ -119,118 +106,73 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
       size="md"
       title="Payment Receipt"
     >
-          <section className="rounded-2xl bg-navy-950 p-5 text-white">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-200">
-                  Amount paid
-                </p>
-                <p
-                  className="mt-2 font-mono text-3xl font-extrabold tabular-nums text-white"
-                  data-testid="receipt-total-payable"
-                >
-                  {currency(amountPaid)}
-                </p>
-              </div>
-              <span
-                className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
-                  paid
-                    ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-200"
-                    : "border-amber-400/40 bg-amber-400/15 text-amber-200"
-                }`}
-              >
-                <StatusIcon aria-hidden="true" className="h-4 w-4" />
-                {paymentStatus} after payment
-              </span>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-500">Date</p>
+              <p className="mt-1 text-sm font-bold text-navy-900">
+                {receiptData.paymentDate ?? "Not available"}
+              </p>
             </div>
-          </section>
-
-          <div className="mt-5 grid gap-5 sm:grid-cols-2">
-            <section aria-labelledby="receipt-account-heading">
-              <h3
-                className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
-                id="receipt-account-heading"
+            <div className="text-right">
+              <p className="text-xs font-semibold text-slate-500">Invoice</p>
+              <p
+                className="mt-1 font-mono text-sm font-bold tabular-nums text-navy-900"
+                data-testid="receipt-invoice"
               >
-                Account
-              </h3>
-              <dl className="mt-2">
-                <ReceiptLine
-                  label="Resident"
-                  testId="receipt-name"
-                  value={receiptData.name ?? receiptData.consumerName ?? "Not available"}
-                />
-                <ReceiptLine
-                  label="Invoice"
-                  testId="receipt-invoice"
-                  value={receiptData.invoiceNumber ?? "Not available"}
-                />
-                <ReceiptLine label="Transaction" value={transactionNumber} />
-              </dl>
-            </section>
-
-            <section aria-labelledby="receipt-payment-heading">
-              <h3
-                className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
-                id="receipt-payment-heading"
-              >
-                Payment
-              </h3>
-              <dl className="mt-2">
-                <ReceiptLine label="Date" value={receiptData.paymentDate ?? "Not available"} />
-                <ReceiptLine label="Method" value={paymentMethod} />
-                {receiptData.referenceNumber && (
-                  <ReceiptLine label="Reference" value={receiptData.referenceNumber} />
-                )}
-              </dl>
-            </section>
+                {receiptData.invoiceNumber ?? "Not available"}
+              </p>
+              <p className="mt-3 text-xs font-semibold text-slate-500">Transaction Number</p>
+              <p className="mt-1 font-mono text-sm font-bold tabular-nums text-navy-900">
+                {transactionNumber}
+              </p>
+            </div>
           </div>
 
-          {isCash && (
-            <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                Cash breakdown
-              </h3>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <div>
-                  <p className="text-xs font-semibold text-slate-500">Cash received</p>
-                  <p className="mt-1 font-mono text-lg font-extrabold tabular-nums text-navy-900">
-                    {currency(amountTendered)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-500">Applied to bill</p>
-                  <p className="mt-1 font-mono text-lg font-extrabold tabular-nums text-navy-900">
-                    {currency(amountPaid)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-500">Change</p>
-                  <p className="mt-1 font-mono text-lg font-extrabold tabular-nums text-emerald-700">
-                    {currency(changeGiven)}
-                  </p>
-                </div>
-              </div>
-            </section>
-          )}
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-slate-500">Name</p>
+            <p
+              className="mt-1 text-sm font-bold text-navy-900"
+              data-testid="receipt-name"
+            >
+              {receiptData.name ?? receiptData.consumerName ?? "Not available"}
+            </p>
+          </div>
 
-          <section className="mt-5 rounded-2xl border border-slate-200 p-4" aria-labelledby="receipt-balance-heading">
-            <h3 className="text-sm font-bold text-navy-900" id="receipt-balance-heading">Bill balance and status</h3>
-            <dl className="mt-2">
-              <ReceiptLine label="Balance after this payment" value={currency(remainingBalance)} />
-              <ReceiptLine label="Status after this payment" value={paymentStatus} />
-              {billStatusChanged && (
-                <>
-                  <ReceiptLine label="Current bill balance" value={currency(currentBillRemainingBalance)} />
-                  <ReceiptLine label="Current bill status" value={currentBillStatus} />
-                </>
-              )}
-            </dl>
-            {billStatusChanged && (
-              <p className="mt-3 rounded-xl bg-water-50 p-3 text-xs leading-5 text-water-800">
-                This bill changed after this payment was recorded. The values above preserve the transaction history while the current values show the latest bill state.
-              </p>
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <p className="text-xs font-semibold text-slate-500">Amount</p>
+            <p
+              className="font-mono text-xl font-extrabold tabular-nums text-navy-900"
+              data-testid="receipt-total-payable"
+            >
+              {currency(amountPaid)}
+            </p>
+          </div>
+
+          <hr className="my-5 border-slate-200" />
+
+          <dl>
+            {isCash && (
+              <>
+                <ReceiptLine label="Cash Received" value={currency(amountTendered)} />
+                <ReceiptLine label="Change" value={currency(changeGiven)} />
+              </>
             )}
-          </section>
+            <div className="flex items-start justify-between gap-4 py-3">
+              <dt className="text-sm font-semibold text-slate-500">Status</dt>
+              <dd>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${
+                    paid
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-amber-200 bg-amber-50 text-amber-800"
+                  }`}
+                >
+                  <StatusIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                  {paymentStatus}
+                </span>
+              </dd>
+            </div>
+          </dl>
 
           {onViewConsumptionReceipt && (
             <button

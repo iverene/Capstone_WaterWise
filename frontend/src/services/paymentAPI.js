@@ -31,6 +31,7 @@ export function normalizePaymentRecord(record) {
   return {
     id: record.id,
     billingId: record.billing_id,
+    invoiceNumber: record.invoiceNumber ?? (record.billing_id ? `INV-${record.billing_id}` : "Not available"),
     consumerName: record.consumerName ?? `Billing #${record.billing_id}`,
     paymentDate: formatPaymentDate(record.payment_date ?? record.created_at),
     paymentMethod: record.payment_method ?? "Cash",

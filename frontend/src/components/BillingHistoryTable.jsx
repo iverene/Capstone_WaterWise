@@ -29,21 +29,22 @@ function getStatusConfig(status) {
   };
 }
 
-function MobileBillCard({ onViewReceipt, row, showConsumerDetails }) {
+function MobileBillCard({ canViewReceipt, onViewReceipt, row, showConsumerDetails }) {
+  const receiptAvailable = onViewReceipt && (canViewReceipt ? canViewReceipt(row) : true);
   const { Icon: StatusIcon, className: statusClassName } = getStatusConfig(row.status);
   const title = showConsumerDetails ? (row.consumerName ?? "Unknown consumer") : row.billingPeriod;
   const subtitle = showConsumerDetails ? row.billingPeriod : `${row.cubicMetersConsumed} m³`;
   const statusLabel = row.status === "Overdue" && Number(row.overdueDays) > 0
     ? `Overdue ${row.overdueDays}d`
     : row.status;
-  const Wrapper = onViewReceipt ? "button" : "div";
+  const Wrapper = receiptAvailable ? "button" : "div";
 
   return (
     <Wrapper
-      aria-label={onViewReceipt ? `View receipt for ${title}` : undefined}
-      className={`flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card ${onViewReceipt ? "cursor-pointer transition-colors active:bg-slate-50" : ""}`}
-      onClick={onViewReceipt ? () => onViewReceipt(row) : undefined}
-      type={onViewReceipt ? "button" : undefined}
+      aria-label={receiptAvailable ? `View receipt for ${title}` : undefined}
+      className={`flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card ${receiptAvailable ? "cursor-pointer transition-colors active:bg-slate-50" : ""}`}
+      onClick={receiptAvailable ? () => onViewReceipt(row) : undefined}
+      type={receiptAvailable ? "button" : undefined}
     >
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-extrabold text-navy-900">{title}</span>
@@ -66,6 +67,7 @@ function MobileBillCard({ onViewReceipt, row, showConsumerDetails }) {
 }
 
 export default function BillingHistoryTable({
+  canViewReceipt,
   emptyDescription = "There are no billing records yet.",
   emptyTitle = "No billing records",
   highlightedBillingId,
@@ -85,6 +87,7 @@ export default function BillingHistoryTable({
           historyData.map((row) => (
             <li key={row.invoiceNumber ?? row.id}>
               <MobileBillCard
+                canViewReceipt={canViewReceipt}
                 onViewReceipt={onViewReceipt}
                 row={row}
                 showConsumerDetails={showConsumerDetails}
@@ -127,6 +130,7 @@ export default function BillingHistoryTable({
       testId="billing-history-table"
       renderRow={(row) => {
         const { Icon: StatusIcon, className: statusClassName } = getStatusConfig(row.status);
+        const receiptAvailable = onViewReceipt && (canViewReceipt ? canViewReceipt(row) : true);
         const statusLabel = row.status === "Overdue" && Number(row.overdueDays) > 0
           ? `Overdue ${row.overdueDays}d`
           : row.status;
@@ -193,7 +197,7 @@ export default function BillingHistoryTable({
                 minimumFractionDigits: 2,
               })}
             </td>
-            {onViewReceipt && (
+            {receiptAvailable && (
               <td className="col-span-2 flex items-center justify-center md:col-span-1 md:table-cell md:px-4 md:py-4 md:text-center">
                 <button
                   className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 md:w-auto"
