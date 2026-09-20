@@ -9,8 +9,10 @@ import {
   getOtpExpiry,
   getOtpMaxAttempts,
   getOtpResendCooldownSeconds,
+  getRefreshTokenDuration,
   JWT_AUDIENCE,
   JWT_ISSUER,
+  REFRESH_AUDIENCE,
 } from "../config/auth.js";
 import { supabase } from "../config/supabase.js";
 import {
@@ -39,7 +41,10 @@ import {
   verifyTrustedDevice,
 } from "../models/trustedDeviceModels.js";
 import {
+  getRefreshCookieName,
   getSessionCookieName,
+  readRefreshToken,
+  refreshCookieOptions,
   sessionCookieOptions,
 } from "../models/sessionCookieModels.js";
 import {
@@ -129,25 +134,48 @@ function clearTrustedDeviceCookie(res, role, req) {
 }
 
 function getSessionCookieMaxAgeMs(role) {
-  // Only meter-reader gets a persistent cookie so the installed PWA survives
-  // tab close/clear. Bounded by the role's JWT lifetime (8h default).
-  // Meter readers are already exempt from the 15m inactivity expiry.
-  if (role !== "meter-reader") return undefined;
-  const duration = getAccessTokenDuration(role);
-  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
-    // jsonwebtoken numeric expiresIn = seconds.
-    return duration * 1000;
+  // Meter-reader PWA + consumer 90-day session: persistent cookies so tab
+  // close/relaunch survives. Access is short-lived (consumer 15m); the long
+  // refresh cookie (consumer 90d absolute) renews it in the background.
+  // Admin + super-admin also get persistent cookies matching their refresh
+  // absolute so tab-reopen can restore via refresh without re-login.
+  if (role === "meter-reader") {
+    const duration = getAccessTokenDuration(role);
+    return durationToMs(duration, 8 * 60 * 60 * 1000);
   }
+  const refreshDuration = getRefreshTokenDuration(role);
+  return durationToMs(refreshDuration, 90 * 24 * 60 * 60 * 1000);
+}
+
+function setSessionCookie(res, token, req, role) {
+  res.cookie(getSessionCookieName(), token, sessionCookieOptions(req, getSessionCookieMaxAgeMs(role)));
+}
+
+function durationToMs(duration, fallbackMs) {
+  if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) return duration * 1000;
   const match = String(duration ?? "").trim().match(/^(\d+)\s*(ms|s|m|h|d|w|y)?$/i);
-  if (!match) return 8 * 60 * 60 * 1000;
+  if (!match) return fallbackMs;
   const value = Number(match[1]);
   const unit = (match[2] ?? "s").toLowerCase();
   const multipliers = { ms: 1, s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000, w: 7 * 24 * 60 * 60 * 1000, y: 365 * 24 * 60 * 60 * 1000 };
   return value * (multipliers[unit] ?? 1000);
 }
 
-function setSessionCookie(res, token, req, role) {
-  res.cookie(getSessionCookieName(), token, sessionCookieOptions(req, getSessionCookieMaxAgeMs(role)));
+function getRefreshCookieMaxAgeMs(role = "consumer") {
+  return durationToMs(getRefreshTokenDuration(role), 90 * 24 * 60 * 60 * 1000);
+}
+
+function setRefreshCookie(res, token, req, maxAgeMs, role) {
+  res.cookie(getRefreshCookieName(), token, refreshCookieOptions(req, maxAgeMs ?? getRefreshCookieMaxAgeMs(role)));
+}
+
+function clearRefreshCookie(res, req) {
+  const options = refreshCookieOptions(req);
+  res.clearCookie(getRefreshCookieName(), options);
+  const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
+  if (flipped.secure) flipped.partitioned = true;
+  else delete flipped.partitioned;
+  res.clearCookie(getRefreshCookieName(), flipped);
 }
 
 function clearSessionCookie(res, req) {
@@ -178,6 +206,24 @@ function createAccessToken(user, passwordHash) {
 
 function hashFingerprint(fingerprint) {
   return createHash("sha256").update(String(fingerprint || "")).digest("hex");
+}
+
+// Consumer refresh token: absolute 90d window anchored at first login
+// (`loginAt`). Rotation reuses the original absolute expiry instead of
+// extending it, so day 90 always forces re-login.
+function createRefreshToken(user, passwordHash, loginAt, absoluteExpSeconds) {
+  const claims = { role: user.role, loginAt };
+  if (passwordHash) claims.pwd = passwordFingerprint(passwordHash);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const remaining = Number.isFinite(absoluteExpSeconds)
+    ? Math.max(60, absoluteExpSeconds - nowSeconds)
+    : undefined;
+  return jwt.sign(claims, getJwtSecret(), {
+    subject: String(user.id),
+    issuer: JWT_ISSUER,
+    audience: REFRESH_AUDIENCE,
+    ...(remaining ? { expiresIn: remaining } : { expiresIn: getRefreshTokenDuration() }),
+  });
 }
 
 async function storeDeviceFingerprint(userId, role, fingerprint) {
@@ -440,6 +486,12 @@ export async function login(req, res) {
         await touchSessionActivity(user.role, user.id);
         const sessionToken = createAccessToken(user, passwordHash);
         setSessionCookie(res, sessionToken, req, user.role);
+        // Issue refresh for admin + super-admin (not meter-reader).
+        if (["admin", "super-admin"].includes(user.role)) {
+          const loginAt = Date.now();
+          const refreshToken = createRefreshToken(user, passwordHash, loginAt);
+          setRefreshCookie(res, refreshToken, req, undefined, user.role);
+        }
         return res.status(200).json({
           success: true,
           user,
@@ -481,6 +533,13 @@ export async function login(req, res) {
     await touchSessionActivity(user.role, user.id);
     const loginSessionToken = createAccessToken(user, loginPasswordHash);
     setSessionCookie(res, loginSessionToken, req, user.role);
+    if (user.role === "consumer" || user.role === "admin" || user.role === "super-admin") {
+      // Absolute window anchored at this login; background refresh every
+      // 5min renews the 15m access without extending the absolute cap.
+      const loginAt = Date.now();
+      const refreshToken = createRefreshToken(user, loginPasswordHash, loginAt);
+      setRefreshCookie(res, refreshToken, req, undefined, user.role);
+    }
     return res.status(200).json({ success: true, user });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -497,6 +556,56 @@ export async function login(req, res) {
         ? { remainingAttempts: error.remainingAttempts }
         : {}),
     });
+  }
+}
+
+export async function refreshSession(req, res) {
+  try {
+    const token = readRefreshToken(req);
+    if (!token) return res.status(401).json({ success: false, message: "Session refresh is required. Please sign in again." });
+    const payload = jwt.verify(token, getJwtSecret(), { issuer: JWT_ISSUER, audience: REFRESH_AUDIENCE });
+    const role = payload.role;
+    if (!["consumer", "admin", "super-admin"].includes(role)) {
+      return res.status(403).json({ success: false, message: "Session refresh is not available for this account type." });
+    }
+    const userId = Number(payload.sub);
+    if (!Number.isInteger(userId) || userId < 1) throw new jwt.JsonWebTokenError("Invalid refresh identity.");
+    const account = await getPasswordResetAccountById(userId, role);
+    if (!account || account.status !== "active") {
+      clearSessionCookie(res, req);
+      clearRefreshCookie(res, req);
+      return res.status(401).json({ success: false, message: "This account is no longer active. Please sign in again." });
+    }
+    if (payload.pwd && account.password && payload.pwd !== passwordFingerprint(account.password)) {
+      clearSessionCookie(res, req);
+      clearRefreshCookie(res, req);
+      return res.status(401).json({ success: false, message: "Your password was changed. Please sign in again." });
+    }
+    const requestFingerprint = req.get("x-device-fingerprint");
+    const storedHash = await getStoredFingerprintHash(userId, role);
+    if (storedHash) {
+      if (!requestFingerprint) return res.status(401).json({ success: false, message: "Session device verification is required. Please sign in again." });
+      if (hashFingerprint(requestFingerprint) !== storedHash) {
+        return res.status(401).json({ success: false, message: "Session device mismatch. Please sign in again." });
+      }
+    }
+    // Intentionally no touchSessionActivity(): the 5min refresh renews the
+    // access token only; the 15m inactivity logout still applies.
+    const user = { id: account.id, username: account.username, email: account.email, name: account.username, role, status: account.status };
+    const loginAt = Number(payload.loginAt) > 0 ? Number(payload.loginAt) : Date.now();
+    const absoluteExp = Number(payload.exp);
+    setSessionCookie(res, createAccessToken(user, account.password), req, role);
+    const remainingMs = getRefreshCookieMaxAgeMs(role);
+    const absoluteRemainingMs = Number.isFinite(absoluteExp) ? absoluteExp * 1000 - Date.now() : remainingMs;
+    setRefreshCookie(res, createRefreshToken(user, account.password, loginAt, absoluteExp), req, Math.max(1000, Math.min(remainingMs, absoluteRemainingMs)), role);
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    const isTokenError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
+    if (isTokenError) {
+      clearSessionCookie(res, req);
+      clearRefreshCookie(res, req);
+    }
+    return res.status(401).json({ success: false, message: "Session refresh expired. Please sign in again." });
   }
 }
 
@@ -668,6 +777,12 @@ export async function verifyAdminLoginOtp(req, res) {
     await touchSessionActivity(user.role, user.id);
     const otpSessionToken = createAccessToken(user, account.password);
     setSessionCookie(res, otpSessionToken, req, user.role);
+    // Issue refresh for admin + super-admin after OTP login.
+    {
+      const loginAt = Date.now();
+      const refreshToken = createRefreshToken(user, account.password, loginAt);
+      setRefreshCookie(res, refreshToken, req, undefined, user.role);
+    }
     return res.status(200).json({
       success: true,
       user,
@@ -859,6 +974,7 @@ export async function completeConsumerEmailChange(req, res) {
     // signs in again with the updated credentials instead of hitting a 401
     // that surfaces as a generic "Session expired" notice.
     clearSessionCookie(res, req);
+    clearRefreshCookie(res, req);
     return res.status(200).json({ success: true, message: "Your email address has been changed successfully. Please sign in again.", email: updated.email });
   } catch (error) {
     const isTokenError = error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError;
@@ -990,6 +1106,7 @@ export async function changeAuthenticatedPassword(req, res) {
       clearTrustedDeviceCookie(res, req.user.role, req);
     }
     clearSessionCookie(res, req);
+    clearRefreshCookie(res, req);
     return res.status(200).json({ success: true, message: "Your password has been changed successfully." });
   } catch (error) {
     return res.status(error.statusCode ?? 500).json({
@@ -1114,6 +1231,7 @@ export async function logout(req, res) {
     await supabase.from(table).update({ device_fingerprint_hash: null }).eq("id", id);
     await clearSessionActivity(role, id);
     clearSessionCookie(res, req);
+    clearRefreshCookie(res, req);
     // Trusted admin browsers stay trusted across explicit logout so the next
     // sign-in on the same browser can skip OTP until expiry, manual revoke,
     // or password change. Only the short-lived JWT/session is ended here.

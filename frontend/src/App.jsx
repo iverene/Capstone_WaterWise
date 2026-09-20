@@ -40,6 +40,7 @@ import MeterReaderProfile from "./pages/MeterReaderProfile";
 import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation";
 import { clearApiCache } from "./services/apiCache";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
+import { startSessionRefresh } from "./services/sessionRefresh";
 
 
 
@@ -462,6 +463,8 @@ export default function App() {
     clearApiCache();
     setDataRevision((revision) => revision + 1);
   }), [sessionRevision]);
+
+  useEffect(() => startSessionRefresh(), []);
 
   useEffect(() => {
     const sessionChanged = () => setSessionRevision((revision) => revision + 1);

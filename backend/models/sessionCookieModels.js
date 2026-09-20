@@ -1,11 +1,21 @@
 import { isSecureRequest, readCookie } from "./trustedDeviceModels.js";
 
 const SESSION_COOKIE = "waterwise_session";
+const REFRESH_COOKIE = "waterwise_refresh";
 
 export const getSessionCookieName = () => SESSION_COOKIE;
+export const getRefreshCookieName = () => REFRESH_COOKIE;
 
 export function readSessionToken(req) {
   return readCookie(req, SESSION_COOKIE) || "";
+}
+
+export function readRefreshToken(req) {
+  return readCookie(req, REFRESH_COOKIE) || "";
+}
+
+export function refreshCookieOptions(req, maxAgeMs) {
+  return sessionCookieOptions(req, maxAgeMs);
 }
 
 export function sessionCookieOptions(req, maxAgeMs) {
