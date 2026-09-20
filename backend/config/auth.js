@@ -8,6 +8,7 @@ dotenv.config({
 
 export const JWT_ISSUER = "waterwise-api";
 export const JWT_AUDIENCE = "waterwise-frontend";
+export const REFRESH_AUDIENCE = "waterwise-refresh";
 
 export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -22,10 +23,23 @@ export function getJwtSecret() {
 }
 
 const DEFAULT_ACCESS_TOKEN_DURATION_BY_ROLE = {
-  consumer: "4h",
+  consumer: "10m",
   "meter-reader": "8h",
+  admin: "10m",
+  "super-admin": "10m",
+};
+
+// Absolute refresh window from first login per role (auto-logout after this).
+const DEFAULT_REFRESH_TOKEN_DURATION_BY_ROLE = {
+  consumer: "90d",
   admin: "1h",
   "super-admin": "30m",
+};
+
+const REFRESH_TOKEN_DURATION_ENV_BY_ROLE = {
+  consumer: "REFRESH_EXPIRES_CONSUMER",
+  admin: "REFRESH_EXPIRES_ADMIN",
+  "super-admin": "REFRESH_EXPIRES_SUPER_ADMIN",
 };
 
 const ACCESS_TOKEN_DURATION_ENV_BY_ROLE = {
@@ -74,6 +88,24 @@ export function getAccessTokenDuration(role) {
       console.warn(
         `Invalid ${envName} value "${raw}"; using default "${fallback}". ` +
           `Use seconds (e.g. 3600) or a duration string (e.g. 30m, 1h).`,
+      );
+    }
+    return fallback;
+  }
+  return /^\d+$/.test(raw) ? Number(raw) : raw;
+}
+
+export function getRefreshTokenDuration(role = "consumer") {
+  const fallback = DEFAULT_REFRESH_TOKEN_DURATION_BY_ROLE[role] ?? "90d";
+  const envName = REFRESH_TOKEN_DURATION_ENV_BY_ROLE[role];
+  const raw = envName ? (process.env[envName] ?? "").trim() : "";
+  if (!raw) return fallback;
+  if (!isValidJwtDuration(raw)) {
+    if (!warnedInvalidDurations.has(`refresh-${role}`)) {
+      warnedInvalidDurations.add(`refresh-${role}`);
+      console.warn(
+        `Invalid ${envName} value "${raw}"; using default "${fallback}". ` +
+          `Use seconds (e.g. 3600) or a duration string (e.g. 90d).`,
       );
     }
     return fallback;

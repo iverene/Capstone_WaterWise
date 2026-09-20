@@ -93,6 +93,7 @@ const dataMutationMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ignoredChangePaths = [
   "/api/auth/logout",
   "/api/auth/login",
+  "/api/auth/refresh",
   "/api/auth/forgot-password",
   "/api/auth/verify-reset-otp",
   "/api/auth/admin/verify-login-otp",

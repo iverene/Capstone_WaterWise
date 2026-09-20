@@ -34,7 +34,9 @@ export default function SessionInactivityGuard() {
     // screen (walking between houses, reading meters). Inactivity logout
     // would sign them out mid-route, so this role is exempt. Their sessions
     // remain bounded by the absolute JWT expiry and device binding.
-    if (getStoredAccount()?.role === "meter-reader") return undefined;
+    // Consumers use the 90-day absolute session with 5min background refresh,
+    // so they are exempt from the 15-minute idle logout as well.
+    if (getStoredAccount()?.role === "meter-reader" || getStoredAccount()?.role === "consumer") return undefined;
 
     let cancelled = false;
     let warningToastId = null;

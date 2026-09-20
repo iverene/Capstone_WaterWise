@@ -38,6 +38,18 @@ const apiClient = axios.create({
 });
 
 const networkAdapter = axios.getAdapter(apiClient.defaults.adapter);
+let refreshInFlight = null;
+
+async function tryRefreshConsumerSession() {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    const { refreshSession } = await import("./auth.service.js");
+    return refreshSession();
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
 const pendingGets = new Map();
 
 function getRequestKey(config) {
@@ -94,11 +106,12 @@ apiClient.interceptors.response.use(
     if (!["get", "head"].includes(response.config.method?.toLowerCase())) clearApiCache();
     return response;
   },
-  (error) => {
+  async (error) => {
     const status = error.response?.status;
     const requestUrl = error.config?.url ?? "";
     const isPublicAuthRequest =
       requestUrl.startsWith("/auth/login") ||
+      requestUrl.startsWith("/auth/refresh") ||
       requestUrl.startsWith("/auth/forgot-password") ||
       requestUrl.startsWith("/auth/verify-reset-otp") ||
       requestUrl.startsWith("/auth/reset-password") ||
@@ -107,6 +120,27 @@ apiClient.interceptors.response.use(
     const isPublicAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(
       window.location.pathname,
     );
+    // Consumer/Admin/Super-admin silent refresh: a 15m access may expire
+    // between the 5min timer ticks (closed laptop, throttled tab). Try one
+    // refresh + retry before treating it as a logout. Terminal refresh
+    // failures (absolute expiry, password change, deactivation, mismatch)
+    // fall through to logout.
+    if (
+      status === 401 &&
+      !isLoggingOut() &&
+      !isPublicAuthPage &&
+      !isPublicAuthRequest &&
+      !error.config?._refreshRetried &&
+      ["consumer", "admin", "super-admin"].includes(getStoredAccount()?.role)
+    ) {
+      try {
+        await tryRefreshConsumerSession();
+        error.config._refreshRetried = true;
+        return apiClient.request(error.config);
+      } catch {
+        // Refresh failed: fall through to the logout handling below.
+      }
+    }
     if (status === 401 && !isLoggingOut() && !isPublicAuthPage && !isPublicAuthRequest) {
       // Expired, idle-timed-out, revoked (password change), deactivated, or
       // device-mismatch sessions must end here instead of leaving the user

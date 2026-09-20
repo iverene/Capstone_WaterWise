@@ -32,6 +32,12 @@ export async function login(credentials) {
   }
 }
 
+export async function refreshSession() {
+  // Consumer background refresh: renews the 15m access via the 90d refresh
+  // cookie. Throws on 401 (day-90 expiry, password change, deactivation).
+  return apiRequest("/auth/refresh", { method: "POST" });
+}
+
 export async function verifyAdminLoginOtp(challengeToken, otp) {
   try {
     // No session write here either (see login above): validated + stored by
