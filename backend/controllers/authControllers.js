@@ -52,6 +52,12 @@ import {
   getInactivityTimeoutMs,
   touchSessionActivity,
 } from "../services/sessionActivityService.js";
+import {
+  addDeviceFingerprint,
+  getDeviceFingerprints,
+  removeAllDeviceFingerprints,
+  touchDeviceFingerprint,
+} from "../models/deviceFingerprintModels.js";
 
 export function getSessionConfig(req, res) {
   return res.status(200).json({
@@ -227,15 +233,13 @@ function createRefreshToken(user, passwordHash, loginAt, absoluteExpSeconds) {
 }
 
 async function storeDeviceFingerprint(userId, role, fingerprint) {
-  const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
   const hash = hashFingerprint(fingerprint);
-  await supabase.from(table).update({ device_fingerprint_hash: hash }).eq("id", userId);
+  await addDeviceFingerprint(userId, role, hash);
 }
 
-async function getStoredFingerprintHash(userId, role) {
-  const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
-  const { data } = await supabase.from(table).select("device_fingerprint_hash").eq("id", userId).maybeSingle();
-  return data?.device_fingerprint_hash || null;
+async function getStoredFingerprintHashes(userId, role) {
+  const rows = await getDeviceFingerprints(userId, role);
+  return rows.map((r) => r.fingerprint_hash);
 }
 
 export async function requestStaffActionOtp(req, res) {
@@ -582,12 +586,14 @@ export async function refreshSession(req, res) {
       return res.status(401).json({ success: false, message: "Your password was changed. Please sign in again." });
     }
     const requestFingerprint = req.get("x-device-fingerprint");
-    const storedHash = await getStoredFingerprintHash(userId, role);
-    if (storedHash) {
+    const storedHashes = await getStoredFingerprintHashes(userId, role);
+    if (storedHashes.length > 0) {
       if (!requestFingerprint) return res.status(401).json({ success: false, message: "Session device verification is required. Please sign in again." });
-      if (hashFingerprint(requestFingerprint) !== storedHash) {
+      const requestHash = hashFingerprint(requestFingerprint);
+      if (!storedHashes.includes(requestHash)) {
         return res.status(401).json({ success: false, message: "Session device mismatch. Please sign in again." });
       }
+      touchDeviceFingerprint(userId, role, requestHash).catch(() => {});
     }
     // Intentionally no touchSessionActivity(): the 5min refresh renews the
     // access token only; the 15m inactivity logout still applies.
@@ -1101,6 +1107,7 @@ export async function changeAuthenticatedPassword(req, res) {
       currentPassword: req.body?.currentPassword,
       newPassword: req.body?.newPassword,
     });
+    await removeAllDeviceFingerprints(req.user.id, req.user.role);
     if (["admin", "super-admin"].includes(req.user.role)) {
       await revokeAdminTrustedDevices(req.user.id);
       clearTrustedDeviceCookie(res, req.user.role, req);
@@ -1209,6 +1216,7 @@ export async function resetPassword(req, res) {
       error.statusCode = 400;
       throw error;
     }
+    await removeAllDeviceFingerprints(payload.sub, payload.role);
     if (["admin", "super-admin"].includes(payload.role)) {
       await revokeAdminTrustedDevices(payload.sub);
       clearTrustedDeviceCookie(res, payload.role, req);
@@ -1227,14 +1235,15 @@ export async function resetPassword(req, res) {
 export async function logout(req, res) {
   try {
     const { id, role } = req.user;
-    const table = role === "consumer" ? "consumers" : role === "meter-reader" ? "meter_readers" : "admins";
-    await supabase.from(table).update({ device_fingerprint_hash: null }).eq("id", id);
+    const requestFingerprint = req.get("x-device-fingerprint");
+    if (requestFingerprint) {
+      const hash = hashFingerprint(requestFingerprint);
+      const { removeDeviceFingerprint } = await import("../models/deviceFingerprintModels.js");
+      await removeDeviceFingerprint(id, role, hash).catch(() => {});
+    }
     await clearSessionActivity(role, id);
     clearSessionCookie(res, req);
     clearRefreshCookie(res, req);
-    // Trusted admin browsers stay trusted across explicit logout so the next
-    // sign-in on the same browser can skip OTP until expiry, manual revoke,
-    // or password change. Only the short-lived JWT/session is ended here.
     return res.status(200).json({ success: true, message: "Logged out successfully." });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Logout failed." });
