@@ -21,6 +21,14 @@ function splitLegacyFullName(fullName) {
   return { firstName: parts[0], middleName: parts.slice(1, -1).join(" "), lastName: parts[parts.length - 1] };
 }
 
+function normalizeTo09Input(value) {
+  const raw = String(value ?? "").trim().replace(/[\s()-]/g, "");
+  if (/^\+639\d{9}$/.test(raw)) {
+    return `09${raw.slice(4)}`;
+  }
+  return String(value ?? "").replace(/\D/g, "").slice(0, 11);
+}
+
 function createInitialState(initialData) {
   if (!initialData) return initialState;
 
@@ -35,7 +43,7 @@ function createInitialState(initialData) {
     lastName: String(legacy?.lastName ?? initialData.lastName ?? ""),
     purok: String(initialData.purok ?? ""),
     email: String(initialData.email ?? ""),
-    contactNumber: String(initialData.contactNumber ?? initialData.contact_number ?? ""),
+    contactNumber: normalizeTo09Input(initialData.contactNumber ?? initialData.contact_number ?? ""),
     status: String(initialData.status ?? "active"),
   };
 }
@@ -51,8 +59,8 @@ function isStrongPassword(password) {
 }
 
 function isValidContactNumber(contactNumber) {
-  const compactNumber = String(contactNumber ?? "").trim().replace(/[\s()-]/g, "");
-  return /^(?:09\d{9}|\+639\d{9})$/.test(compactNumber);
+  const digitsOnly = String(contactNumber ?? "").replace(/\D/g, "");
+  return /^09\d{9}$/.test(digitsOnly);
 }
 
 function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onCancel }) {
@@ -92,7 +100,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
     if (!String(consumer.contactNumber ?? "").trim()) {
       validationErrors.contactNumber = "Enter the resident's contact number.";
     } else if (!isValidContactNumber(consumer.contactNumber)) {
-      validationErrors.contactNumber = "Enter a valid Philippine mobile number, such as 09171234567.";
+      validationErrors.contactNumber = "Enter an 11-digit Philippine mobile number starting with 09, such as 09171234567.";
     }
     if (requirePassword) {
       if (!password) {
@@ -275,15 +283,15 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
               autoComplete="tel"
               className={inputClass("contactNumber", "pl-12 font-mono tabular-nums")}
               id="resident-contact-number"
-              inputMode="tel"
-              maxLength={20}
-              onChange={(event) => updateField("contactNumber", event.target.value.replace(/[^\d+\s()-]/g, ""))}
-              placeholder="0917 123 4567"
+              inputMode="numeric"
+              maxLength={11}
+              onChange={(event) => updateField("contactNumber", event.target.value.replace(/\D/g, "").slice(0, 11))}
+              placeholder="09171234567"
               type="tel"
               value={consumer.contactNumber}
             />
           </div>
-          <p className="mt-1.5 text-xs text-slate-500" id="contact-number-helper">Use an active Philippine mobile number for resident contact.</p>
+          <p className="mt-1.5 text-xs text-slate-500" id="contact-number-helper">Enter an 11-digit mobile number starting with 09.</p>
           {errors.contactNumber && <p className={errorClass} id="contactNumber-error" role="alert">{errors.contactNumber}</p>}
         </div>
 
