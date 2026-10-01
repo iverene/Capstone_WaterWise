@@ -9,7 +9,6 @@ import {
 import { useNavigate } from "react-router";
 import AdminProfileBanner from "../components/AdminProfileBanner";
 import LoadingSkeleton from "../components/LoadingSkeleton";
-import PageHeader from "../components/PageHeader";
 import { isCanceledRequest } from "../services/apiClient";
 import { fetchConsumerProfile } from "../services/consumerPortal.service";
 import {
@@ -130,19 +129,10 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
   }, []);
 
   const consumer = usesApi ? loadedConsumer : consumerProp;
-  const pageHeader = (
-    <PageHeader
-      compact
-      description="Review the personal  information registered to your account."
-      descriptionClassName="!text-[13px] !leading-5 !text-slate-900 sm:!text-sm sm:!leading-6"
-      eyebrow="Resident profile"
-    />
-  );
 
   if (error) {
     return (
       <div className="space-y-5 sm:space-y-6">
-        {pageHeader}
         <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
           <span>{error}</span>
           <button className="min-h-11 rounded-xl bg-red-700 px-4 font-bold text-white hover:bg-red-800" onClick={retry} type="button">
@@ -156,7 +146,6 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
   if (!consumer) {
     return (
       <div className="space-y-5 sm:space-y-6">
-        {pageHeader}
         <LoadingSkeleton label="Loading consumer profile" variant="profile" />
       </div>
     );
@@ -164,8 +153,6 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {pageHeader}
-
       <AdminProfileBanner account={consumer} displayName={consumer.name} roleLabel="Resident" subtitle="WaterWise Resident" details={[{ label: "Account ID", value: consumer.accountId }, { label: "Username", value: consumer.username }, { label: "Email address", value: consumer.email }, { label: "Contact number", value: consumer.contactNumber }, { label: "Service area", value: consumer.purok }]} tagline={<>&ldquo;Clean water for<br />every home.&rdquo;</>} />
 
 

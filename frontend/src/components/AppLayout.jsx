@@ -52,10 +52,10 @@ const ROLE_CONFIG = {
     homePath: "/admin/dashboard",
     links: [
       { label: "Dashboard", path: "/admin/dashboard", Icon: FiGrid },
-      { label: "Residents", path: "/admin/consumers", Icon: FiUsers },
       { label: "Readings", path: "/admin/readings", Icon: FiBookOpen },
-      { label: "Billing", path: "/admin/billings", Icon: FiFileText },
+      { label: "Billings", path: "/admin/billings", Icon: FiFileText },
       { label: "Payments", path: "/admin/payments", Icon: FiCreditCard },
+      { label: "Residents", path: "/admin/consumers", Icon: FiUsers },
       { label: "Flagged Accounts", path: "/admin/flagged-accounts", Icon: FiAlertTriangle },
       { label: "Events", path: "/admin/events", Icon: FiCalendar },
       {

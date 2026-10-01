@@ -33,7 +33,7 @@
 .resident-input-icon { position: absolute; left: 17px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; color: #5674a0; pointer-events: none; }
 .resident-registration-form .resident-security { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 12px; background: #edf5ff; color: #7086aa; font-size: 12px; line-height: 1.6; }
 .resident-security > span { display: grid; place-items: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; background: #d2e8ff; color: #0075df; }
-.resident-registration-form .resident-form-actions { grid-column: 1 / -1; justify-content: flex-end; gap: 14px; padding-top: 0; margin-top: -9px; }
+.resident-registration-form .resident-form-actions { grid-column: 1 / -1; justify-content: flex-end; gap: 14px; position: sticky; bottom: 0; background: #fff; padding: 12px 0 4px; }
 .resident-registration-form .resident-form-actions button { flex: none; min-height: 46px; min-width: 125px; padding: 0 24px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; }
 .resident-registration-form .resident-form-actions button[type="submit"] { background: #0071d8; min-width: 165px; }
 .resident-registration-form .resident-form-actions button[type="submit"]:hover { background: #005eb7; }

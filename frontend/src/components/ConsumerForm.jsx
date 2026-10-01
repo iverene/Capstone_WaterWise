@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, UserRoundPlus, LoaderCircle } from "lucide-react";
+import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, LoaderCircle } from "lucide-react";
 import Dropdown from "./Dropdown";
 
 const initialState = {
@@ -21,6 +21,14 @@ function splitLegacyFullName(fullName) {
   return { firstName: parts[0], middleName: parts.slice(1, -1).join(" "), lastName: parts[parts.length - 1] };
 }
 
+function normalizeTo09Input(value) {
+  const raw = String(value ?? "").trim().replace(/[\s()-]/g, "");
+  if (/^\+639\d{9}$/.test(raw)) {
+    return `09${raw.slice(4)}`;
+  }
+  return String(value ?? "").replace(/\D/g, "").slice(0, 11);
+}
+
 function createInitialState(initialData) {
   if (!initialData) return initialState;
 
@@ -35,7 +43,7 @@ function createInitialState(initialData) {
     lastName: String(legacy?.lastName ?? initialData.lastName ?? ""),
     purok: String(initialData.purok ?? ""),
     email: String(initialData.email ?? ""),
-    contactNumber: String(initialData.contactNumber ?? initialData.contact_number ?? ""),
+    contactNumber: normalizeTo09Input(initialData.contactNumber ?? initialData.contact_number ?? ""),
     status: String(initialData.status ?? "active"),
   };
 }
@@ -51,8 +59,8 @@ function isStrongPassword(password) {
 }
 
 function isValidContactNumber(contactNumber) {
-  const compactNumber = String(contactNumber ?? "").trim().replace(/[\s()-]/g, "");
-  return /^(?:09\d{9}|\+639\d{9})$/.test(compactNumber);
+  const digitsOnly = String(contactNumber ?? "").replace(/\D/g, "");
+  return /^09\d{9}$/.test(digitsOnly);
 }
 
 function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onCancel }) {
@@ -92,7 +100,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
     if (!String(consumer.contactNumber ?? "").trim()) {
       validationErrors.contactNumber = "Enter the resident's contact number.";
     } else if (!isValidContactNumber(consumer.contactNumber)) {
-      validationErrors.contactNumber = "Enter a valid Philippine mobile number, such as 09171234567.";
+      validationErrors.contactNumber = "Enter an 11-digit Philippine mobile number starting with 09, such as 09171234567.";
     }
     if (requirePassword) {
       if (!password) {
@@ -139,7 +147,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
   };
 
   const inputClass = (field, extraClasses = "") => [
-    "min-h-12 w-full rounded-xl border bg-white px-4 text-navy-900 outline-none transition-colors placeholder:text-slate-400 focus:ring-4",
+    "min-h-12 w-full rounded-xl border bg-white px-4 text-sm text-navy-900 outline-none transition-colors placeholder:text-slate-400 focus:ring-4 sm:text-base",
     errors[field]
       ? "border-red-600 focus:border-red-600 focus:ring-red-100"
       : "border-slate-300 focus:border-water-600 focus:ring-water-100",
@@ -166,7 +174,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
         </div>
       </header>}
 
-      <div className="resident-fields grid gap-5 p-5 sm:grid-cols-3 sm:p-6">
+      <div className={`resident-fields grid gap-5 p-5 sm:p-6 ${registrationDesign ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         <div>
           <label className={labelClass} htmlFor="resident-first-name">First name{registrationDesign && <span className="text-red-500"> *</span>}</label>
           <div className="relative mt-2">
@@ -275,15 +283,15 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
               autoComplete="tel"
               className={inputClass("contactNumber", "pl-12 font-mono tabular-nums")}
               id="resident-contact-number"
-              inputMode="tel"
-              maxLength={20}
-              onChange={(event) => updateField("contactNumber", event.target.value.replace(/[^\d+\s()-]/g, ""))}
-              placeholder="0917 123 4567"
+              inputMode="numeric"
+              maxLength={11}
+              onChange={(event) => updateField("contactNumber", event.target.value.replace(/\D/g, "").slice(0, 11))}
+              placeholder="09171234567"
               type="tel"
               value={consumer.contactNumber}
             />
           </div>
-          <p className="mt-1.5 text-xs text-slate-500" id="contact-number-helper">Use an active Philippine mobile number for resident contact.</p>
+          <p className="mt-1.5 text-xs text-slate-500" id="contact-number-helper">Enter an 11-digit mobile number starting with 09.</p>
           {errors.contactNumber && <p className={errorClass} id="contactNumber-error" role="alert">{errors.contactNumber}</p>}
         </div>
 
@@ -346,17 +354,17 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
         )}
 
         {initialData && (
-          <div className="sm:col-span-3">
-            <div className="flex min-h-20 items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${consumer.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+          <div className={registrationDesign ? "sm:col-span-3" : "sm:col-span-2"}>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${consumer.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                   {consumer.status === "active"
-                    ? <CheckCircle2 aria-hidden="true" className="h-5 w-5" />
-                    : <CircleOff aria-hidden="true" className="h-5 w-5" />}
+                    ? <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
+                    : <CircleOff aria-hidden="true" className="h-4 w-4" />}
                 </span>
                 <div>
-                  <p className="text-sm font-bold text-navy-900">Account status</p>
-                  <p className={`mt-1 text-sm font-semibold ${consumer.status === "active" ? "text-emerald-700" : "text-red-700"}`}>
+                  <p className="text-xs font-bold text-navy-900">Account status</p>
+                  <p className={`mt-0.5 text-xs font-semibold ${consumer.status === "active" ? "text-emerald-700" : "text-red-700"}`}>
                     {consumer.status === "active" ? "Active — resident can use the account" : "Inactive — account access is disabled"}
                   </p>
                 </div>
@@ -364,26 +372,26 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
               <button
                 aria-checked={consumer.status === "active"}
                 aria-label={`Set resident account ${consumer.status === "active" ? "inactive" : "active"}`}
-                className={`relative h-11 w-[4.5rem] shrink-0 rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 ${consumer.status === "active" ? "border-emerald-600 bg-emerald-600" : "border-slate-300 bg-slate-300"}`}
+                className={`relative h-8 w-14 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 ${consumer.status === "active" ? "bg-emerald-600" : "bg-slate-300"}`}
                 onClick={() => updateField("status", consumer.status === "active" ? "inactive" : "active")}
                 role="switch"
                 type="button"
               >
-                <span className={`absolute left-1 top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform ${consumer.status === "active" ? "translate-x-7" : "translate-x-0"}`} />
+                <span className={`absolute left-1 top-1/2 h-6 w-6 -translate-y-1/2 rounded-full bg-white shadow-sm transition-transform ${consumer.status === "active" ? "translate-x-6" : "translate-x-0"}`} />
               </button>
             </div>
           </div>
         )}
 
         {registrationDesign && <div className="resident-security"><span><ShieldCheck aria-hidden="true" size={24} /></span><div><p className="font-bold text-navy-900">Account Security</p><p>The resident will use this username and password to sign in to their account.</p></div></div>}
-        <div className="resident-form-actions flex flex-row items-start gap-2 sm:pt-8">
+        <div className={`resident-form-actions flex flex-row items-start gap-2 ${registrationDesign ? "sm:col-span-3" : "sm:col-span-2"}`}>
           {onCancel && (
             <button className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50" onClick={onCancel} type="button">
               Cancel
             </button>
           )}
           <button aria-busy={submitting} disabled={submitting} className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-water-600 px-3 text-sm font-bold text-white transition-colors hover:bg-water-700 disabled:cursor-wait disabled:opacity-60" type="submit">
-            {submitting ? <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" /> : registrationDesign && <UserRoundPlus aria-hidden="true" size={20} />}
+            {submitting && <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin" />}
             {submitting ? (initialData ? "Updating resident…" : "Adding resident…") : initialData ? "Update resident" : "Add resident"}
           </button>
         </div>

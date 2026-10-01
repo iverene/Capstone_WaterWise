@@ -9,6 +9,11 @@ export function beginLogout() {
 export const TOKEN_STORAGE_KEY = "accessToken";
 const PERSISTENT_METER_READER_KEY = "waterwiseMeterReaderSession";
 const PERSISTENT_CONSUMER_KEY = "waterwiseConsumerPushSession";
+// 90-day absolute consumer session: minimal identity to restore the tab
+// session after close/relaunch so the 5min background refresh can renew the
+// 15m access cookie. No token/password stored; refresh cookie proves it.
+const CONSUMER_SESSION_KEY = "waterwiseConsumerSession";
+const CONSUMER_SESSION_GRACE_MS = 90 * 24 * 60 * 60 * 1000;
 const CONSUMER_PUSH_SESSION_ENABLED_KEY = "waterwiseConsumerPushSessionEnabled";
 // Offline grace for meter-reader PWA: how long a closed tab / offline relaunch
 // may reopen the readings workspace without re-login. No password or token is
@@ -77,6 +82,53 @@ function getPersistentMeterReaderSession() {
   return user ? { user } : null;
 }
 
+function sanitizeConsumerUser(user) {
+  if (!user || user.role !== "consumer" || user.id == null) return null;
+  const safe = { id: user.id, role: "consumer" };
+  if (user.username) safe.username = user.username;
+  if (user.email) safe.email = user.email;
+  if (user.name) safe.name = user.name;
+  return safe;
+}
+
+function writePersistentConsumer(user) {
+  try {
+    const safe = sanitizeConsumerUser(user);
+    if (!safe) {
+      window.localStorage.removeItem(CONSUMER_SESSION_KEY);
+      return;
+    }
+    const now = Date.now();
+    window.localStorage.setItem(
+      CONSUMER_SESSION_KEY,
+      JSON.stringify({ user: safe, loginAt: now, graceUntil: now + CONSUMER_SESSION_GRACE_MS }),
+    );
+  } catch {
+    // Best-effort only.
+  }
+}
+
+export function getPersistentConsumerUser() {
+  try {
+    const raw = window.localStorage.getItem(CONSUMER_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    const safe = sanitizeConsumerUser(session?.user);
+    if (!safe) {
+      window.localStorage.removeItem(CONSUMER_SESSION_KEY);
+      return null;
+    }
+    const graceUntil = Number(session?.graceUntil);
+    if (!Number.isFinite(graceUntil) || Date.now() >= graceUntil) {
+      window.localStorage.removeItem(CONSUMER_SESSION_KEY);
+      return null;
+    }
+    return safe;
+  } catch {
+    return null;
+  }
+}
+
 function getPersistentConsumerSession() {
   try {
     const session = JSON.parse(window.localStorage.getItem(PERSISTENT_CONSUMER_KEY));
@@ -126,12 +178,23 @@ export function storeSession({ user }) {
   }
   // Meter-reader PWA: persist minimal identity (no token/password) so closing
   // the tab / reopening the installed PWA offline restores the workspace.
+  // Consumers persist the same minimal identity for the 90-day absolute
+  // session so the background refresh can renew access after relaunch.
   // Other roles stay session-only.
   if (user?.role === "meter-reader") {
     writePersistentMeterReader(user);
   } else {
     try {
       window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+    } catch {
+      // Ignore.
+    }
+  }
+  if (user?.role === "consumer") {
+    writePersistentConsumer(user);
+  } else {
+    try {
+      window.localStorage.removeItem(CONSUMER_SESSION_KEY);
     } catch {
       // Ignore.
     }
@@ -165,6 +228,7 @@ export function clearSession() {
     window.sessionStorage.getItem(TOKEN_STORAGE_KEY) ||
     window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY) ||
     window.localStorage.getItem(PERSISTENT_METER_READER_KEY) ||
+    window.localStorage.getItem(CONSUMER_SESSION_KEY) ||
     window.localStorage.getItem(PERSISTENT_CONSUMER_KEY),
   );
   clearStoredApiCache();
@@ -180,6 +244,11 @@ export function clearSession() {
     // Ignore storage failures during logout.
   }
   window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
+  try {
+    window.localStorage.removeItem(CONSUMER_SESSION_KEY);
+  } catch {
+    // Ignore.
+  }
   disableConsumerPushSessionPersistence();
   if (hadSession) {
     window.queueMicrotask(() => {
@@ -245,6 +314,15 @@ export function getStoredAccount() {
       // Best-effort restore; callers still get the user below.
     }
     return persistent.user;
+  }
+  const persistentConsumer = getPersistentConsumerUser();
+  if (persistentConsumer) {
+    try {
+      window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(persistentConsumer));
+    } catch {
+      // Best-effort restore.
+    }
+    return persistentConsumer;
   }
   return getPersistentSession()?.user ?? null;
 }

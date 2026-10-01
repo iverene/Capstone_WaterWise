@@ -7,6 +7,7 @@ import {
 } from "../config/auth.js";
 import { supabase } from "../config/supabase.js";
 import { readSessionToken } from "../models/sessionCookieModels.js";
+import { getDeviceFingerprints, touchDeviceFingerprint } from "../models/deviceFingerprintModels.js";
 import {
   getInactivityTimeoutMs,
   isSessionIdle,
@@ -61,7 +62,7 @@ export async function authenticate(req, res, next) {
     const table = payload.role === "consumer" ? "consumers" : payload.role === "meter-reader" ? "meter_readers" : "admins";
     const { data, error: accountError } = await supabase
       .from(table)
-      .select("device_fingerprint_hash, password, status, created_at")
+      .select("password, status, created_at")
       .eq("id", userId)
       .maybeSingle();
     if (accountError) {
@@ -84,32 +85,26 @@ export async function authenticate(req, res, next) {
         message: "Your password was changed. Please sign in again.",
       });
     }
-    // Device binding is mandatory once a fingerprint is enrolled: a missing
-    // or mismatched header must not silently bypass the check.
-    // Fingerprint-as-CSRF: cookie sessions must always present the custom
-    // X-Device-Fingerprint header (simple cross-site forms cannot set custom
-    // headers due to CORS preflight). Bearer sessions keep legacy best-effort
-    // behavior during the dual-support transition.
-    const storedHash = data?.device_fingerprint_hash;
+    // Device binding: check if the request fingerprint is among the user's
+    // registered devices. Multiple concurrent sessions are supported.
     if (authMethod === "cookie" && !requestFingerprint) {
       return res.status(401).json({
         success: false,
         message: "Session device verification is required. Please sign in again.",
       });
     }
-    if (storedHash) {
-      if (!requestFingerprint) {
-        return res.status(401).json({
-          success: false,
-          message: "Session device verification is required. Please sign in again.",
-        });
-      }
-      const requestHash = hashFingerprint(requestFingerprint);
-      if (requestHash !== storedHash) {
-        return res.status(401).json({
-          success: false,
-          message: "Session device mismatch. Please sign in again.",
-        });
+    if (requestFingerprint) {
+      const storedHashes = await getDeviceFingerprints(userId, payload.role);
+      if (storedHashes.length > 0) {
+        const requestHash = hashFingerprint(requestFingerprint);
+        const matched = storedHashes.some((r) => r.fingerprint_hash === requestHash);
+        if (!matched) {
+          return res.status(401).json({
+            success: false,
+            message: "Session device mismatch. Please sign in again.",
+          });
+        }
+        touchDeviceFingerprint(userId, payload.role, requestHash).catch(() => {});
       }
     }
 
@@ -122,7 +117,7 @@ export async function authenticate(req, res, next) {
     // (walking between houses, reading meters). Their sessions remain
     // bounded by the absolute JWT expiry and device binding.
     const idleCheck = await isSessionIdle(payload.role, userId);
-    if (idleCheck.idle && payload.role !== "meter-reader") {
+    if (idleCheck.idle && payload.role !== "meter-reader" && payload.role !== "consumer") {
       return res.status(401).json({
         success: false,
         code: "SESSION_INACTIVE",

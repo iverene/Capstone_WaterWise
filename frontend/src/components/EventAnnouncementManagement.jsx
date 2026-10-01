@@ -189,7 +189,7 @@ export default function EventAnnouncementManagement() {
 
   return (
     <main className="space-y-5 sm:space-y-6">
-      <PageHeader description="Publish service updates and keep upcoming barangay activities visible in one familiar feed." eyebrow="Community workspace" title="WaterWise community home" />
+      <PageHeader description="Publish service updates and keep upcoming barangay activities visible in one familiar feed." title="WaterWise community home" />
 
       <div className="flex justify-end">
         <button

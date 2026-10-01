@@ -24,6 +24,8 @@ import AnalyticsDashboard from "./pages/analyticsDashboard";
 import Reports from "./pages/Reports";
 import ConsumerManagementPage from "./pages/ConsumerManagementPage";
 import AdminReadingsPage from "./pages/AdminReadingsPage";
+import ConsumerBillsPage from "./pages/ConsumerBillsPage";
+import ConsumerReadingsPage from "./pages/ConsumerReadingsPage";
 import BillingManagementPage from "./pages/BillingManagementPage";
 import EventManagementPage from "./pages/EventManagementPage";
 import AnnouncementManagementPage from "./pages/AnnouncementManagementPage";
@@ -38,6 +40,7 @@ import MeterReaderProfile from "./pages/MeterReaderProfile";
 import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation";
 import { clearApiCache } from "./services/apiCache";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
+import { startSessionRefresh } from "./services/sessionRefresh";
 
 
 
@@ -52,6 +55,8 @@ const roleAccess = {
       "/admin/account-information",
       "/admin/consumers",
       "/admin/readings",
+      "/admin/consumer-readings",
+      "/admin/consumer-billings",
       "/admin/billings",
       "/admin/payments",
       "/admin/flagged-accounts",
@@ -298,6 +303,26 @@ export function AppRoutes() {
         }
       />
       <Route
+        path="/admin/consumer-readings"
+        element={
+          <RoleRouteGuard requiredRole="admin">
+            <AppLayout>
+              <ConsumerReadingsPage />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        path="/admin/consumer-billings"
+        element={
+          <RoleRouteGuard requiredRole="admin">
+            <AppLayout>
+              <ConsumerBillsPage />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
         path="/admin/reports"
         element={
           <RoleRouteGuard requiredRole="admin">
@@ -438,6 +463,8 @@ export default function App() {
     clearApiCache();
     setDataRevision((revision) => revision + 1);
   }), [sessionRevision]);
+
+  useEffect(() => startSessionRefresh(), []);
 
   useEffect(() => {
     const sessionChanged = () => setSessionRevision((revision) => revision + 1);

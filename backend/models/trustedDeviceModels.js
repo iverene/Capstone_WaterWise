@@ -102,9 +102,8 @@ export async function verifyTrustedDevice({ token, adminId, role }) {
 export async function revokeAdminTrustedDevices(adminId) {
   const { error } = await supabase
     .from("admin_trusted_devices")
-    .update({ revoked_at: new Date().toISOString() })
-    .eq("admin_id", adminId)
-    .is("revoked_at", null);
+    .delete()
+    .eq("admin_id", adminId);
   if (error) throw new Error(`Failed to revoke trusted devices: ${error.message}`);
 }
 
@@ -132,10 +131,9 @@ export async function listAdminTrustedDevices({ adminId, currentToken }) {
 export async function revokeTrustedDevice({ adminId, deviceId, currentToken }) {
   const { data, error } = await supabase
     .from("admin_trusted_devices")
-    .update({ revoked_at: new Date().toISOString() })
+    .delete()
     .eq("id", deviceId)
     .eq("admin_id", adminId)
-    .is("revoked_at", null)
     .select("token_hash")
     .maybeSingle();
 
@@ -156,9 +154,8 @@ export async function revokeOtherTrustedDevices({ adminId, currentToken }) {
   }
   const { data, error } = await supabase
     .from("admin_trusted_devices")
-    .update({ revoked_at: new Date().toISOString() })
+    .delete()
     .eq("admin_id", adminId)
-    .is("revoked_at", null)
     .neq("token_hash", hashToken(currentToken))
     .select("id");
   if (error) throw new Error(`Failed to revoke other trusted devices: ${error.message}`);

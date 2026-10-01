@@ -1,37 +1,39 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, Clock3, Eye } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Eye } from "lucide-react";
 import BillingSummaryCard from "../components/BillingSummaryCard";
+import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
-import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import Table from "../components/Table";
 import { fetchBillingHistory } from "../services/billingAPI";
 
+const monthKeyOf = (billing) =>
+  String(billing.raw?.billing_date ?? billing.readingDate ?? "").slice(0, 7);
+
+const formatMonthLabel = (monthKey) => {
+  const date = new Date(`${monthKey}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return monthKey;
+  return new Intl.DateTimeFormat("en-PH", { month: "long", timeZone: "UTC" }).format(date);
+};
+
+const purokRank = (value) => {
+  const match = String(value ?? "").match(/(\d+)\s*$/);
+  return match ? Number(match[1]) : Number.POSITIVE_INFINITY;
+};
+
 const currency = (value) =>
   `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
-function StatusBadge({ status }) {
-  const config = status === "Paid"
-    ? { Icon: CheckCircle2, classes: "border-emerald-200 bg-emerald-50 text-emerald-700" }
-    : status === "Partially Paid"
-      ? { Icon: Clock3, classes: "border-amber-200 bg-amber-50 text-amber-800" }
-      : { Icon: AlertCircle, classes: "border-red-200 bg-red-50 text-red-700" };
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${config.classes}`}>
-      <config.Icon aria-hidden="true" className="h-3.5 w-3.5" />
-      {status}
-    </span>
-  );
-}
-
 export default function BillingManagementPage() {
+  const navigate = useNavigate();
   const [billingHistory, setBillingHistory] = useState([]);
   const [query, setQuery] = useState("");
+  const [purok, setPurok] = useState("all");
+  const [month, setMonth] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedResident, setSelectedResident] = useState(null);
 
   const loadBillingHistory = useCallback(async () => {
     try {
@@ -97,50 +99,96 @@ export default function BillingManagementPage() {
         ) || Number(second.id) - Number(first.id),
       ),
       consumerName: billings[0].consumerName,
-      overallBillCount: billings.length,
-      overallBillTotal: billings.reduce(
-        (total, billing) => total + Number(billing.amountDue || 0),
-        0,
-      ),
       purok: billings[0].purok,
     }));
   }, [billingHistory]);
 
+  const purokOptions = useMemo(() => [...new Set(
+    residentRows.map((resident) => resident.purok).filter(Boolean),
+  )].sort((left, right) =>
+    purokRank(left) - purokRank(right) || String(left).localeCompare(String(right)),
+  ), [residentRows]);
+
+  const monthOptions = useMemo(() => [...new Set(
+    billingHistory
+      .map((billing) => monthKeyOf(billing))
+      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+  )].sort((left, right) => right.localeCompare(left)), [billingHistory]);
+  const activeMonth = monthOptions.includes(month) ? month : monthOptions[0] ?? "";
+
   const visibleResidents = useMemo(() => {
     const term = query.trim().toLowerCase();
 
-    return residentRows.filter((resident) => {
-      const matchesQuery =
-        !term ||
-        [resident.consumerName, resident.purok].some((value) =>
-          String(value).toLowerCase().includes(term),
-        );
-
-      return matchesQuery;
-    });
-  }, [query, residentRows]);
+    return residentRows
+      .map((resident) => {
+        const billings = activeMonth
+          ? resident.billings.filter((billing) => monthKeyOf(billing) === activeMonth)
+          : resident.billings;
+        const currentBill = Number(billings[0]?.amountDue ?? 0);
+        const displayedIds = new Set(billings.map((billing) => billing.id));
+        const over30Days = resident.billings
+          .filter((billing) => !displayedIds.has(billing.id))
+          .reduce((total, billing) => {
+            const balance = Number(billing.outstandingBalance ?? 0);
+            if (!(balance > 0)) return total;
+            const referenceDate = String(billing.dueDate ?? billing.readingDate ?? "").slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(referenceDate)) return total;
+            const overdueDays = Math.floor(
+              (Date.now() - Date.parse(`${referenceDate}T00:00:00Z`)) / 86_400_000,
+            );
+            return overdueDays >= 30 ? total + balance : total;
+          }, 0);
+        return {
+          ...resident,
+          billings,
+          currentBill,
+          over30Days,
+          totalOutstanding: currentBill + over30Days,
+        };
+      })
+      .filter((resident) => {
+        const matchesQuery =
+          !term ||
+          String(resident.consumerName ?? "").toLowerCase().includes(term);
+        return resident.billings.length > 0 && matchesQuery &&
+          (purok === "all" || resident.purok === purok);
+      });
+  }, [activeMonth, purok, query, residentRows]);
 
   return (
     <main className="min-w-0 space-y-5 sm:space-y-6">
       <PageHeader
         description="Review billing periods, water usage, account balances, and collection status."
-        eyebrow="Billing administration"
         title="Billing Management"
       />
 
-      <BillingSummaryCard billingData={billingHistory} />
+      <BillingSummaryCard billingData={visibleResidents.flatMap((resident) => resident.billings)} />
 
       <div
         aria-label="Billing table controls"
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
+        className="flex flex-col gap-3 md:flex-row md:items-center"
         role="search"
       >
         <Search
-          ariaLabel="Search billing history"
+          ariaLabel="Search billing history by resident name"
           className="flex-1"
           onValueChange={setQuery}
-          placeholder="Search resident name or purok"
+          placeholder="Search resident name"
           value={query}
+        />
+        <Filter
+          ariaLabel="Filter billing history by purok"
+          className="w-full md:w-44"
+          onValueChange={setPurok}
+          options={[{ label: "All puroks", value: "all" }, ...purokOptions.map((option) => ({ label: option, value: option }))]}
+          value={purok}
+        />
+        <Filter
+          ariaLabel="Filter billing history by month"
+          className="w-full md:w-44"
+          onValueChange={setMonth}
+          options={monthOptions.map((option) => ({ label: formatMonthLabel(option), value: option }))}
+          value={activeMonth}
         />
       </div>
 
@@ -163,8 +211,9 @@ export default function BillingManagementPage() {
           ariaLabel="Resident billing accounts"
           columns={[
             { key: "name", label: "Name" },
-            { key: "purok", label: "Purok" },
-            { key: "bills", label: "Overall bills" },
+            { key: "current", label: "Current Bill", className: "text-right" },
+            { key: "over30", label: "Over 30 Days", className: "text-right" },
+            { key: "total", label: "Total", className: "text-right" },
             { key: "action", label: "Action", className: "text-right" },
           ]}
           data={visibleResidents}
@@ -179,82 +228,37 @@ export default function BillingManagementPage() {
           tableClassName="block w-full text-left text-sm md:table"
           renderRow={(resident) => (
             <>
-              <td className="px-4 py-4 font-extrabold text-navy-900">
-                {resident.consumerName}
+              <td className="col-span-2 md:col-span-1 md:px-4 md:py-4">
+                <span className="block font-extrabold leading-5 text-navy-900">
+                  {resident.consumerName}
+                </span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                  {resident.purok}
+                </span>
               </td>
-              <td className="px-4 py-4 text-slate-600">{resident.purok}</td>
-              <td className="px-4 py-4">
-                <p className="font-mono font-extrabold text-navy-900">
-                  {resident.overallBillCount} {resident.overallBillCount === 1 ? "bill" : "bills"}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {currency(resident.overallBillTotal)} total billed
-                </p>
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-right">
+                {currency(resident.currentBill)}
               </td>
-              <td className="flex flex-col items-stretch justify-end md:table-cell md:px-4 md:py-4 md:text-right">
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-right">
+                {currency(resident.over30Days)}
+              </td>
+              <td className="font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-right">
+                {currency(resident.totalOutstanding)}
+              </td>
+              <td className="justify-self-end md:justify-self-auto md:px-4 md:py-4 md:text-right">
                 <button
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-water-50 px-3 font-bold text-water-700 hover:bg-water-100 md:w-auto md:px-4"
-                  onClick={() => setSelectedResident(resident)}
+                  aria-label={`View all bills for ${resident.consumerName}`}
+                  className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+                  onClick={() => navigate(`/admin/consumer-billings?residentId=${encodeURIComponent(resident.id)}`)}
                   type="button"
                 >
                   <Eye aria-hidden="true" className="h-4 w-4" />
-                  View all billings
                 </button>
               </td>
             </>
           )}
         />
       )}
-
-      <Modal
-        closeLabel="Close resident billing history"
-        description={`${selectedResident?.overallBillCount ?? 0} billing records for this resident.`}
-        eyebrow="Resident billing history"
-        isOpen={Boolean(selectedResident)}
-        onClose={() => setSelectedResident(null)}
-        size="xl"
-        title={selectedResident?.consumerName}
-      >
-        <div className="p-4 sm:p-6">
-          <Table
-            ariaLabel={`${selectedResident?.consumerName ?? "Resident"} billing records`}
-            columns={[
-              { key: "period", label: "Billing Period" },
-              { key: "date", label: "Reading Date" },
-              { key: "consumption", label: "Consumption" },
-              { key: "total", label: "Total Bill", className: "text-right" },
-              { key: "balance", label: "Balance", className: "text-right" },
-              { key: "status", label: "Status" },
-            ]}
-            data={selectedResident?.billings ?? []}
-            getRowKey={(billing) => billing.id}
-            rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
-            tableClassName="block w-full text-left text-sm md:table"
-            renderRow={(billing) => (
-              <>
-                <td className="px-4 py-4 font-extrabold text-navy-900">
-                  {billing.billingPeriod}
-                </td>
-                <td className="px-4 py-4 font-mono text-xs text-slate-600">
-                  {billing.readingDate}
-                </td>
-                <td className="px-4 py-4 font-mono text-slate-700">
-                  {billing.cubicMetersConsumed} m³
-                </td>
-                <td className="px-4 py-4 text-right font-mono font-bold tabular-nums text-navy-900">
-                  {currency(billing.amountDue)}
-                </td>
-                <td className="px-4 py-4 text-right font-mono font-bold tabular-nums text-slate-700">
-                  {currency(billing.outstandingBalance)}
-                </td>
-                <td className="px-4 py-4">
-                  <StatusBadge status={billing.status} />
-                </td>
-              </>
-            )}
-          />
-        </div>
-      </Modal>
     </main>
   );
 }

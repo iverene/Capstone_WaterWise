@@ -221,24 +221,14 @@ function ConsumerManagementPage() {
     setPasswordOtpError("");
   };
 
+  const openAddResident = () => {
+    setSelectedConsumer(null);
+    setFormMode("add");
+  };
+
   return (
     <main className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." eyebrow="Resident accounts" title="Resident Management" />
-        <div className="hidden shrink-0 pt-8 lg:block">
-          <button
-            className="inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
-            onClick={() => {
-              setSelectedConsumer(null);
-              setFormMode("add");
-            }}
-            type="button"
-          >
-            <FiPlus aria-hidden="true" className="h-5 w-5" />
-            Add Resident
-          </button>
-        </div>
-      </div>
+      <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." title="Resident Management" />
 
       <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3">
         <KPI compact description="Community" icon={FiUsers} title="Total Residents" value={consumers.length} />
@@ -256,13 +246,13 @@ function ConsumerManagementPage() {
         onClose={closeForm}
         panelRoundedClass="rounded-xl"
         showCloseButton={false}
-        size="xl"
-        title={formMode === "edit" ? "Edit resident" : "Add resident"}
+        size={formMode === "add" ? "xl" : "lg"}
+        title={formMode === "edit" ? "Edit Resident" : "Add Resident"}
       >
         <div className={formMode === "add" ? "resident-registration-layout" : ""}>
           {formMode === "add" && <ResidentRegistrationIntro />}
           <div className={formMode === "add" ? "resident-registration-content" : ""}>
-            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident?s details and create secure sign-in credentials.</p></div><button aria-label="Close resident form" className="resident-registration-close" onClick={closeForm} type="button"><X size={21} /></button></header>}
+            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident's details and create secure sign-in credentials.</p></div><button aria-label="Close resident form" className="resident-registration-close" onClick={closeForm} type="button"><X size={21} /></button></header>}
             {error && (
               <p
                 className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 sm:mx-6"
@@ -285,7 +275,7 @@ function ConsumerManagementPage() {
         </div>
       </Modal>
 
-      <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify resident password change">
+      <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify Resident Password Change">
         {passwordChallenge && (
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={confirmPasswordChange}>
           <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{passwordChallenge?.maskedEmail ?? "your email"}</strong>. It expires in 5 minutes.</p>
@@ -307,24 +297,22 @@ function ConsumerManagementPage() {
         <Filter ariaLabel="Filter residents by purok" className="w-full sm:w-48" onValueChange={setPurok} options={purokOptions} value={purok} />
       </div>
 
+      <div className="flex justify-end">
+        <button
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+          onClick={openAddResident}
+          type="button"
+        >
+          <FiPlus aria-hidden="true" className="h-5 w-5" />
+          Add Resident
+        </button>
+      </div>
+
       <ConsumerListTable
         consumers={visibleConsumers}
         isLoading={isLoading}
         onEdit={selectConsumer}
       />
-
-      <button
-        aria-label="Add resident"
-        className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-water-600 px-5 font-bold text-white shadow-modal transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 lg:hidden"
-        onClick={() => {
-          setSelectedConsumer(null);
-          setFormMode("add");
-        }}
-        type="button"
-      >
-        <FiPlus aria-hidden="true" className="h-5 w-5" />
-        Add Resident
-      </button>
     </main>
   );
 }

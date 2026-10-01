@@ -20,8 +20,20 @@ function parseEventBlock(block) {
   }
 }
 
-function handleStreamUnauthorized() {
+async function handleStreamUnauthorized() {
   if (isLoggingOut() || !getStoredAccount()) return;
+  // Consumer/Admin/Super-admin access may lapse between 5min refresh ticks:
+  // try one silent refresh first. Terminal failures (absolute expiry,
+  // password change) log out.
+  if (["consumer", "admin", "super-admin"].includes(getStoredAccount()?.role)) {
+    try {
+      const { refreshSession } = await import("./auth.service.js");
+      await refreshSession();
+      return;
+    } catch {
+      // Fall through to logout below.
+    }
+  }
   // Mirror apiClient 401 handling so an expired/revoked/mismatched SSE
   // session ends the session instead of retrying every 3s forever.
   try {

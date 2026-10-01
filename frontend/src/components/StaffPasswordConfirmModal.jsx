@@ -29,7 +29,7 @@ export default function StaffPasswordConfirmModal({
       isOpen={isOpen}
       onClose={onClose}
       size="sm"
-      title="Confirm staff action"
+      title="Confirm Staff Action"
     >
       <form className="grid gap-4 p-5 sm:p-6" onSubmit={onSubmit}>
         <div className="rounded-xl border border-water-200 bg-water-50 p-4 text-sm leading-6 text-water-900">

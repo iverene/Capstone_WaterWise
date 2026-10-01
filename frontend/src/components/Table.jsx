@@ -80,6 +80,7 @@ export default function Table({
             </table>
           </div>
 
+          {totalPages > 1 && (
           <footer className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-center text-xs font-semibold text-slate-500 sm:text-left">
               Showing <span className="font-mono tabular-nums text-slate-700">{startIndex + 1}–{endIndex}</span> of <span className="font-mono tabular-nums text-slate-700">{data.length}</span>
@@ -108,6 +109,7 @@ export default function Table({
               </button>
             </div>
           </footer>
+          )}
         </>
       )}
     </section>

@@ -28,7 +28,6 @@ export default function AnnouncementsPage() {
       <PageHeader
         description="Browse all official notice updates from WaterWise Administration."
         descriptionClassName="!text-[13px] !leading-5 sm:!text-sm sm:!leading-6"
-        eyebrow="Community feed"
         title="Announcements"
       />
       {error && (
