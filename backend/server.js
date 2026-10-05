@@ -17,6 +17,7 @@ import reportRoutes from "./routes/reportRoutes.js";
 import changeEventRoutes from "./routes/changeEventRoutes.js";
 import systemSettingsRoutes from "./routes/systemSettingsRoutes.js";
 import { publishDataChange } from "./services/changeEventService.js";
+import { startDeviceSessionPruneScheduler } from "./services/deviceSessionPruneService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
 import { startPushNotificationWorker } from "./services/pushNotificationService.js";
 
@@ -183,6 +184,7 @@ const PORT = Number(process.env.PORT) || 5000;
 app.listen(PORT, () => {
   console.log(`WaterWise Backend running on http://localhost:${PORT}`);
   startNotificationReminderScheduler();
+  startDeviceSessionPruneScheduler();
   startPushNotificationWorker();
 });
 

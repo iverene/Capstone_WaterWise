@@ -85,8 +85,10 @@ export async function authenticate(req, res, next) {
         message: "Your password was changed. Please sign in again.",
       });
     }
-    // Device binding: check if the request fingerprint is among the user's
-    // registered devices. Multiple concurrent sessions are supported.
+    // Device binding: the request fingerprint must match an enrolled,
+    // unexpired device row. Fail closed: an empty list (all expired or none
+    // enrolled) rejects the request. getDeviceFingerprints already excludes
+    // expired rows.
     if (authMethod === "cookie" && !requestFingerprint) {
       return res.status(401).json({
         success: false,
@@ -95,17 +97,15 @@ export async function authenticate(req, res, next) {
     }
     if (requestFingerprint) {
       const storedHashes = await getDeviceFingerprints(userId, payload.role);
-      if (storedHashes.length > 0) {
-        const requestHash = hashFingerprint(requestFingerprint);
-        const matched = storedHashes.some((r) => r.fingerprint_hash === requestHash);
-        if (!matched) {
-          return res.status(401).json({
-            success: false,
-            message: "Session device mismatch. Please sign in again.",
-          });
-        }
-        touchDeviceFingerprint(userId, payload.role, requestHash).catch(() => {});
+      const requestHash = hashFingerprint(requestFingerprint);
+      const matched = storedHashes.some((r) => r.fingerprint_hash === requestHash);
+      if (!matched) {
+        return res.status(401).json({
+          success: false,
+          message: "Session device mismatch. Please sign in again.",
+        });
       }
+      touchDeviceFingerprint(userId, payload.role, requestHash).catch(() => {});
     }
 
     // 15-minute inactivity expiry: the JWT may still be within its absolute
