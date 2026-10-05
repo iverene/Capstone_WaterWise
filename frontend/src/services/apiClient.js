@@ -108,6 +108,36 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     const status = error.response?.status;
+    // Rate-limited (global/authStrict): never trigger silent refresh or
+    // logout. Surface Retry-After so callers (e.g. Login.jsx) can countdown.
+    if (status === 429) {
+      const retryAfter = Number(
+        error.response?.headers?.["retry-after"] ??
+          error.response?.data?.retryAfterSeconds,
+      );
+      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+        error.retryAfterSeconds = Math.ceil(retryAfter);
+      }
+      // Notify the global toast listener (RateLimitToast). Login.jsx keeps
+      // its own lock countdown; this toast is the visible warning for both
+      // AUTH (10/15min) and GLOBAL (300/15min) limits on every other page.
+      try {
+        const serverMessage = String(error.response?.data?.message ?? "");
+        const url = String(error.config?.url ?? "");
+        window.dispatchEvent(
+          new CustomEvent("waterwise:rate-limited", {
+            detail: {
+              message: serverMessage,
+              retryAfterSeconds: error.retryAfterSeconds ?? 0,
+              url,
+            },
+          }),
+        );
+      } catch {
+        // Non-browser / disabled events must never break the request chain.
+      }
+      return Promise.reject(error);
+    }
     const requestUrl = error.config?.url ?? "";
     const isPublicAuthRequest =
       requestUrl.startsWith("/auth/login") ||

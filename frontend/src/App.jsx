@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import RateLimitToast from "./components/RateLimitToast";
 import RouteAccessError from "./components/RouteAccessError";
 import SessionInactivityGuard from "./components/SessionInactivityGuard";
 import {
@@ -476,6 +477,7 @@ export default function App() {
     <BrowserRouter>
       <SessionExpiryGuard />
       <SessionInactivityGuard />
+      <RateLimitToast />
       <AppRoutes key={dataRevision} />
       <PWAInstallPrompt />
     </BrowserRouter>
