@@ -16,6 +16,11 @@ account (includes the OTP step). Stats poll every 5s.
 Backend must run on http://127.0.0.1:5000 (or set
 `WATERWISE_API_TARGET` env when starting vite).
 
+Production (Vercel, same as the main frontend): set
+`VITE_API_URL=https://<render-backend>` in the Vercel project
+Environment Variables (no backend URL lives in this repo).
+The dashboard origin must be in backend `ALLOWED_ORIGINS`.
+
 Counters reset on backend restart (memory-only limiter).
 
 ## Delete
