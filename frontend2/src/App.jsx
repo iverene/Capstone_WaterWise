@@ -112,10 +112,10 @@ export default function App() {
       try {
         await loadStats();
       } catch (err) {
-        if (err?.status === 401) {
+        if (err?.status === 401 || err?.status === 403) {
           stopPolling();
           setStep("login");
-          setError("Session ended. Please sign in again.");
+          setError("Session ended or not authorized. Please sign in again.");
         }
       }
     }, 5000);
@@ -129,8 +129,10 @@ export default function App() {
   useEffect(() => () => stopPolling(), []);
 
   async function enterDashboard(user) {
-    if (user?.role !== "admin" && user?.role !== "super-admin") {
-      setError("This dashboard needs an admin or super-admin account.");
+    // Super-admin only (fail-fast): the backend route also enforces it, so
+    // non-super-admin sessions never reach the stats data.
+    if (user?.role !== "super-admin") {
+      setError("This dashboard needs a super-admin account.");
       try {
         await api("/auth/logout", { method: "POST" });
       } catch {
@@ -232,7 +234,10 @@ export default function App() {
         >
           {step === "login" ? (
             <>
-              <h2 style={{ margin: "0 0 8px" }}>Admin sign in</h2>
+              <h2 style={{ margin: "0 0 8px" }}>Super-admin sign in</h2>
+              <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 8px" }}>
+                Rate-limit monitor — super-admin only.
+              </p>
               <label style={{ fontSize: 13 }}>
                 Email or username
                 <input
