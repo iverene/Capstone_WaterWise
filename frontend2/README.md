@@ -11,8 +11,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5174 — sign in with an **admin / super-admin**
-account (includes the OTP step). Stats poll every 5s.
+Open http://localhost:5174 — sign in with a **super-admin**
+account (includes the OTP step; admin accounts are rejected). Stats poll every 5s.
 Backend must run on http://127.0.0.1:5000 (or set
 `WATERWISE_API_TARGET` env when starting vite).
 
