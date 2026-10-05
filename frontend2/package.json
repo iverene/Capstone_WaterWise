@@ -1,0 +1,22 @@
+{
+  "name": "waterwise-rate-limit-dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone rate-limit monitor for WaterWise. Delete the whole frontend2/ folder to remove it.",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build",
+    "preview": "vite preview --port 5174"
+  },
+  "dependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "vite": "^8.0.16"
+  }
+}

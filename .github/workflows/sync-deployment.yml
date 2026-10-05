@@ -90,3 +90,45 @@ jobs:
             git commit -m "Sync backend from Capstone_WaterWise"
             git push origin main
           fi
+
+  sync-frontend2:
+    name: Sync Rate Limit Dashboard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Capstone_WaterWise
+        uses: actions/checkout@v4
+
+      - name: Clone Deployed_RateLimits
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_REPOS_TOKEN }}
+        run: |
+          git clone \
+            "https://x-access-token:${DEPLOY_TOKEN}@github.com/JAYCEEHERNANDEZ/Deployed_RateLimits.git" \
+            deployed-ratelimits
+
+      - name: Synchronize rate-limit dashboard files
+        run: |
+          rsync -av --delete \
+            --exclude=".git/" \
+            --exclude=".github/" \
+            --exclude="node_modules/" \
+            --exclude="dist/" \
+            --exclude=".env" \
+            --exclude=".env.*" \
+            frontend2/ deployed-ratelimits/
+
+      - name: Commit and push rate-limit dashboard
+        working-directory: deployed-ratelimits
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add --all
+
+          if git diff --cached --quiet; then
+            echo "No rate-limit dashboard changes to sync."
+          else
+            git commit -m "Sync rate-limit dashboard from Capstone_WaterWise"
+            git push origin main
+          fi

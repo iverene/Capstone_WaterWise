@@ -1,4 +1,8 @@
-import { redis } from "../config/redis.js";
+// Memory-only rate limiter (no Redis / zero Upstash commands).
+// Redis stays in use for consumption + session-activity caching; only the
+// limiter runs here so quota is spent on speed, not counting.
+// Single-instance safe (free Render + uptime pinger). Counters reset on
+// backend restart/redeploy by design; each window also auto-expires.
 
 const enabled = process.env.RATE_LIMIT_ENABLED !== "false";
 
@@ -7,8 +11,94 @@ const GLOBAL_WINDOW_MS = Number(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS ?? 15 * 
 const AUTH_MAX = Number(process.env.RATE_LIMIT_AUTH_MAX ?? 10);
 const AUTH_WINDOW_MS = Number(process.env.RATE_LIMIT_AUTH_WINDOW_MS ?? 15 * 60 * 1000);
 
-// In-memory fallback for local try-out (no Redis env) and for fail-open.
+const MAX_KEYS = Number(process.env.RATE_LIMIT_MAX_KEYS ?? 5000);
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
 const memoryStore = new Map();
+
+// Cumulative counters since backend start (reset on restart by design).
+const totals = {
+  global: { hits: 0, blocked: 0 },
+  auth: { hits: 0, blocked: 0 },
+};
+
+function maskKey(prefix, key) {
+  const body = key.startsWith(`${prefix}:`) ? key.slice(prefix.length + 1) : key;
+  if (prefix === "rl:auth") {
+    const separator = body.lastIndexOf(":");
+    const ip = separator >= 0 ? body.slice(0, separator) : body;
+    const identifier = separator >= 0 ? body.slice(separator + 1) : "";
+    return `${maskIp(ip)}:${maskIdentifier(identifier)}`;
+  }
+  return maskIp(body);
+}
+
+function maskIp(value) {
+  const parts = String(value).split(".");
+  if (parts.length === 4) return `${parts[0]}.${parts[1]}.${parts[2]}.*`;
+  if (String(value).includes(":")) return "ipv6:*";
+  return "***";
+}
+
+function maskIdentifier(value) {
+  const text = String(value ?? "");
+  const at = text.indexOf("@");
+  if (at > 0) return `${text[0]}***@${text.slice(at + 1)}`;
+  if (text.length <= 2) return "***";
+  return `${text[0]}***${text[text.length - 1]}`;
+}
+
+// Admin-only snapshot for the optional rate-limit dashboard (frontend2).
+// Keys are masked — no raw IPs or emails ever leave the server.
+export function getRateLimitStats() {
+  const now = Date.now();
+  const collect = (prefix) => {
+    const entries = [];
+    for (const [key, entry] of memoryStore) {
+      if (!key.startsWith(`${prefix}:`)) continue;
+      if (!entry || now >= entry.resetAt) continue;
+      entries.push({
+        key: maskKey(prefix, key),
+        count: entry.count,
+        resetInSeconds: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)),
+      });
+    }
+    entries.sort((a, b) => b.count - a.count);
+    return { activeKeys: entries.length, top: entries.slice(0, 10) };
+  };
+  return {
+    sinceRestart: true,
+    generatedAt: new Date().toISOString(),
+    global: {
+      max: GLOBAL_MAX,
+      windowSeconds: Math.max(1, Math.ceil(GLOBAL_WINDOW_MS / 1000)),
+      ...totals.global,
+      ...collect("rl:global"),
+    },
+    auth: {
+      max: AUTH_MAX,
+      windowSeconds: Math.max(1, Math.ceil(AUTH_WINDOW_MS / 1000)),
+      ...totals.auth,
+      ...collect("rl:auth"),
+    },
+  };
+}
+
+function sweepExpired() {
+  const now = Date.now();
+  for (const [key, entry] of memoryStore) {
+    if (!entry || now >= entry.resetAt) memoryStore.delete(key);
+  }
+  // Hard cap: evict oldest first (Map preserves insertion order).
+  while (memoryStore.size > MAX_KEYS) {
+    memoryStore.delete(memoryStore.keys().next().value);
+  }
+}
+
+if (typeof setInterval !== "undefined") {
+  const timer = setInterval(sweepExpired, SWEEP_INTERVAL_MS);
+  if (typeof timer.unref === "function") timer.unref();
+}
 
 function hitMemory(key, windowMs) {
   const now = Date.now();
@@ -16,6 +106,7 @@ function hitMemory(key, windowMs) {
   if (!entry || now >= entry.resetAt) {
     const resetAt = now + windowMs;
     memoryStore.set(key, { count: 1, resetAt });
+    if (memoryStore.size > MAX_KEYS) sweepExpired();
     return { count: 1, retryAfterSeconds: Math.ceil(windowMs / 1000) };
   }
   entry.count += 1;
@@ -23,25 +114,6 @@ function hitMemory(key, windowMs) {
     count: entry.count,
     retryAfterSeconds: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)),
   };
-}
-
-async function hitRedis(key, windowSeconds) {
-  try {
-    const count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, windowSeconds);
-    }
-    let ttl = windowSeconds;
-    try {
-      const raw = await redis.ttl(key);
-      if (Number.isFinite(Number(raw)) && Number(raw) > 0) ttl = Number(raw);
-    } catch {
-      // TTL is best-effort; windowSeconds is a safe fallback.
-    }
-    return { count: Number(count), retryAfterSeconds: Math.max(1, ttl) };
-  } catch {
-    return null;
-  }
 }
 
 function clientIp(req) {
@@ -60,20 +132,16 @@ function sanitizeIdentifier(value) {
     .slice(0, 120) || "anonymous";
 }
 
-function createLimiter({ prefix, windowMs, max, keyGenerator, skip, message }) {
-  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+function createLimiter({ name, prefix, windowMs, max, keyGenerator, skip, message }) {
   return async (req, res, next) => {
     if (!enabled) return next();
     if (skip?.(req)) return next();
 
     const key = `${prefix}:${keyGenerator(req)}`;
-    let result = null;
-
-    if (redis) {
-      result = await hitRedis(key, windowSeconds);
-      if (!result) result = hitMemory(key, windowMs);
-    } else {
-      result = hitMemory(key, windowMs);
+    const result = hitMemory(key, windowMs);
+    if (totals[name]) {
+      totals[name].hits += 1;
+      if (result.count > max) totals[name].blocked += 1;
     }
 
     const remaining = Math.max(0, max - result.count);
@@ -96,6 +164,7 @@ function createLimiter({ prefix, windowMs, max, keyGenerator, skip, message }) {
 // Generous guard for every /api/* request. Skips health + CORS preflight so
 // uptime checks and browsers never trip it during normal use.
 export const globalLimiter = createLimiter({
+  name: "global",
   prefix: "rl:global",
   windowMs: GLOBAL_WINDOW_MS,
   max: GLOBAL_MAX,
@@ -113,6 +182,7 @@ export const globalLimiter = createLimiter({
 // Strict guard for brute-forceable auth endpoints. Keyed by IP + identifier so
 // one shared-IP network (e.g. barangay hall WiFi) does not lock everyone out.
 export const authStrictLimiter = createLimiter({
+  name: "auth",
   prefix: "rl:auth",
   windowMs: AUTH_WINDOW_MS,
   max: AUTH_MAX,
