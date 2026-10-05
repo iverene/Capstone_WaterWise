@@ -26,7 +26,7 @@ import { startPushNotificationWorker } from "./services/pushNotificationService.
 const app = express();
 
 const normalizeOrigin = (value) => value.trim().replace(/\/$/, "");
-const productionOrigins = ["https://sucolwatersystem.vercel.app"];
+const productionOrigins = ["https://sucolwatersystem.vercel.app", ];
 const developmentOrigins =
   process.env.NODE_ENV === "production"
     ? []
