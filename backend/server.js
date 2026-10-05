@@ -16,6 +16,7 @@ import recomendationRoutes from "./routes/recommendationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import changeEventRoutes from "./routes/changeEventRoutes.js";
 import systemSettingsRoutes from "./routes/systemSettingsRoutes.js";
+import { globalLimiter } from "./middleware/rateLimit.js";
 import { publishDataChange } from "./services/changeEventService.js";
 import { startDeviceSessionPruneScheduler } from "./services/deviceSessionPruneService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
@@ -89,6 +90,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+app.use("/api", globalLimiter);
 
 const dataMutationMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ignoredChangePaths = [
