@@ -3,13 +3,26 @@
 // limiter runs here so quota is spent on speed, not counting.
 // Single-instance safe (free Render + uptime pinger). Counters reset on
 // backend restart/redeploy by design; each window also auto-expires.
-
 const enabled = process.env.RATE_LIMIT_ENABLED !== "false";
 
-const GLOBAL_MAX = Number(process.env.RATE_LIMIT_GLOBAL_MAX ?? 300);
-const GLOBAL_WINDOW_MS = Number(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS ?? 15 * 60 * 1000);
+const GLOBAL_MAX = Number(process.env.RATE_LIMIT_GLOBAL_MAX ?? 3000);
 const AUTH_MAX = Number(process.env.RATE_LIMIT_AUTH_MAX ?? 10);
-const AUTH_WINDOW_MS = Number(process.env.RATE_LIMIT_AUTH_WINDOW_MS ?? 15 * 60 * 1000);
+const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
+
+// Shared override: one env for both limiters. A limiter-specific env still
+// wins when set, so existing deployments keep working unchanged.
+const SHARED_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS);
+const sharedWindowMs =
+  Number.isFinite(SHARED_WINDOW_MS) && SHARED_WINDOW_MS > 0 ? SHARED_WINDOW_MS : null;
+
+const resolveWindowMs = (specific) => {
+  const specificMs = Number(specific);
+  if (Number.isFinite(specificMs) && specificMs > 0) return specificMs;
+  return sharedWindowMs ?? DEFAULT_WINDOW_MS;
+};
+
+const GLOBAL_WINDOW_MS = resolveWindowMs(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS);
+const AUTH_WINDOW_MS = resolveWindowMs(process.env.RATE_LIMIT_AUTH_WINDOW_MS);
 
 const MAX_KEYS = Number(process.env.RATE_LIMIT_MAX_KEYS ?? 5000);
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
