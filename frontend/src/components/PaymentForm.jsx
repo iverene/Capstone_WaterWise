@@ -142,26 +142,32 @@ export default function PaymentForm({
   const selectedBilling = billingRecords.find(
     (record) => String(record.id) === String(form.billingId),
   );
-  const selectedBillIsCurrentMonth =
-    String(selectedBilling?.raw?.billing_date ?? "").slice(0, 7) === today().slice(0, 7);
-  const selectedBillHasPartialPayment = selectedBilling?.status === "Partially Paid";
-  const allBillsBalance = residentBills.reduce(
-    (total, billing) => total + Number(billing.outstandingBalance || 0),
-    0,
-  );
-  const balance = form.paymentScope === "all"
-    ? allBillsBalance
-    : Number(selectedBilling?.outstandingBalance || 0);
+  const residentBillsSorted = residentBills; // already oldest-first sorted above
+  const totalOutstanding = Number(residentBillsSorted.reduce((t, b) => t + Number(b.outstandingBalance || 0), 0).toFixed(2));
+  const balance = totalOutstanding;
   const amountReceived = Number(form.amountReceived) || 0;
-  const amountApplied =
-    form.paymentMethod === "Cash" ? Math.min(amountReceived, balance) : amountReceived;
-  const changeGiven =
-    form.paymentMethod === "Cash" ? Math.max(amountReceived - balance, 0) : 0;
-  const remainingBalance = Math.max(balance - amountApplied, 0);
+  const amountApplied = Math.min(amountReceived, totalOutstanding);
+  const changeGiven = form.paymentMethod === "Cash" ? Math.max(amountReceived - amountApplied, 0) : 0;
+  const remainingBalance = Math.max(totalOutstanding - amountApplied, 0);
+  const previewAllocations = residentBillsSorted.reduce(
+    (state, b) => {
+      const outstanding = Number(b.outstandingBalance || 0);
+      const slice = Math.min(outstanding, state.left);
+      if (slice <= 0) return state;
+      return {
+        left: Math.max(state.left - slice, 0),
+        items: [
+          ...state.items,
+          { id: b.id, period: b.billingPeriod, invoice: b.invoiceNumber, outstanding, slice, leftAfter: Math.max(outstanding - slice, 0) },
+        ],
+      };
+    },
+    { left: amountApplied, items: [] },
+  ).items;
   const paymentStatus =
     amountApplied <= 0
       ? "Unpaid"
-      : amountApplied >= balance
+      : amountApplied >= totalOutstanding
         ? "Paid"
         : "Partially Paid";
 
@@ -226,28 +232,8 @@ export default function PaymentForm({
     if (!form.amountReceived) nextErrors.amountReceived = "Enter the amount received.";
     else if (Number(form.amountReceived) <= 0) {
       nextErrors.amountReceived = "The amount must be greater than zero.";
-    } else if (form.paymentScope === "all" && Number(form.amountReceived) < balance) {
-      nextErrors.amountReceived =
-        "The amount is not enough to pay all bills. Proceed with the oldest bill only for a per-month payment.";
-    } else if (
-      form.paymentScope === "oldest" &&
-      selectedBillHasPartialPayment &&
-      amountApplied < balance
-    ) {
-      nextErrors.amountReceived =
-        "This bill already has a partial payment. The next payment must settle the full remaining balance.";
-    } else if (
-      form.paymentScope === "oldest" &&
-      !selectedBillIsCurrentMonth &&
-      amountApplied < balance
-    ) {
-      nextErrors.amountReceived =
-        "Bills from previous months require full payment. Partial payment is allowed only for the current month.";
-    } else if (
-      form.paymentMethod !== "Cash" &&
-      Number(form.amountReceived) > balance
-    ) {
-      nextErrors.amountReceived = "Electronic payments cannot exceed the current balance.";
+    } else if (form.paymentMethod !== "Cash" && Number(form.amountReceived) > totalOutstanding) {
+      nextErrors.amountReceived = "Electronic payments cannot exceed the total outstanding balance.";
     }
     if (!form.paymentMethod) nextErrors.paymentMethod = "Select a payment method.";
     if (form.paymentMethod !== "Cash" && !form.referenceNumber.trim()) {
@@ -275,17 +261,15 @@ export default function PaymentForm({
       setSubmitting(true);
       const saved = await onSubmit({
         ...form,
-        amountPaid: amountApplied,
+        consumerId: Number(selectedBilling?.raw?.user_id ?? residentBills[0]?.raw?.user_id),
+        totalApplied: amountApplied,
         amountReceived,
         amountTendered: amountReceived,
-        billingId: Number(form.billingId),
-        billingIds: residentBills.map((billing) => billing.id),
-        currentBalance: balance,
         idempotencyKey: idempotencyKeyRef.current,
-        paymentStatus,
-        paymentScope: form.paymentScope,
+        paymentStatus: amountApplied >= totalOutstanding ? "Paid" : "Partially Paid",
         remainingBalance,
         changeGiven,
+        allocations: previewAllocations,
       });
 
       if (saved !== false) {
@@ -397,85 +381,32 @@ export default function PaymentForm({
                     {selectedBilling?.dueDate || "Not available"}
                   </span>
                 </div>
-                <p className={`mt-2 text-xs font-bold ${
-                  selectedBillIsCurrentMonth ? "text-water-700" : "text-amber-700"
-                }`}>
-                  {selectedBillHasPartialPayment
-                    ? "A partial payment was already made; full remaining balance is required"
-                    : selectedBillIsCurrentMonth
-                    ? "One partial payment is allowed for the current month"
-                    : "Full payment required for a previous month"}
+                <p className="mt-2 text-xs font-bold text-water-700">
+                  {`${residentBills.length} outstanding bill(s) · Total ${currency(totalOutstanding)} · Any amount pays oldest first`}
                 </p>
               </div>
             )}
 
-            {selectedResident && (
+            {selectedResident && previewAllocations.length > 0 && (
               <div className="mt-4 space-y-4">
-
-                {residentBills.length > 1 && (
-                  <>
-                    <fieldset>
-                      <legend className="text-sm font-bold text-navy-900">Payment coverage</legend>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      {[
-                        {
-                          label: selectedBillIsCurrentMonth
-                            ? "Oldest bill only"
-                            : "Oldest bill (full payment required)",
-                          value: "oldest",
-                          amount: selectedBilling?.outstandingBalance,
-                        },
-                        { label: `Pay all ${residentBills.length} bills`, value: "all", amount: allBillsBalance },
-                      ].map((option) => (
-                        <label
-                          className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-                            form.paymentScope === option.value
-                              ? "border-water-500 bg-water-50 ring-2 ring-water-100"
-                              : "border-slate-200 bg-white hover:border-water-300"
-                          }`}
-                          key={option.value}
-                        >
-                          <input
-                            checked={form.paymentScope === option.value}
-                            className="sr-only"
-                            name="paymentScope"
-                            onChange={() => setForm((previous) => ({
-                              ...previous,
-                              amountReceived: "",
-                              paymentScope: option.value,
-                            }))}
-                            type="radio"
-                            value={option.value}
-                          />
-                          <span className="text-sm font-bold text-navy-900">{option.label}</span>
-                          <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-slate-600">
-                            {currency(option.amount)}
-                          </span>
-                        </label>
-                      ))}
+                <div>
+                  <p className="text-sm font-bold text-navy-900">Waterfall preview</p>
+                  <div className="mt-2 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    {previewAllocations.map((allocation) => (
+                      <div className="flex items-center justify-between gap-4 px-4 py-3" key={allocation.id}>
+                        <div>
+                          <p className="font-semibold text-navy-900">{allocation.period}</p>
+                          <p className="mt-0.5 font-mono text-xs text-slate-500">
+                            {allocation.invoice} · {currency(allocation.slice)} applied
+                          </p>
+                        </div>
+                        <p className="font-mono text-sm font-extrabold text-slate-700">
+                          {currency(allocation.leftAfter)} left
+                        </p>
                       </div>
-                    </fieldset>
-
-                    <div>
-                      <p className="text-sm font-bold text-navy-900">Other outstanding bills</p>
-                      <div className="mt-2 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                        {residentBills.slice(1).map((billing) => (
-                          <div className="flex items-center justify-between gap-4 px-4 py-3" key={billing.id}>
-                            <div>
-                              <p className="font-semibold text-navy-900">{billing.billingPeriod}</p>
-                              <p className="mt-0.5 font-mono text-xs text-slate-500">
-                                {billing.invoiceNumber} · Due {billing.dueDate || "Not available"}
-                              </p>
-                            </div>
-                            <p className="font-mono text-sm font-extrabold text-slate-700">
-                              {currency(billing.outstandingBalance)}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
           </section>
@@ -515,26 +446,6 @@ export default function PaymentForm({
                   value={form.amountReceived}
                 />
                 {error("amountReceived")}
-                {form.paymentScope === "all" &&
-                  amountReceived > 0 &&
-                  amountReceived < balance &&
-                  !errors.amountReceived && (
-                    <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="status">
-                      <p className="font-semibold">
-                        The received amount is not enough to pay all outstanding bills.
-                      </p>
-                      <button
-                        className="mt-1 min-h-9 font-bold text-water-700 underline"
-                        onClick={() => setForm((previous) => ({
-                          ...previous,
-                          paymentScope: "oldest",
-                        }))}
-                        type="button"
-                      >
-                        Proceed with oldest bill only
-                      </button>
-                    </div>
-                  )}
               </div>
 
               <div>
@@ -639,7 +550,7 @@ export default function PaymentForm({
             <ReviewRow label="Resident" value={selectedBilling?.consumerName} />
             <ReviewRow
               label="Payment coverage"
-              value={form.paymentScope === "all" ? `All ${residentBills.length} outstanding bills` : "Oldest bill only"}
+              value={`${residentBills.length} outstanding bill(s) · Oldest first`}
             />
             <ReviewRow label="Starting invoice" value={selectedBilling?.invoiceNumber} />
             <ReviewRow label="Starting billing period" value={selectedBilling?.billingPeriod} />
