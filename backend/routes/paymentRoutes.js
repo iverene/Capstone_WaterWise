@@ -1,6 +1,7 @@
 import express from "express";
 import {
   addPayment,
+  allocatePayment,
   listBillingPayments,
   listConsumerPayments,
   listPayments,
@@ -22,7 +23,8 @@ router.get(
   listConsumerPayments
 );
 router.get("/billing/:billingId", authorizeRoles("admin"), listBillingPayments);
-router.get("/:id", authorizeRoles("admin"), showPayment);
+router.post("/allocate", authorizeRoles("admin"), allocatePayment);
 router.post("/", authorizeRoles("admin"), addPayment);
+router.get("/:id", authorizeRoles("admin"), showPayment);
 
 export default router;
