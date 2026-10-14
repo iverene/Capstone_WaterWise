@@ -113,6 +113,66 @@ export function getRefreshTokenDuration(role = "consumer") {
   return /^\d+$/.test(raw) ? Number(raw) : raw;
 }
 
+// --- Device session expiry (user_device_sessions.expires_at) ---
+//
+// A device row is trusted for the role's absolute session lifetime
+// (refresh-token lifetime per role; 7 days for meter readers who have no
+// refresh token), plus a small grace so a still-valid access token never
+// 401s on device grounds alone.
+
+const MS_PER_UNIT = {
+  ms: 1,
+  s: 1000,
+  m: 60 * 1000,
+  h: 60 * 60 * 1000,
+  d: 24 * 60 * 60 * 1000,
+  w: 7 * 24 * 60 * 60 * 1000,
+  y: 365 * 24 * 60 * 60 * 1000,
+};
+
+function parseJwtDurationToMs(value, fallbackMs) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value * 1000 : fallbackMs;
+  }
+  if (typeof value !== "string") return fallbackMs;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return seconds > 0 ? seconds * 1000 : fallbackMs;
+  }
+  const match = trimmed.match(/^(\d+)\s*(ms|s|m|h|d|w|y)$/i);
+  if (!match) return fallbackMs;
+  const amount = Number(match[1]);
+  const unit = MS_PER_UNIT[match[2].toLowerCase()];
+  if (!(amount > 0) || !unit) return fallbackMs;
+  return amount * unit;
+}
+
+const DEFAULT_DEVICE_SESSION_MS_BY_ROLE = {
+  consumer: 90 * 24 * 60 * 60 * 1000,
+  admin: 60 * 60 * 1000,
+  "super-admin": 30 * 60 * 1000,
+  "meter-reader": 7 * 24 * 60 * 60 * 1000,
+};
+
+export function getDeviceSessionLifetimeMs(role) {
+  if (role === "meter-reader") {
+    // Meter readers have no refresh token; match the 7-day offline grace.
+    // Optional override; defaults apply when unset or invalid.
+    const days = readPositiveInt("DEVICE_SESSION_DAYS_METER_READER", 7, 1, 90);
+    return days * 24 * 60 * 60 * 1000;
+  }
+  const fallback = DEFAULT_DEVICE_SESSION_MS_BY_ROLE[role] ?? DEFAULT_DEVICE_SESSION_MS_BY_ROLE.consumer;
+  return parseJwtDurationToMs(getRefreshTokenDuration(role), fallback);
+}
+
+export function getDeviceSessionGraceMs(role) {
+  // The last access token issued before the absolute cap may outlive the
+  // device row by up to one access-token lifetime. Cover it plus margin.
+  const fallback = 10 * 60 * 1000;
+  return parseJwtDurationToMs(getAccessTokenDuration(role), fallback) + 5 * 60 * 1000;
+}
+
 // --- Priority 1 security tunables (all optional; documented defaults apply) ---
 
 const DEFAULT_TRUSTED_DEVICE_DAYS_BY_ROLE = {

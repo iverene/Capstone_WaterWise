@@ -15,19 +15,28 @@ import anomaly from "./routes/anomalyRoutes.js";
 import recomendationRoutes from "./routes/recommendationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import changeEventRoutes from "./routes/changeEventRoutes.js";
+import rateLimitRoutes from "./routes/rateLimitRoutes.js";
 import systemSettingsRoutes from "./routes/systemSettingsRoutes.js";
+import { globalLimiter } from "./middleware/rateLimit.js";
 import { publishDataChange } from "./services/changeEventService.js";
+import { startDeviceSessionPruneScheduler } from "./services/deviceSessionPruneService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
 import { startPushNotificationWorker } from "./services/pushNotificationService.js";
 
 const app = express();
 
 const normalizeOrigin = (value) => value.trim().replace(/\/$/, "");
-const productionOrigins = ["https://sucolwatersystem.vercel.app"];
+const productionOrigins = ["https://sucolwatersystem.vercel.app", ];
 const developmentOrigins =
   process.env.NODE_ENV === "production"
     ? []
-    : ["http://localhost:5173", "http://127.0.0.1:5173"];
+    : [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        // Standalone rate-limit dashboard (frontend2, port 5174).
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+      ];
 const configuredOrigins = [
   ...productionOrigins,
   ...developmentOrigins,
@@ -50,7 +59,7 @@ const isAllowedOrigin = (origin) => {
         /^10\./.test(hostname) ||
         /^192\.168\./.test(hostname) ||
         /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
-      if (protocol === "http:" && port === "5173" && isPrivateLanHost) return true;
+      if (protocol === "http:" && ["5173", "5174"].includes(port) && isPrivateLanHost) return true;
     } catch {
       return false;
     }
@@ -88,6 +97,7 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "1mb" }));
+app.use("/api", globalLimiter);
 
 const dataMutationMethods = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ignoredChangePaths = [
@@ -151,6 +161,7 @@ app.use("/api/anomaly", anomaly);
 app.use("/api/recommendation", recomendationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/changes", changeEventRoutes);
+app.use("/api/admin/rate-limits", rateLimitRoutes);
 app.use("/api/system-settings", systemSettingsRoutes);
 
 app.use((error, req, res, next) => {
@@ -183,6 +194,7 @@ const PORT = Number(process.env.PORT) || 5000;
 app.listen(PORT, () => {
   console.log(`WaterWise Backend running on http://localhost:${PORT}`);
   startNotificationReminderScheduler();
+  startDeviceSessionPruneScheduler();
   startPushNotificationWorker();
 });
 

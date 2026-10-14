@@ -46,7 +46,7 @@ backend/
 
 - Issued on successful login
 - Contains `role` and `sub` (user ID) claims
-- Expires based on role: Consumer (4h), Meter Reader (2h), Admin (1h), Super Admin (30min)
+- Expires based on role (access token): Consumer (10m), Meter Reader (8h), Admin (10m), Super Admin (10m)
 - Verified on every protected request
 
 ### Device Fingerprint Binding
@@ -57,21 +57,21 @@ WaterWise binds JWT access tokens to the device that logged in. If a token is st
 
 1. Client generates a fingerprint from browser properties (userAgent, screen, timezone, etc.)
 2. Fingerprint is sent as `X-Device-Fingerprint` header on every request
-3. Server hashes the fingerprint (SHA-256) and stores it in the user's DB row on login
-4. On each request, server compares the incoming fingerprint hash with the stored hash
+3. Server hashes the fingerprint (SHA-256) and stores it in the `user_device_sessions` junction table on login (one row per device, multiple devices allowed)
+4. On each request, server compares the incoming fingerprint hash with the stored device sessions (fail-closed on expiry via `expires_at`)
 5. Mismatch → 401 "Session device mismatch"
 
 **Files:**
 
 | File | Purpose |
 | --- | --- |
-| `controllers/authControllers.js` | `hashFingerprint()`, `storeDeviceFingerprint()`, `getStoredFingerprintHash()` |
-| `middleware/authMiddleware.js` | Verifies fingerprint hash against DB on every request |
-| `routes/authRoutes.js` | `POST /api/auth/logout` clears fingerprint from DB |
+| `models/deviceFingerprintModels.js` | `addDeviceFingerprint()`, `hasDeviceFingerprint()`, `touchDeviceFingerprint()`, `removeDeviceFingerprint()` |
+| `middleware/authMiddleware.js` | Verifies fingerprint hash against `user_device_sessions` on every request |
+| `routes/authRoutes.js` | `POST /api/auth/logout` clears device session from DB |
 
 **Logout:**
 
-`POST /api/auth/logout` clears the `device_fingerprint_hash` from the database, revoking the fingerprint.
+`POST /api/auth/logout` removes the device session row from `user_device_sessions`, revoking the fingerprint.
 
 ### Admin OTP + Trusted Device
 
@@ -84,7 +84,7 @@ WaterWise binds JWT access tokens to the device that logged in. If a token is st
 
 - bcrypt hashing with salt
 - OTP-based password reset and change
-- Account lockout after 5 failed attempts (5 minute cooldown)
+- Account lockout enforced in JS (`models/authModels.js`) using `LOGIN_MAX_ATTEMPTS` / `LOGIN_LOCKOUT_MINUTES` from `.env` (defaults: 5 attempts, 3 minute lockout)
 
 ### Staff Action OTP
 
@@ -160,9 +160,14 @@ Supported actions: `manage-staff`, `create-admin`, `create-meter-reader`, `updat
 
 Run migrations from `db/` folder in Supabase SQL Editor:
 
-1. `migration.sql` — main schema
-2. `fingerprint_migration.sql` — adds `device_fingerprint_hash` column
-3. `system_settings_migration.sql` — adds `system_settings` table with default water rate
+- `full_setup_migration.sql` — consolidated one-shot setup (recommended for fresh installs). Schema only, in order:
+  1. Base schema (`migration.sql`)
+  2. `system_settings` table + default rate
+  3. Inactivity (`last_activity_at`)
+  4. Multi-device `user_device_sessions` junction table (fresh-create + conditional legacy migrate)
+  5. Device session expiry (`expires_at`)
+- Individual files (`migration.sql`, `system_settings_migration.sql`, `inactivity_migration.sql`, `multi_device_migration.sql`, `device_session_expiry_migration.sql`, etc.) — kept for reference / upgrading existing installs.
+- Seed files (`seed_*.sql`) — run separately after schema setup when test accounts are needed.
 
 ## Recent Changes
 

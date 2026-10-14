@@ -3,6 +3,8 @@ import jwt from "jsonwebtoken";
 import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import {
   getAccessTokenDuration,
+  getDeviceSessionGraceMs,
+  getDeviceSessionLifetimeMs,
   getJwtSecret,
   getLoginLockoutMinutes,
   getLoginMaxAttempts,
@@ -234,7 +236,12 @@ function createRefreshToken(user, passwordHash, loginAt, absoluteExpSeconds) {
 
 async function storeDeviceFingerprint(userId, role, fingerprint) {
   const hash = hashFingerprint(fingerprint);
-  await addDeviceFingerprint(userId, role, hash);
+  // Absolute device trust: role session lifetime plus grace for the last
+  // access token. Re-login refreshes expiry via the upsert.
+  const expiresAt = new Date(
+    Date.now() + getDeviceSessionLifetimeMs(role) + getDeviceSessionGraceMs(role),
+  ).toISOString();
+  await addDeviceFingerprint(userId, role, hash, {}, expiresAt);
 }
 
 async function getStoredFingerprintHashes(userId, role) {
@@ -586,15 +593,15 @@ export async function refreshSession(req, res) {
       return res.status(401).json({ success: false, message: "Your password was changed. Please sign in again." });
     }
     const requestFingerprint = req.get("x-device-fingerprint");
+    // Fail closed: no enrolled (unexpired) device, or no match, rejects the
+    // refresh. getStoredFingerprintHashes already excludes expired rows.
     const storedHashes = await getStoredFingerprintHashes(userId, role);
-    if (storedHashes.length > 0) {
-      if (!requestFingerprint) return res.status(401).json({ success: false, message: "Session device verification is required. Please sign in again." });
-      const requestHash = hashFingerprint(requestFingerprint);
-      if (!storedHashes.includes(requestHash)) {
-        return res.status(401).json({ success: false, message: "Session device mismatch. Please sign in again." });
-      }
-      touchDeviceFingerprint(userId, role, requestHash).catch(() => {});
+    if (!requestFingerprint) return res.status(401).json({ success: false, message: "Session device verification is required. Please sign in again." });
+    const requestHash = hashFingerprint(requestFingerprint);
+    if (!storedHashes.includes(requestHash)) {
+      return res.status(401).json({ success: false, message: "Session device mismatch. Please sign in again." });
     }
+    touchDeviceFingerprint(userId, role, requestHash).catch(() => {});
     // Intentionally no touchSessionActivity(): the 5min refresh renews the
     // access token only; the 15m inactivity logout still applies.
     const user = { id: account.id, username: account.username, email: account.email, name: account.username, role, status: account.status };
