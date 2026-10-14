@@ -51,7 +51,7 @@ BEGIN
         RAISE EXCEPTION 'A valid payment idempotency key is required.';
     END IF;
 
-    SELECT * INTO v_existing FROM payments WHERE idempotency_key = TRIM(p_idempotency_key) LIMIT 1;
+    SELECT * INTO v_existing FROM payments WHERE idempotency_key LIKE TRIM(p_idempotency_key) || ':%' LIMIT 1;
     IF FOUND THEN
         SELECT jsonb_agg(to_jsonb(p) - 'idempotency_key') INTO v_payments FROM payments p WHERE p.idempotency_key LIKE TRIM(p_idempotency_key) || '%';
         RETURN jsonb_build_object('payments', COALESCE(v_payments, '[]'::JSONB), 'replayed', true);
