@@ -133,6 +133,12 @@ export default function PaymentProcessingPage() {
     try {
       setError("");
       const consumerId = Number(billing.raw?.user_id);
+      if (!Number.isFinite(consumerId) || consumerId <= 0) {
+        const message = "The selected resident has no valid account ID. Reload the billing list and try again.";
+        setError(message);
+        toast.warning("Billing record unavailable", message);
+        return false;
+      }
       const { payments: apiPayments, totalApplied } = await recordWaterfallPayment({
         amountTendered: Number(payment.amountTendered ?? payment.totalApplied),
         consumerId,
@@ -142,7 +148,7 @@ export default function PaymentProcessingPage() {
         referenceNumber: payment.referenceNumber,
         totalApplied: Number(payment.totalApplied),
       });
-      const savedPayments = apiPayments.map((p, i) => {
+      const savedPayments = apiPayments.map((p) => {
         const target = billingRecords.find((r) => r.id === p.billingId) ?? billing;
         return { ...p, address: target.address, amountDue: p.amountPaid, billingId: p.billingId, consumerName: target.consumerName, currentReading: target.currentReading, invoiceNumber: target.invoiceNumber, name: target.consumerName, paymentStatus: p.paymentStatus, previousReading: target.previousReading, remainingBalance: p.remainingBalance };
       });
@@ -167,7 +173,7 @@ export default function PaymentProcessingPage() {
         0,
       );
       toast.success(
-        payment.paymentScope === "all" ? "All bills paid" : "Payment recorded",
+        "Payment recorded",
         `${billing.consumerName}'s payment of ₱${totalSaved.toLocaleString("en-PH", { minimumFractionDigits: 2 })} was saved.`,
       );
       return { ...savedPayments[0], amountPaid: totalApplied, paymentCount: savedPayments.length, payments: savedPayments };

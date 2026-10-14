@@ -54,7 +54,6 @@ function createInitialPayment(initialData, billingRecords) {
     currentBalance: String(oldestBilling?.outstandingBalance ?? ""),
     paymentDate: initialData?.paymentDate ?? today(),
     paymentMethod: initialData?.paymentMethod ?? "Cash",
-    paymentScope: "oldest",
     referenceNumber: initialData?.referenceNumber ?? "",
     residentKey: selectedResidentKey,
   };
@@ -205,7 +204,6 @@ export default function PaymentForm({
       billingId: oldestBilling?.id ?? "",
       consumerName: resident.name,
       currentBalance: String(oldestBilling?.outstandingBalance ?? ""),
-      paymentScope: "oldest",
       residentKey: resident.key,
     }));
     setErrors((previous) => ({ ...previous, billingId: "", resident: "" }));
