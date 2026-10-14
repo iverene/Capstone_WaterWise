@@ -84,3 +84,24 @@ export async function recordPayment(payload, options = {}) {
     payment: normalizePaymentRecord(result),
   };
 }
+
+export async function recordWaterfallPayment(payload, options = {}) {
+  const response = await apiClient.post("/payments/allocate", {
+    consumerId: Number(payload.consumerId),
+    amountTendered: Number(payload.amountTendered ?? payload.totalApplied),
+    idempotencyKey: payload.idempotencyKey,
+    paymentDate: payload.paymentDate,
+    paymentMethod: payload.paymentMethod,
+    referenceNumber: payload.referenceNumber || null,
+    totalApplied: Number(payload.totalApplied ?? payload.amount),
+  }, options);
+  const result = response.data?.data ?? {};
+  const raws = Array.isArray(result.payments) ? result.payments : [];
+  return {
+    billings: result.billings ?? [],
+    changeGiven: Number(result.changeGiven ?? result.change_given ?? 0),
+    payments: raws.map(normalizePaymentRecord),
+    replayed: Boolean(result.replayed),
+    totalApplied: Number(result.totalApplied ?? result.total_applied ?? 0),
+  };
+}

@@ -1,5 +1,6 @@
 import {
   createPayment,
+  createWaterfallPayment,
   getPaymentById,
   getPayments,
   getPaymentsByBilling,
@@ -64,5 +65,17 @@ export async function listConsumerPayments(req, res) {
     });
   } catch (error) {
     return sendError(res, error, "Failed to retrieve consumer payments.");
+  }
+}
+
+export async function allocatePayment(req, res) {
+  try {
+    return res.status(201).json({
+      success: true,
+      message: "Payment allocated oldest to newest.",
+      data: await createWaterfallPayment(req.body ?? {}),
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to allocate payment.");
   }
 }

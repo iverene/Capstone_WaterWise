@@ -493,17 +493,13 @@ Search and table filters operate at the grouped resident level. Detail modals re
 
 WaterWise enforces payment order in both the frontend and backend:
 
-1. The resident's oldest outstanding bill is selected automatically; administrators cannot choose a newer month first.
-2. A bill outside the current Manila month must be paid in full.
-3. Partial payment is allowed only for the current Manila month's bill.
-4. **Oldest bill only** applies the payment to the automatically selected oldest bill.
-5. **Pay all bills** requires the full combined outstanding amount and creates bill-level transactions from oldest to newest.
-6. The administrator enters the amount received. If it cannot cover **Pay all bills**, the form blocks submission and offers **Proceed with oldest bill only**.
-7. Cash overpayment is returned as change. GCash and bank-transfer payments cannot exceed the applicable balance and require a reference number.
-8. Payment date is read-only and uses the current date in the `Asia/Manila` timezone.
-9. Idempotency keys protect payment retries from creating duplicate financial records.
+1. The payment applies oldest outstanding bill first, cascading any remainder to the next bills.
+2. Any positive amount is accepted; repeated partials are allowed.
+3. One tender creates one payment row per bill touched (e.g. 750 vs 500+500 → 500 Paid + 250 Partially Paid, 250 left).
+4. Cash tendered may exceed the total; excess returns as change. GCash payments must equal the applied amount, cannot exceed the total, and require a reference number.
+5. Payment date is read-only Manila today. Idempotency keys cover the whole allocation.
 
-The relevant payment endpoint is `POST /api/payments`. Direct API calls are subject to the same oldest-first and full-payment rules.
+The relevant payment endpoint is POST /api/payments/allocate. Direct API calls are subject to the same waterfall rules above. Legacy POST /api/payments (single-bill, billingId) remains for backward compat.
 
 ## Flagged Accounts and Disconnection
 
