@@ -69,7 +69,7 @@ export default function PaymentModal({
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 {completedPayment.paymentCount > 1
-                  ? `${completedPayment.paymentCount} bills were paid from oldest to newest.`
+                  ? `${completedPayment.paymentCount} bills were paid oldest to newest (waterfall).`
                   : "The transaction is in the payment ledger and the billing balance has been updated."}
               </p>
 

@@ -13,7 +13,7 @@ import { useToast } from "../components/Toast";
 import { fetchBillingHistory } from "../services/billingAPI";
 import {
   fetchPaymentHistory,
-  recordPayment as recordPaymentRequest,
+  recordWaterfallPayment,
 } from "../services/paymentAPI";
 
 function enrichPayments(paymentHistory, billings) {
@@ -132,54 +132,20 @@ export default function PaymentProcessingPage() {
 
     try {
       setError("");
-      const consumerKey = String(billing.raw?.user_id ?? billing.consumerName);
-      const targetBillings = payment.paymentScope === "all"
-        ? billingRecords
-            .filter(
-              (record) =>
-                Number(record.outstandingBalance) > 0 &&
-                String(record.raw?.user_id ?? record.consumerName) === consumerKey,
-            )
-            .sort((first, second) =>
-              String(first.raw?.billing_date ?? "").localeCompare(
-                String(second.raw?.billing_date ?? ""),
-              ) || Number(first.id) - Number(second.id),
-            )
-        : [billing];
-      const savedPayments = [];
-
-      for (let index = 0; index < targetBillings.length; index += 1) {
-        const targetBilling = targetBillings[index];
-        const isLastBilling = index === targetBillings.length - 1;
-        const amountPaid = payment.paymentScope === "all"
-          ? Number(targetBilling.outstandingBalance)
-          : payment.amountPaid;
-        const amountTendered = payment.paymentMethod === "Cash" && isLastBilling
-          ? amountPaid + Number(payment.changeGiven || 0)
-          : amountPaid;
-        const result = await recordPaymentRequest({
-          amountPaid,
-          amountTendered,
-          billingId: targetBilling.id,
-          idempotencyKey: `${payment.idempotencyKey}:${targetBilling.id}`,
-          paymentDate: payment.paymentDate,
-          paymentMethod: payment.paymentMethod,
-          referenceNumber: payment.referenceNumber,
-        });
-        savedPayments.push({
-          ...result.payment,
-          address: targetBilling.address,
-          amountDue: result.payment.amountPaid,
-          billingId: targetBilling.id,
-          consumerName: targetBilling.consumerName,
-          currentReading: targetBilling.currentReading,
-          invoiceNumber: targetBilling.invoiceNumber,
-          name: targetBilling.consumerName,
-          paymentStatus: result.billing.status,
-          previousReading: targetBilling.previousReading,
-          remainingBalance: Number(result.billing.remaining_balance),
-        });
-      }
+      const consumerId = Number(billing.raw?.user_id);
+      const { payments: apiPayments, totalApplied } = await recordWaterfallPayment({
+        amountTendered: Number(payment.amountTendered ?? payment.totalApplied),
+        consumerId,
+        idempotencyKey: payment.idempotencyKey,
+        paymentDate: payment.paymentDate,
+        paymentMethod: payment.paymentMethod,
+        referenceNumber: payment.referenceNumber,
+        totalApplied: Number(payment.totalApplied),
+      });
+      const savedPayments = apiPayments.map((p, i) => {
+        const target = billingRecords.find((r) => r.id === p.billingId) ?? billing;
+        return { ...p, address: target.address, amountDue: p.amountPaid, billingId: p.billingId, consumerName: target.consumerName, currentReading: target.currentReading, invoiceNumber: target.invoiceNumber, name: target.consumerName, paymentStatus: p.paymentStatus, previousReading: target.previousReading, remainingBalance: p.remainingBalance };
+      });
 
       setPayments((current) => [
         ...savedPayments,
@@ -204,14 +170,7 @@ export default function PaymentProcessingPage() {
         payment.paymentScope === "all" ? "All bills paid" : "Payment recorded",
         `${billing.consumerName}'s payment of ₱${totalSaved.toLocaleString("en-PH", { minimumFractionDigits: 2 })} was saved.`,
       );
-      return payment.paymentScope === "all"
-        ? {
-            ...savedPayments[0],
-            amountPaid: totalSaved,
-            paymentCount: savedPayments.length,
-            payments: savedPayments,
-          }
-        : savedPayments[0];
+      return { ...savedPayments[0], amountPaid: totalApplied, paymentCount: savedPayments.length, payments: savedPayments };
     } catch (requestError) {
       const message = requestError?.response?.data?.message ?? requestError.message ?? "Unable to record payment.";
       setError(message);
