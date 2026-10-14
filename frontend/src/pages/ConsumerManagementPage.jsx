@@ -295,11 +295,8 @@ function ConsumerManagementPage() {
       >
         <Search ariaLabel="Search residents by username or name" className="flex-1" onValueChange={setQuery} placeholder="Search username or name" value={query} />
         <Filter ariaLabel="Filter residents by purok" className="w-full sm:w-48" onValueChange={setPurok} options={purokOptions} value={purok} />
-      </div>
-
-      <div className="flex justify-end">
         <button
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 sm:shrink-0"
           onClick={openAddResident}
           type="button"
         >

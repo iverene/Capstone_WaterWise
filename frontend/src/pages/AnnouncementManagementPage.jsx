@@ -135,11 +135,8 @@ export default function AnnouncementManagementPage() {
           tone="emerald"
           value={category}
         />
-      </div>
-
-      <div className="flex justify-end">
         <button
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 sm:shrink-0"
           onClick={() => setIsFormOpen(true)}
           type="button"
         >
