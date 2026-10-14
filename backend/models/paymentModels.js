@@ -59,17 +59,6 @@ const parseOptionalReference = (value) => {
   return reference || null;
 };
 
-const currentManilaMonth = () => {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-US", {
-      month: "2-digit",
-      timeZone: "Asia/Manila",
-      year: "numeric",
-    }).formatToParts(new Date()).map(({ type, value }) => [type, value]),
-  );
-  return `${parts.year}-${parts.month}`;
-};
-
 const paymentErrorStatus = (message) => {
   if (message.includes("not found")) return 404;
   if (message.includes("already fully paid")) return 409;
@@ -132,24 +121,6 @@ export async function createPayment({
     }
     if (!targetBilling) {
       throw createError("Billing record not found.", 404);
-    }
-    if (
-      targetBilling.status === "Partially Paid" &&
-      paymentAmount < Number(targetBilling.remaining_balance)
-    ) {
-      throw createError(
-        "This bill already has a partial payment. The next payment must settle the full remaining balance.",
-        400,
-      );
-    }
-    if (
-      String(targetBilling.billing_date).slice(0, 7) !== currentManilaMonth() &&
-      paymentAmount < Number(targetBilling.remaining_balance)
-    ) {
-      throw createError(
-        "Bills from previous months must be paid in full. Partial payments are allowed only for the current month's bill.",
-        400,
-      );
     }
 
     const { data: oldestUnpaidBills, error: oldestUnpaidError } = await supabase
@@ -264,4 +235,58 @@ export async function getPaymentsByConsumer(consumerId) {
     throw createError(`Failed to retrieve consumer payments: ${error.message}`, 500);
   }
   return data ?? [];
+}
+
+export async function createWaterfallPayment({
+  consumerId,
+  totalApplied,
+  amount,
+  amountTendered,
+  paymentDate,
+  paymentMethod,
+  referenceNumber,
+  idempotencyKey,
+}) {
+  const userId = parsePositiveId(consumerId, "consumer ID");
+  const applied = parsePaymentAmount(totalApplied ?? amount);
+  const tendered = parsePaymentAmount(amountTendered ?? applied);
+  const normalizedDate = parsePaymentDate(paymentDate);
+  const normalizedMethod = parsePaymentMethod(paymentMethod);
+  const normalizedReference = parseOptionalReference(referenceNumber);
+  const normalizedKey = String(idempotencyKey ?? randomUUID()).trim();
+  if (!normalizedKey || normalizedKey.length > 200) {
+    throw createError("A valid payment idempotency key is required.");
+  }
+  if (normalizedMethod !== "Cash" && !normalizedReference) {
+    throw createError("An electronic payment reference number is required.");
+  }
+  if (normalizedMethod === "Cash" && tendered < applied) {
+    throw createError("Cash received cannot be lower than the amount applied.");
+  }
+  if (normalizedMethod !== "Cash" && tendered !== applied) {
+    throw createError("Electronic payment must equal the amount applied.");
+  }
+  const { data: outstanding, error: outError } = await supabase
+    .from("billing")
+    .select("remaining_balance")
+    .eq("user_id", userId)
+    .gt("remaining_balance", 0);
+  if (outError) throw createError(`Failed to load outstanding balance: ${outError.message}`, 500);
+  const totalOutstanding = Number(
+    (outstanding ?? []).reduce((t, b) => t + Number(b.remaining_balance || 0), 0).toFixed(2),
+  );
+  if (totalOutstanding <= 0) throw createError("No outstanding bills for this resident.", 409);
+  if (normalizedMethod !== "Cash" && applied > totalOutstanding) throw createError("Electronic payments cannot exceed the total outstanding balance.", 400);
+  const cappedApplied = Math.min(applied, totalOutstanding);
+  const { data, error } = await supabase.rpc("record_payment_waterfall", {
+    p_amount_tendered: tendered,
+    p_applied: cappedApplied,
+    p_consumer_id: userId,
+    p_idempotency_key: normalizedKey,
+    p_payment_date: normalizedDate,
+    p_payment_method: normalizedMethod,
+    p_reference_number: normalizedReference,
+  });
+  if (error) throw createError(error.message || "Failed to record payment.", paymentErrorStatus(error.message || ""));
+  return { ...data, changeGiven: Number(data?.change_given ?? Math.max(tendered - cappedApplied, 0)), totalApplied: Number(data?.total_applied ?? cappedApplied) };
 }

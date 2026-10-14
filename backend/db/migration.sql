@@ -584,11 +584,6 @@ BEGIN
         RAISE EXCEPTION 'This billing record is already fully paid.';
     END IF;
 
-    IF billing_record.status = 'Partially Paid'
-       AND p_amount < billing_record.remaining_balance THEN
-        RAISE EXCEPTION 'This bill already has a partial payment. The next payment must settle the full remaining balance.';
-    END IF;
-
     IF p_amount > billing_record.remaining_balance THEN
         RAISE EXCEPTION 'Payment amount cannot exceed the remaining balance.';
     END IF;
