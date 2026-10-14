@@ -168,10 +168,7 @@ export default function PaymentProcessingPage() {
       } catch {
         toast.warning("Payment saved", "The billing list could not refresh. Reload the page to see the updated balances.");
       }
-      const totalSaved = savedPayments.reduce(
-        (total, savedPayment) => total + Number(savedPayment.amountPaid || 0),
-        0,
-      );
+      const totalSaved = Number(totalApplied ?? 0);
       toast.success(
         "Payment recorded",
         `${billing.consumerName}'s payment of ₱${totalSaved.toLocaleString("en-PH", { minimumFractionDigits: 2 })} was saved.`,

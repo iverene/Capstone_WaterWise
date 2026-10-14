@@ -62,6 +62,7 @@ const parseOptionalReference = (value) => {
 const paymentErrorStatus = (message) => {
   if (message.includes("not found")) return 404;
   if (message.includes("already fully paid")) return 409;
+  if (message.includes("No outstanding bills")) return 409;
   return 400;
 };
 
@@ -136,7 +137,7 @@ export async function createPayment({
       throw createError(`Failed to validate billing payment order: ${oldestUnpaidError.message}`, 500);
     }
     if (oldestUnpaidBills[0]?.id !== normalizedBillingId) {
-      throw createError("The resident's oldest outstanding bill must be paid in full first.", 409);
+      throw createError("The resident's oldest outstanding bill must be paid first.", 409);
     }
   }
 

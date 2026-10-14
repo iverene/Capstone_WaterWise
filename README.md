@@ -499,7 +499,7 @@ WaterWise enforces payment order in both the frontend and backend:
 4. Cash tendered may exceed the total; excess returns as change. GCash payments must equal the applied amount, cannot exceed the total, and require a reference number.
 5. Payment date is read-only Manila today. Idempotency keys cover the whole allocation.
 
-The relevant payment endpoint is `POST /api/payments`. Direct API calls are subject to the same oldest-first and full-payment rules.
+The relevant payment endpoint is POST /api/payments/allocate. Direct API calls are subject to the same waterfall rules above. Legacy POST /api/payments (single-bill, billingId) remains for backward compat.
 
 ## Flagged Accounts and Disconnection
 

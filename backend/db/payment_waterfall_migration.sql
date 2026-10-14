@@ -25,6 +25,9 @@ DECLARE
     v_payments JSONB := '[]'::JSONB;
     v_billings JSONB := '[]'::JSONB;
     v_existing payments%ROWTYPE;
+    v_replay_total NUMERIC(10,2);
+    v_replay_consumer INTEGER;
+    v_replay_method TEXT;
 BEGIN
     IF p_applied IS NULL OR ROUND(p_applied, 2) <= 0 THEN
         RAISE EXCEPTION 'Payment amount must be greater than zero.';
@@ -51,10 +54,24 @@ BEGIN
         RAISE EXCEPTION 'A valid payment idempotency key is required.';
     END IF;
 
-    SELECT * INTO v_existing FROM payments WHERE idempotency_key LIKE TRIM(p_idempotency_key) || ':%' LIMIT 1;
+    SELECT * INTO v_existing FROM payments WHERE starts_with(idempotency_key, TRIM(p_idempotency_key) || ':') LIMIT 1;
     IF FOUND THEN
-        SELECT jsonb_agg(to_jsonb(p) - 'idempotency_key') INTO v_payments FROM payments p WHERE p.idempotency_key LIKE TRIM(p_idempotency_key) || '%';
-        RETURN jsonb_build_object('payments', COALESCE(v_payments, '[]'::JSONB), 'replayed', true);
+        SELECT MIN(b.user_id), SUM(p.total_paid), MIN(p.payment_method) INTO v_replay_consumer, v_replay_total, v_replay_method
+        FROM payments p JOIN billing b ON b.id = p.billing_id
+        WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':');
+        IF v_replay_consumer IS DISTINCT FROM p_consumer_id OR ROUND(COALESCE(v_replay_total, 0), 2) <> ROUND(p_applied, 2) THEN
+            RAISE EXCEPTION 'This payment request key was already used for different payment details.';
+        END IF;
+        SELECT jsonb_agg(to_jsonb(p) - 'idempotency_key') INTO v_payments FROM payments p WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':');
+        SELECT jsonb_agg(to_jsonb(b)) INTO v_billings FROM billing b WHERE b.id IN (SELECT p.billing_id FROM payments p WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':'));
+        v_replay_total := ROUND(COALESCE(v_replay_total, 0), 2);
+        RETURN jsonb_build_object(
+            'payments', COALESCE(v_payments, '[]'::JSONB),
+            'billings', COALESCE(v_billings, '[]'::JSONB),
+            'total_applied', v_replay_total,
+            'change_given', CASE WHEN v_replay_method = 'Cash' THEN ROUND(p_amount_tendered - v_replay_total, 2) ELSE 0.00 END,
+            'replayed', true
+        );
     END IF;
 
     FOR v_bill IN SELECT * FROM billing WHERE user_id = p_consumer_id AND remaining_balance > 0 ORDER BY billing_date ASC, id ASC FOR UPDATE LOOP
@@ -82,6 +99,10 @@ BEGIN
         v_billings := v_billings || jsonb_build_array(to_jsonb(v_updated));
         v_left := ROUND(v_left - v_slice, 2);
     END LOOP;
+
+    IF ROUND(v_left, 2) > 0 AND p_payment_method <> 'Cash' THEN
+        RAISE EXCEPTION 'Electronic payments cannot exceed the total outstanding balance.';
+    END IF;
 
     IF v_payments = '[]'::JSONB THEN
         RAISE EXCEPTION 'No outstanding bills for this resident.';
