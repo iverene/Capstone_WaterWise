@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -113,6 +113,33 @@ export default function PaymentForm({
   const [stage, setStage] = useState("details");
   const [submitting, setSubmitting] = useState(false);
 
+  // Auto-select resident when modal opened via per-resident Record Payment
+  // but form mounted before billingRecords arrived (or key stayed "new").
+  useEffect(() => {
+    if (form.residentKey || !billingRecords.length) return;
+    const target = billingRecords.find(
+      (record) => String(record.id) === String(initialData?.billingId ?? ""),
+    );
+    if (!target) return;
+    const key = residentKey(target);
+    const oldest = billingRecords
+      .filter((record) => record.outstandingBalance > 0 && residentKey(record) === key)
+      .sort((first, second) =>
+        String(first.raw?.billing_date ?? "").localeCompare(
+          String(second.raw?.billing_date ?? ""),
+        ) || Number(first.id) - Number(second.id),
+      )[0];
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm((previous) => ({
+      ...previous,
+      billingId: oldest?.id ?? target.id ?? "",
+      consumerName: target.consumerName ?? previous.consumerName,
+      currentBalance: String(oldest?.outstandingBalance ?? target.outstandingBalance ?? ""),
+      residentKey: key,
+    }));
+    if (target.consumerName) setResidentQuery(target.consumerName);
+  }, [billingRecords, initialData?.billingId, form.residentKey]);
+
   const unpaidBillings = billingRecords.filter((record) => record.outstandingBalance > 0);
   const residentOptions = Array.from(
     new Map(
@@ -138,6 +165,9 @@ export default function PaymentForm({
         String(second.raw?.billing_date ?? ""),
       ) || Number(first.id) - Number(second.id),
     );
+  const effectiveResident = selectedResident ?? (residentBills[0]
+    ? { key: form.residentKey, name: residentBills[0].consumerName, purok: residentBills[0].purok }
+    : null);
   const selectedBilling = billingRecords.find(
     (record) => String(record.id) === String(form.billingId),
   );
@@ -148,11 +178,13 @@ export default function PaymentForm({
   const amountApplied = Math.min(amountReceived, totalOutstanding);
   const changeGiven = form.paymentMethod === "Cash" ? Math.max(amountReceived - amountApplied, 0) : 0;
   const remainingBalance = Math.max(totalOutstanding - amountApplied, 0);
-  const previewAllocations = residentBillsSorted.reduce(
+  const hasEnteredAmount = amountApplied > 0;
+  // Always list every outstanding bill (oldest first). Typing an amount only
+  // shrinks each row's leftAfter; untouched bills stay visible with slice 0.
+  const displayAllocations = residentBillsSorted.reduce(
     (state, b) => {
       const outstanding = Number(b.outstandingBalance || 0);
-      const slice = Math.min(outstanding, state.left);
-      if (slice <= 0) return state;
+      const slice = hasEnteredAmount ? Math.min(outstanding, state.left) : 0;
       return {
         left: Math.max(state.left - slice, 0),
         items: [
@@ -163,6 +195,7 @@ export default function PaymentForm({
     },
     { left: amountApplied, items: [] },
   ).items;
+  const previewAllocations = displayAllocations.filter((a) => a.slice > 0);
   const paymentStatus =
     amountApplied <= 0
       ? "Unpaid"
@@ -307,7 +340,7 @@ export default function PaymentForm({
       {stage === "details" ? (
         <div className="space-y-6">
           <section>
-            {!selectedResident ? (
+            {!effectiveResident ? (
               <div className="mt-4">
                 <label className="text-sm font-bold text-navy-900" htmlFor="payment-resident-search">
                   Resident name
@@ -358,13 +391,8 @@ export default function PaymentForm({
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-water-200 bg-water-50 p-4">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <p className="font-bold text-navy-900">{selectedResident.name}</p>
-                  <p className="font-mono text-xl font-extrabold tabular-nums text-navy-900">
-                    {currency(selectedBilling?.outstandingBalance)}
-                  </p>
-                </div>
-                <p className="mt-1 text-xs font-semibold text-slate-600">{selectedResident.purok}</p>
+                <p className="font-bold text-navy-900">{effectiveResident.name}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">{effectiveResident.purok}</p>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-water-200/70 pt-3 text-xs text-slate-600">
                   <span>
                     <span className="font-semibold">Invoice </span>
@@ -385,21 +413,23 @@ export default function PaymentForm({
               </div>
             )}
 
-            {selectedResident && previewAllocations.length > 0 && (
+            {effectiveResident && displayAllocations.length > 0 && (
               <div className="mt-4 space-y-4">
                 <div>
-                  <p className="text-sm font-bold text-navy-900">Waterfall preview</p>
+                  <p className="text-sm font-bold text-navy-900">Outstanding bills · Waterfall (oldest first)</p>
                   <div className="mt-2 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    {previewAllocations.map((allocation) => (
+                    {displayAllocations.map((allocation) => (
                       <div className="flex items-center justify-between gap-4 px-4 py-3" key={allocation.id}>
                         <div>
                           <p className="font-semibold text-navy-900">{allocation.period}</p>
                           <p className="mt-0.5 font-mono text-xs text-slate-500">
-                            {allocation.invoice} · {currency(allocation.slice)} applied
+                            {hasEnteredAmount
+                              ? `${allocation.invoice} · ${currency(allocation.slice)} applied`
+                              : `${allocation.invoice} · ${currency(allocation.outstanding)} due`}
                           </p>
                         </div>
                         <p className="font-mono text-sm font-extrabold text-slate-700">
-                          {currency(allocation.leftAfter)} left
+                          {hasEnteredAmount ? `${currency(allocation.leftAfter)} left` : `${currency(allocation.outstanding)} due`}
                         </p>
                       </div>
                     ))}
@@ -567,6 +597,29 @@ export default function PaymentForm({
             )}
             <ReviewRow label="Remaining balance" value={currency(remainingBalance)} />
           </dl>
+
+          {displayAllocations.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-bold text-navy-900">Outstanding bills · Waterfall (oldest first)</p>
+              <div className="mt-2 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                {displayAllocations.map((allocation) => (
+                  <div className="flex items-center justify-between gap-4 px-4 py-3" key={allocation.id}>
+                    <div>
+                      <p className="font-semibold text-navy-900">{allocation.period}</p>
+                      <p className="mt-0.5 font-mono text-xs text-slate-500">
+                        {hasEnteredAmount
+                          ? `${allocation.invoice} · ${currency(allocation.slice)} applied`
+                          : `${allocation.invoice} · ${currency(allocation.outstanding)} due`}
+                      </p>
+                    </div>
+                    <p className="font-mono text-sm font-extrabold text-slate-700">
+                      {hasEnteredAmount ? `${currency(allocation.leftAfter)} left` : `${currency(allocation.outstanding)} due`}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="mt-4 flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4">
             <span className="text-sm font-bold text-navy-900">Resulting bill status</span>
