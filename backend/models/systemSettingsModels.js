@@ -40,7 +40,11 @@ export async function updateSystemSetting(key, value, updatedBy) {
   return data;
 }
 
-export async function getRatePerCubicMeter() {
-  const setting = await getSystemSetting("rate_per_cubic_meter");
-  return Number(setting.setting_value);
-}
+export const TIER_SETTING_KEYS = [
+  "minimum_charge",
+  "minimum_m3",
+  "rate_6_15",
+  "rate_16_25",
+  "rate_26_50",
+  "rate_51_up",
+];

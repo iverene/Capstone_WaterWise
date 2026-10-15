@@ -11,6 +11,7 @@ import { useToast } from "../components/Toast";
 import { createMeterReading, fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
 import { cacheRecordingContexts, getCachedRecordingContexts, getPendingMeterReadings, queueMeterReading, syncPendingMeterReadings } from "../services/offlineMeterReadings";
 import { fetchSystemSetting } from "../services/systemSettingsService";
+import { TIER_DEFAULTS, breakdownTieredBill, computeTieredBill } from "../utils/waterBill";
 
 const requestMessage = (error, fallback) => error?.response?.data?.message ?? error.message ?? fallback;
 
@@ -31,24 +32,27 @@ const recordedAt = (timestamp, readingDate) => {
   return "Timestamp unavailable";
 };
 
-const consumptionReceiptData = (consumerName, receipt, rate = 15) => ({
+const consumptionReceiptData = (consumerName, receipt, rates = TIER_DEFAULTS) => ({
   meterName: consumerName,
   runDate: recordedAt(receipt.createdAt, receipt.readingDate),
   previousReading: receipt.previousReading,
   presentReading: receipt.currentReading,
-  baselineBill: receipt.baselineBill ?? receipt.consumption * rate,
+  consumption: receipt.consumption,
+  baselineBill: receipt.baselineBill ?? computeTieredBill(receipt.consumption, rates),
+  billBreakdown: receipt.billBreakdown ?? breakdownTieredBill(receipt.consumption, rates),
   arrears30Days: Number(receipt.arrears30Days ?? 0),
   arrears60Days: Number(receipt.arrears60Days ?? 0),
   arrears90Days: Number(receipt.arrears90Days ?? 0),
 });
 
-const receiptFromContext = (context, rate = 15) => context.currentMonthReceipt ?? {
+const receiptFromContext = (context, rates = TIER_DEFAULTS) => context.currentMonthReceipt ?? {
   createdAt: context.latestCreatedAt,
   readingDate: context.latestReadingDate,
   previousReading: context.latestPreviousReading ?? (Number(context.latestPresentReading ?? 0) - Number(context.latestConsumption ?? 0)),
   currentReading: Number(context.latestPresentReading ?? 0),
   consumption: Number(context.latestConsumption ?? 0),
-  baselineBill: Number(context.latestConsumption ?? 0) * rate,
+  baselineBill: computeTieredBill(Number(context.latestConsumption ?? 0), rates),
+  billBreakdown: breakdownTieredBill(Number(context.latestConsumption ?? 0), rates),
 };
 
 export default function RecordConsumptionPage() {
@@ -72,16 +76,27 @@ export default function RecordConsumptionPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [showSynced, setShowSynced] = useState(false);
-  const [rate, setRate] = useState(15);
+  const [rates, setRates] = useState(TIER_DEFAULTS);
   const prevPendingRef = useRef(pendingCount);
 
   useEffect(() => {
-    fetchSystemSetting("rate_per_cubic_meter")
-      .then((setting) => {
-        const value = Number(setting?.setting_value);
-        if (Number.isFinite(value) && value > 0) setRate(value);
-      })
-      .catch(() => {});
+    const loadTier = async (key, field) => {
+      try {
+        const setting = await fetchSystemSetting(key);
+        const value = Number(setting?.data?.setting_value ?? setting?.setting_value);
+        if (Number.isFinite(value) && value >= 0) {
+          setRates((current) => ({ ...current, [field]: value }));
+        }
+      } catch {
+        // Tier key missing - default stays.
+      }
+    };
+    loadTier("minimum_charge", "minimumCharge");
+    loadTier("minimum_m3", "minimumM3");
+    loadTier("rate_6_15", "rate6_15");
+    loadTier("rate_16_25", "rate16_25");
+    loadTier("rate_26_50", "rate26_50");
+    loadTier("rate_51_up", "rate51Up");
   }, []);
 
   useEffect(() => {
@@ -212,8 +227,8 @@ export default function RecordConsumptionPage() {
         const receiptContext = context.hasReadingInSelectedMonth ? context : consumer;
         setReceiptData(consumptionReceiptData(
           receiptContext.consumerName,
-          receiptFromContext(receiptContext, rate),
-          rate,
+          receiptFromContext(receiptContext, rates),
+          rates,
         ));
         setReceiptResidentName(receiptContext.consumerName);
         setSelectedConsumer(null);
@@ -225,7 +240,7 @@ export default function RecordConsumptionPage() {
       }
     } catch (requestError) {
       if (expectsReceipt) {
-        setReceiptData(consumptionReceiptData(consumer.consumerName, receiptFromContext(consumer, rate), rate));
+        setReceiptData(consumptionReceiptData(consumer.consumerName, receiptFromContext(consumer, rates), rates));
       } else {
         setLoadError(requestMessage(requestError, "Unable to check the resident's latest reading."));
       }
@@ -265,14 +280,14 @@ export default function RecordConsumptionPage() {
         const receiptContext = await fetchRecordingContext(payload.consumerId);
         setReceiptData(consumptionReceiptData(
           payload.consumerName,
-          receiptFromContext(receiptContext, rate),
-          rate,
+          receiptFromContext(receiptContext, rates),
+          rates,
         ));
       } catch {
         setReceiptData(consumptionReceiptData(payload.consumerName, {
           ...result,
           baselineBill: result.billing?.totalBill,
-        }, rate));
+        }, rates));
       } finally {
         setReceiptLoading(false);
       }
@@ -346,7 +361,7 @@ export default function RecordConsumptionPage() {
 
       <Modal closeLabel="Close meter reading form" description={selectedConsumer ? `${selectedConsumer.consumerName} · ${selectedConsumer.purok}` : undefined} dismissible={!saving} eyebrow="Field operations" isOpen={Boolean(selectedConsumer)} onClose={closeEntry} showCloseButton={false} size="md" title="Record Meter Reading">
         {saveError && <div className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mx-6" role="alert">{saveError}</div>}
-        <ConsumptionEntryPanel consumer={selectedConsumer} key={`${selectedConsumer?.id}-${selectedConsumer?.latestReadingId ?? "new"}`} onCancel={closeEntry} onSave={saveReading} saving={saving} />
+        <ConsumptionEntryPanel consumer={selectedConsumer} key={`${selectedConsumer?.id}-${selectedConsumer?.latestReadingId ?? "new"}`} onCancel={closeEntry} onSave={saveReading} rates={rates} saving={saving} />
       </Modal>
       <ConsumptionReceiptModal
         isOpen={receiptLoading || Boolean(receiptData)}
