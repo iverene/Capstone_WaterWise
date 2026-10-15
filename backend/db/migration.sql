@@ -343,6 +343,58 @@ CREATE TABLE IF NOT EXISTS generated_reports (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Tiered schedule from image/image.png:
+-- Minimum (5) P270 | Excess 6-15 P17 | Excess 16-25 P20 | Excess 26-50 P23 | Excess 51+ P25
+CREATE OR REPLACE FUNCTION compute_water_bill(p_consumption NUMERIC)
+RETURNS NUMERIC(10,2)
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  v_remaining NUMERIC(10,2) := GREATEST(COALESCE(p_consumption, 0), 0);
+  v_total NUMERIC(10,2) := 270.00;
+  v_min NUMERIC(10,2) := 5;
+  v_r1 NUMERIC(10,2) := 17.00;
+  v_r2 NUMERIC(10,2) := 20.00;
+  v_r3 NUMERIC(10,2) := 23.00;
+  v_r4 NUMERIC(10,2) := 25.00;
+BEGIN
+  SELECT setting_value INTO v_min FROM public.system_settings WHERE setting_key = 'minimum_m3';
+  IF v_min IS NULL OR v_min < 0 THEN v_min := 5; END IF;
+  IF v_remaining <= v_min THEN
+    SELECT setting_value INTO v_total FROM public.system_settings WHERE setting_key = 'minimum_charge';
+    IF v_total IS NULL OR v_total < 0 THEN v_total := 270.00; END IF;
+    RETURN ROUND(v_total, 2);
+  END IF;
+
+  SELECT setting_value INTO v_total FROM public.system_settings WHERE setting_key = 'minimum_charge';
+  IF v_total IS NULL OR v_total < 0 THEN v_total := 270.00; END IF;
+  SELECT setting_value INTO v_r1 FROM public.system_settings WHERE setting_key = 'rate_6_15';
+  IF v_r1 IS NULL OR v_r1 < 0 THEN v_r1 := 17.00; END IF;
+  SELECT setting_value INTO v_r2 FROM public.system_settings WHERE setting_key = 'rate_16_25';
+  IF v_r2 IS NULL OR v_r2 < 0 THEN v_r2 := 20.00; END IF;
+  SELECT setting_value INTO v_r3 FROM public.system_settings WHERE setting_key = 'rate_26_50';
+  IF v_r3 IS NULL OR v_r3 < 0 THEN v_r3 := 23.00; END IF;
+  SELECT setting_value INTO v_r4 FROM public.system_settings WHERE setting_key = 'rate_51_up';
+  IF v_r4 IS NULL OR v_r4 < 0 THEN v_r4 := 25.00; END IF;
+
+  v_remaining := v_remaining - v_min;
+  v_total := v_total + LEAST(v_remaining, 10) * v_r1;
+  v_remaining := v_remaining - LEAST(v_remaining, 10);
+  v_total := v_total + LEAST(v_remaining, 10) * v_r2;
+  v_remaining := v_remaining - LEAST(v_remaining, 10);
+  v_total := v_total + LEAST(v_remaining, 25) * v_r3;
+  v_remaining := v_remaining - LEAST(v_remaining, 25);
+  v_total := v_total + v_remaining * v_r4;
+  RETURN ROUND(v_total, 2);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION compute_water_bill(NUMERIC) FROM PUBLIC;
+REVOKE ALL ON FUNCTION compute_water_bill(NUMERIC) FROM anon;
+REVOKE ALL ON FUNCTION compute_water_bill(NUMERIC) FROM authenticated;
+GRANT EXECUTE ON FUNCTION compute_water_bill(NUMERIC) TO service_role;
+
 -- Record a cumulative meter value and its billing as one transaction. The
 -- initial previous value is accepted only when digitizing a consumer with no
 -- earlier digital reading.
@@ -365,7 +417,6 @@ DECLARE
     v_reading consumption%ROWTYPE;
     v_billing billing%ROWTYPE;
     v_previous NUMERIC(10,2);
-    v_rate NUMERIC(12,2);
     v_total NUMERIC(10,2);
     v_reading_date DATE := (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::DATE;
 BEGIN
@@ -445,20 +496,12 @@ BEGIN
     END IF;
 
     -- Requires system_settings_migration.sql before recording new readings.
-    -- Use the configured rate only for this new bill; existing bills retain their totals.
-    SELECT setting_value INTO v_rate
-    FROM public.system_settings
-    WHERE setting_key = 'rate_per_cubic_meter';
-
-    IF v_rate IS NULL OR v_rate < 0 OR v_rate = 'NaN'::NUMERIC THEN
-        RAISE EXCEPTION 'A valid non-negative water rate is required in system settings.';
-    END IF;
-
+    -- Tiered billing: existing bills retain their totals.
     INSERT INTO consumption (consumer_id, reading_date, previous_reading, present_reading, idempotency_key)
     VALUES (p_consumer_id, v_reading_date, v_previous, p_present_reading, p_idempotency_key)
     RETURNING * INTO v_reading;
 
-    v_total := ROUND(v_reading.consumption * v_rate, 2);
+    v_total := compute_water_bill(v_reading.consumption);
     INSERT INTO billing (
         consumption_id, user_id, billing_date, due_date, total_bill,
         remaining_balance, status

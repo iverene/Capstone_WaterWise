@@ -5,8 +5,9 @@
 -- Ano ang ginagawa:
 --   - 6 months ng reading history bawat consumer (kasama ang current month),
 --     tuloy-tuloy ang previous -> present chaining.
---   - billing = consumption * 15.00 (kapareho ng formula sa
---     record_consumption_and_billing), due date = end of billing month.
+--   - billing = compute_water_bill(consumption) (tiered schedule:
+--     Minimum (5) P270 | Excess 6-15 P17 | Excess 16-25 P20 | Excess 26-50 P23 | Excess 51+ P25),
+--     due date = end of billing month.
 --   - payments na halo: Paid / Partially Paid / Unpaid (deterministic kada
 --     consumer+buwan, para may laman ang lahat ng dashboard states).
 --   - GCash payments ay may reference number; Cash ay exact tendered.
@@ -56,7 +57,7 @@ BEGIN
       SELECT id INTO bill_id FROM billing WHERE consumption_id = cons_id;
 
       IF bill_id IS NULL THEN
-        bill_total := ROUND(use_r * 15, 2);
+        bill_total := compute_water_bill(use_r);
         due_d := (date_trunc('month', reading_d) + INTERVAL '1 month - 1 day')::DATE;
 
         -- Halo ng Paid / Partially Paid / Unpaid para may laman ang lahat ng states.

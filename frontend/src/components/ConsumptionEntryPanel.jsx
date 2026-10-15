@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, Gauge } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarClock, CheckCircle2, Gauge, ReceiptText } from "lucide-react";
+import { TIER_DEFAULTS, breakdownTieredBill, computeTieredBill } from "../utils/waterBill";
+
+const currency = (value) =>
+  `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
 const SummaryItem = ({ label, value }) => (
   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -13,7 +17,7 @@ const createIdempotencyKey = () =>
   globalThis.crypto?.randomUUID?.() ??
   `meter-reading-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, saving = false }) {
+export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, rates = TIER_DEFAULTS, saving = false }) {
   const [requestKey] = useState(createIdempotencyKey);
   const [initialPreviousReading, setInitialPreviousReading] = useState("");
   const [currentReading, setCurrentReading] = useState("");
@@ -26,6 +30,9 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, savi
   const previousReading = consumer.hasPreviousRecord ? consumer.latestPresentReading : initialPreviousReading;
   const hasValues = previousReading !== "" && previousReading != null && currentReading !== "";
   const consumption = hasValues ? Number(currentReading) - Number(previousReading) : 0;
+  const safeConsumption = hasValues && Number.isFinite(consumption) ? Math.max(consumption, 0) : 0;
+  const estimatedBill = computeTieredBill(safeConsumption, rates);
+  const billBreakdown = breakdownTieredBill(safeConsumption, rates);
   const anomalyBaseline = consumer.averageRecentConsumption;
   const showsAnomaly = hasValues && consumption > 50 && (
     anomalyBaseline == null || consumption > Math.max(anomalyBaseline * 1.75, anomalyBaseline + 25)
@@ -76,6 +83,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, savi
     ["Previous reading", `${Number(previousReading).toLocaleString()} m³`],
     ["Current reading", `${Number(currentReading).toLocaleString()} m³`],
     ["Water consumed", `${consumption.toLocaleString()} m³`],
+    ["Estimated bill", currency(estimatedBill)],
   ];
 
   return (
@@ -108,9 +116,10 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, savi
             </label>
           </div>
 
-          <div className="grid gap-3 rounded-2xl border border-water-200 bg-water-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          <div className="grid gap-3 rounded-2xl border border-water-200 bg-water-50 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
             <div className="flex items-start gap-3"><CalendarClock aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-water-700" /><div><p className="text-sm font-bold text-navy-900">Date and time are automatic</p><p className="mt-1 text-xs leading-5 text-slate-600">The system records the exact timestamp when you confirm.</p></div></div>
             <div className="rounded-xl bg-white px-4 py-3"><p className="text-xs font-bold text-water-700">Calculated consumption</p><p className="mt-1 font-mono text-2xl font-extrabold tabular-nums text-water-800">{Math.max(consumption, 0).toLocaleString()} m³</p></div>
+            <div className="rounded-xl bg-navy-950 px-4 py-3"><p className="text-xs font-bold text-water-200">Estimated bill</p><p className="mt-1 font-mono text-2xl font-extrabold tabular-nums text-white">{currency(hasValues ? estimatedBill : 0)}</p></div>
           </div>
 
           {error && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
@@ -121,7 +130,22 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onSave, savi
         </form>
       ) : (
         <div className="mt-5">
-          <dl className="grid gap-3 sm:grid-cols-3">{reviewItems.map(([label, value]) => <SummaryItem key={label} label={label} value={value} />)}</dl>
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{reviewItems.map(([label, value]) => <SummaryItem key={label} label={label} value={value} />)}</dl>
+          <section aria-label="Estimated bill breakdown" className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-500"><ReceiptText aria-hidden="true" className="h-4 w-4" /> Bill breakdown</h4>
+            <dl className="mt-2">
+              {billBreakdown.map((line) => (
+                <div key={line.label} className="flex items-start justify-between gap-4 border-b border-slate-100 py-2 last:border-0">
+                  <dt className="text-sm font-semibold text-slate-500">{line.label}</dt>
+                  <dd className="font-mono text-sm font-bold tabular-nums text-navy-900">{currency(line.amount)}</dd>
+                </div>
+              ))}
+              <div className="flex items-start justify-between gap-4 pt-2">
+                <dt className="text-sm font-extrabold text-navy-900">Total bill</dt>
+                <dd className="font-mono text-base font-extrabold tabular-nums text-water-800">{currency(estimatedBill)}</dd>
+              </div>
+            </dl>
+          </section>
           {showsAnomaly && <label className="mt-4 flex cursor-pointer gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"><input checked={anomalyAcknowledged} className="mt-1 h-5 w-5 accent-water-600" onChange={(event) => setAnomalyAcknowledged(event.target.checked)} type="checkbox" /><span><span className="flex items-center gap-2 text-sm font-bold text-amber-700"><AlertTriangle aria-hidden="true" className="h-4 w-4" /> Unusual consumption</span><span className="mt-1 block text-sm leading-6 text-slate-600">This usage is much higher than the resident’s recent consumption. I checked the meter and confirm it is correct.</span></span></label>}
           {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
           <div className="mt-5 grid gap-2 border-t border-slate-200 pt-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">

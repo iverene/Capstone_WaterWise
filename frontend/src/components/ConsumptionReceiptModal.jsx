@@ -61,13 +61,17 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
     runDate,
     previousReading,
     presentReading,
+    consumption,
     baselineBill,
+    billBreakdown = null,
     arrears30Days = 0,
     arrears60Days = 0,
     arrears90Days = 0,
   } = receiptData;
 
-  const cubicMetersUsed = Number((presentReading - previousReading).toFixed(2));
+  const cubicMetersUsed = Number(
+    (Number(consumption ?? presentReading - previousReading) || 0).toFixed(2),
+  );
   const totalArrears = arrears30Days + arrears60Days + arrears90Days;
   const finalTotalBill = baselineBill + totalArrears;
 
@@ -81,6 +85,9 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         ["Previous Reading", `${previousReading} m³`],
         ["Present Reading", `${presentReading} m³`],
         ["Cubic Meters Used", `${cubicMetersUsed} m³`],
+        ...(Array.isArray(billBreakdown)
+          ? billBreakdown.map((line) => [line.label, `₱${Number(line.amount).toFixed(2)}`])
+          : []),
         ["Baseline Water Bill", `₱${baselineBill.toFixed(2)}`],
         ["Over 30 Days", `₱${arrears30Days.toFixed(2)}`],
         ["Over 60 Days", `₱${arrears60Days.toFixed(2)}`],
@@ -166,6 +173,18 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
             <ReceiptLine label="Present" testId="telemetry-pres" value={`${presentReading} m³`} />
             <ReceiptLine label="Used" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
             <ReceiptLine label="Baseline bill" testId="telemetry-baseline" value={currency(baselineBill)} />
+            {Array.isArray(billBreakdown) && billBreakdown.length > 0 && (
+              <div className="mt-2 rounded-xl bg-slate-50 p-3">
+                {billBreakdown.map((line) => (
+                  <div key={line.label} className="flex items-start justify-between gap-4 py-1">
+                    <dt className="text-xs font-semibold text-slate-500">{line.label}</dt>
+                    <dd className="font-mono text-xs font-bold tabular-nums text-navy-900">
+                      {currency(line.amount)}
+                    </dd>
+                  </div>
+                ))}
+              </div>
+            )}
           </dl>
         </section>
       </div>

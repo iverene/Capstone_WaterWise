@@ -1,6 +1,6 @@
 import { supabase } from "../config/supabase.js";
 import { composeFullName } from "./consumerModels.js";
-import { getRatePerCubicMeter } from "./systemSettingsModels.js";
+import { computeTieredBill, getTieredRates } from "../services/billingTiers.js";
 
 const BILLING_FIELDS = `
   id,
@@ -160,10 +160,8 @@ export const createMonthlyBilling = async ({
     return total + (Number.isFinite(consumption) ? consumption : 0);
   }, 0);
 
-  const rate = await getRatePerCubicMeter();
-  const totalBill = Number(
-    (monthlyConsumption * rate).toFixed(2)
-  );
+  const rates = await getTieredRates();
+  const totalBill = computeTieredBill(monthlyConsumption, rates);
 
   const { data, error } = await supabase
     .from("billing")
@@ -189,7 +187,7 @@ export const createMonthlyBilling = async ({
   return {
     ...attachConsumerFullName(data),
     monthly_consumption: Number(monthlyConsumption.toFixed(2)),
-    rate_per_cubic_meter: rate,
+    tiered_rates: rates,
   };
 };
 

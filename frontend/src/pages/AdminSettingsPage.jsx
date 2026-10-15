@@ -12,6 +12,15 @@ import { SETTINGS_PERMISSION_KEY } from "./AdminProfile";
 
 const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 
+const TIER_LABELS = {
+  minimum_charge: "Minimum charge (₱ flat)",
+  minimum_m3: "Minimum m³ covered",
+  rate_6_15: "Excess 6-15 (₱ per m³)",
+  rate_16_25: "Excess 16-25 (₱ per m³)",
+  rate_26_50: "Excess 26-50 (₱ per m³)",
+  rate_51_up: "Excess 51 & up (₱ per m³)",
+};
+
 function getStoredSettingsPermission() {
   try {
     const permission = JSON.parse(window.sessionStorage.getItem(SETTINGS_PERMISSION_KEY) ?? "null");
@@ -243,7 +252,7 @@ export default function AdminSettingsPage() {
             <div key={setting.id} className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{setting.setting_key}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{TIER_LABELS[setting.setting_key] ?? setting.setting_key}</p>
                   <p className="mt-1 text-sm text-slate-600">{setting.description}</p>
                   {setting.updated_at && (
                     <p className="mt-1 text-xs text-slate-400">
@@ -253,9 +262,11 @@ export default function AdminSettingsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xl font-bold text-slate-900">
-                    {setting.setting_key === "rate_per_cubic_meter"
-                      ? `₱${Number(setting.setting_value).toFixed(2)}`
-                      : String(setting.setting_value)}
+                    {setting.setting_key === "minimum_m3"
+                      ? `${Number(setting.setting_value)} m³`
+                      : setting.setting_key.startsWith("rate_") || setting.setting_key === "minimum_charge"
+                        ? `₱${Number(setting.setting_value).toFixed(2)}`
+                        : String(setting.setting_value)}
                   </span>
                   <button
                     className="min-h-10 rounded-xl border border-water-200 bg-water-50 px-4 text-sm font-semibold text-water-700 transition-colors hover:bg-water-100"
@@ -288,7 +299,7 @@ export default function AdminSettingsPage() {
           )}
 
           <div>
-            <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="setting-value">{editingKey === "rate_per_cubic_meter" ? "New value (₱ per m³)" : "New value"}</label>
+            <label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="setting-value">{TIER_LABELS[editingKey] ? `New value for ${TIER_LABELS[editingKey]}` : "New value"}</label>
             <input
               className="mt-2 block w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition-colors focus:border-water-500 focus:bg-white focus:ring-4 focus:ring-water-100"
               id="setting-value"
