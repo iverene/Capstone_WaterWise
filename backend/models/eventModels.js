@@ -138,3 +138,31 @@ export async function deleteEvent(value) {
   if (!data) throw createError("Event not found.", 404);
   return data;
 }
+
+const toEventContextItem = (event) => ({
+  title: event.title,
+  date: event.event_date,
+  time: typeof event.event_time === "string" ? event.event_time.slice(0, 5) : event.event_time,
+  location: event.location,
+  categories: Array.isArray(event.tags) ? event.tags : [],
+  status: event.status,
+});
+
+export async function getRecommendationEventContext({ years = [], limit = 100 } = {}) {
+  let query = supabase
+    .from("events")
+    .select("id, title, event_date, event_time, location, tags, status")
+    .order("event_date", { ascending: true })
+    .limit(limit);
+  if (Array.isArray(years) && years.length > 0) {
+    const numericYears = years.map(Number).filter(Number.isFinite);
+    if (numericYears.length > 0) {
+      const minYear = Math.min(...numericYears);
+      const maxYear = Math.max(...numericYears);
+      query = query.gte("event_date", `${minYear}-01-01`).lte("event_date", `${maxYear}-12-31`);
+    }
+  }
+  const { data, error } = await query;
+  if (error) throwDatabaseError(error, "retrieve event context");
+  return (data ?? []).map(toEventContextItem);
+}

@@ -12,6 +12,8 @@ import {
   getAllPuroksMonthlyHistory,
   getAllPuroksYearlyHistory,
 } from "./consumptionServices.js";
+import { getPurokPredictionData } from "../models/consumptionModels.js";
+import { getRecommendationEventContext } from "../models/eventModels.js";
 import { getConsumptionSourceVersion } from "../models/predictionModels.js";
 import {
   getStoredRecommendation,
@@ -81,6 +83,23 @@ const toParagraph = (value) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
+
+const formatEventContext = (events) => {
+  if (!Array.isArray(events) || events.length === 0) {
+    return "No community events were recorded in this period.";
+  }
+  return JSON.stringify(events);
+};
+
+const resolveOverallMonthlyTargetYear = async () => {
+  try {
+    const records = await getPurokPredictionData();
+    const years = records.map((record) => Number(record.year)).filter(Number.isFinite);
+    return years.length > 0 ? Math.max(...years) : null;
+  } catch {
+    return null;
+  }
+};
 
 const createEmptyRecommendation =
   (purok = undefined) => {
@@ -232,17 +251,29 @@ const generateOverallMonthlyRecommendationsUncached =
       return createEmptyRecommendation();
     }
 
+    const targetYear = await resolveOverallMonthlyTargetYear();
+    const events = await getRecommendationEventContext(
+      targetYear ? { years: [targetYear] } : { limit: 50 },
+    );
+
     const prompt = `
 You are an AI decision support assistant for a water utility administrator.
 
-Historical monthly water consumption:
+Historical monthly water consumption${targetYear ? ` for ${targetYear}` : ""}:
 
 ${JSON.stringify(historical)}
+
+Community events recorded in the same period (check the event date before linking it to a month):
+
+${formatEventContext(events)}
 
 Generate only practical and actionable administrative recommendations based on the observed consumption trend.
 
 Rules:
-- Base every recommendation only on the supplied historical data.
+- Base every recommendation primarily on the supplied historical consumption data.
+- Before finalizing the recommendation, check whether any listed community event falls in or near a month with a noticeable increase or decrease.
+- You may mention a relevant event as possible context (for example, "coincided with <event title> on <date>") but do not assert that the event caused the change.
+- If no event aligns with the trend, ignore the events section.
 - Do not assume the exact cause of an increase or decrease.
 - Do not speculate about leaks, illegal connections, damaged pipes, faulty meters, weather conditions, or population growth unless directly supported by the data.
 - If consumption remains stable, recommend routine monitoring and continued observation.
@@ -293,6 +324,13 @@ const generateOverallYearlyRecommendationsUncached =
       return createEmptyRecommendation();
     }
 
+    const historicalYears = historical
+      .map((item) => Number(item.year))
+      .filter(Number.isFinite);
+    const events = await getRecommendationEventContext(
+      historicalYears.length > 0 ? { years: historicalYears } : { limit: 50 },
+    );
+
     const prompt = `
 You are an AI decision support assistant for a water utility administrator.
 
@@ -300,10 +338,17 @@ Historical yearly water consumption:
 
 ${JSON.stringify(historical)}
 
+Community events recorded in the same years (check the event date before linking it to a year):
+
+${formatEventContext(events)}
+
 Generate only practical and actionable administrative recommendations based on the observed consumption trend.
 
 Rules:
-- Base every recommendation only on the supplied historical data.
+- Base every recommendation primarily on the supplied historical consumption data.
+- Before finalizing the recommendation, check whether any listed community event falls in or near a year with a noticeable increase or decrease.
+- You may mention a relevant event as possible context (for example, "coincided with <event title> on <date>") but do not assert that the event caused the change.
+- If no event aligns with the trend, ignore the events section.
 - Do not assume the exact cause of an increase or decrease.
 - Do not speculate about leaks, illegal connections, damaged pipes, faulty meters, weather conditions, or population growth unless directly supported by the data.
 - If consumption remains stable, recommend routine monitoring and continued observation.
