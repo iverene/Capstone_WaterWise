@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FiCheckCircle, FiPlus, FiUsers } from "react-icons/fi";
 import ResidentRegistrationIntro from "../components/ResidentRegistrationIntro";
-import { UserRound, X } from "lucide-react";
+import { UserRound } from "lucide-react";
 import "../components/ResidentRegistration.css";
 import ConsumerForm from "../components/ConsumerForm";
 import ConsumerListTable from "../components/ConsumerListTable";
@@ -49,6 +49,8 @@ function ConsumerManagementPage() {
   const [consumers, setConsumers] = useState([]);
   const [selectedConsumer, setSelectedConsumer] = useState(null);
   const [formMode, setFormMode] = useState("");
+  const [isFormDirty, setIsFormDirty] = useState(false);
+  const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
   const [error, setError] = useState("");
@@ -221,6 +223,23 @@ function ConsumerManagementPage() {
     setPasswordOtpError("");
   };
 
+  // Guards accidental closes of the resident form: Cancel, Escape, and
+  // overlay clicks ask first when there is unsent input. Only a dirty flag
+  // is tracked.
+  const requestCloseForm = () => {
+    if (isFormDirty) {
+      setIsDiscardConfirmOpen(true);
+      return;
+    }
+    closeForm();
+  };
+
+  const discardForm = () => {
+    setIsFormDirty(false);
+    setIsDiscardConfirmOpen(false);
+    closeForm();
+  };
+
   const openAddResident = () => {
     setSelectedConsumer(null);
     setFormMode("add");
@@ -243,7 +262,8 @@ function ConsumerManagementPage() {
         description={formMode === "edit" ? "Update the resident's service information." : "Enter the resident's details and create secure sign-in credentials."}
         eyebrow="Resident account"
         isOpen={Boolean(formMode)}
-        onClose={closeForm}
+        onClose={requestCloseForm}
+        closeOnOverlay={false}
         panelRoundedClass="rounded-xl"
         showCloseButton={false}
         size={formMode === "add" ? "xl" : "lg"}
@@ -252,7 +272,7 @@ function ConsumerManagementPage() {
         <div className={formMode === "add" ? "resident-registration-layout" : ""}>
           {formMode === "add" && <ResidentRegistrationIntro />}
           <div className={formMode === "add" ? "resident-registration-content" : ""}>
-            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident's details and create secure sign-in credentials.</p></div><button aria-label="Close resident form" className="resident-registration-close" onClick={closeForm} type="button"><X size={21} /></button></header>}
+            {formMode === "add" && <header className="resident-registration-heading"><span className="resident-heading-icon"><UserRound aria-hidden="true" size={34} /></span><div><h2>Resident Information</h2><p>Enter the resident's details and create secure sign-in credentials.</p></div></header>}
             {error && (
               <p
                 className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 sm:mx-6"
@@ -267,11 +287,38 @@ function ConsumerManagementPage() {
               registrationDesign={formMode === "add"}
               initialData={formMode === "edit" ? selectedConsumer : null}
               key={`${formMode}-${selectedConsumer?.id ?? "new"}`}
-              onCancel={closeForm}
+              onCancel={requestCloseForm}
+              onDirtyChange={formMode ? setIsFormDirty : undefined}
               onSubmit={formMode === "edit" ? editConsumer : addConsumer}
               requirePassword={formMode === "add"}
             />
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        description="Your unsaved changes will be lost if you discard them."
+        eyebrow="Unsaved changes"
+        isOpen={isDiscardConfirmOpen}
+        onClose={() => setIsDiscardConfirmOpen(false)}
+        size="sm"
+        title="Discard changes?"
+      >
+        <div className="flex flex-col gap-2 p-5 sm:flex-row sm:justify-end sm:p-6">
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 sm:order-2"
+            onClick={discardForm}
+            type="button"
+          >
+            Discard changes
+          </button>
+          <button
+            className="ww-primary-button inline-flex min-h-11 items-center justify-center px-5 text-sm sm:order-1"
+            onClick={() => setIsDiscardConfirmOpen(false)}
+            type="button"
+          >
+            Keep editing
+          </button>
         </div>
       </Modal>
 

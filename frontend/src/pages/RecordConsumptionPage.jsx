@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Search as SearchIcon, X } from "lucide-react";
 import ConsumerSelectionList from "../components/ConsumerSelectionList";
 import ConsumptionEntryPanel from "../components/ConsumptionEntryPanel";
+import Dropdown from "../components/Dropdown";
 import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
@@ -62,8 +64,7 @@ export default function RecordConsumptionPage() {
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
   const [recordStatus, setRecordStatus] = useState("all");
-  const [searchFocused, setSearchFocused] = useState(false);
-  const searchWrapperRef = useRef(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -110,15 +111,9 @@ export default function RecordConsumptionPage() {
   }, [isOnline, syncing, pendingCount]);
 
   useEffect(() => {
-    if (!searchFocused) return;
-    const handleClickOutside = (event) => {
-      if (searchWrapperRef.current && !searchWrapperRef.current.contains(event.target)) {
-        setSearchFocused(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [searchFocused]);
+    if (!mobileSearchOpen) return;
+    document.getElementById("mobile-resident-search")?.focus();
+  }, [mobileSearchOpen]);
 
   const applyPendingState = useCallback(async (contexts) => {
     const pending = await getPendingMeterReadings();
@@ -205,6 +200,12 @@ export default function RecordConsumptionPage() {
       .sort((left, right) => Number(left.replace(/\D/g, "")) - Number(right.replace(/\D/g, "")))
       .map((value) => ({ label: value, value })),
   ], [consumers]);
+
+  const recordStatusOptions = useMemo(() => [
+    { label: "All residents", value: "all" },
+    { label: "Not yet recorded", value: "unrecorded" },
+    { label: "Recorded this month", value: "recorded" },
+  ], []);
 
   const selectConsumer = async (consumer) => {
     if (!navigator.onLine) {
@@ -318,44 +319,59 @@ export default function RecordConsumptionPage() {
         </div>
       )}
       {loadError && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{loadError}</span><button className="font-bold underline" onClick={loadData} type="button">Try again</button></div>}
-      <div aria-label="Resident directory controls" className="flex items-center gap-2" ref={searchWrapperRef} role="search">
-        <Search ariaLabel="Search residents by name or account number" className={`min-w-0 transition-all duration-300 ease-in-out [&_input]:min-h-11 [&_input]:py-2 sm:[&_input]:min-h-12 sm:[&_input]:py-3 ${searchFocused ? "flex-1" : "w-1/2 sm:flex-1"}`} onBlur={() => setSearchFocused(false)} onFocus={() => setSearchFocused(true)} onValueChange={setQuery} placeholder="Search name or account number" value={query} />
-        <div className={`shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${searchFocused ? "w-0 opacity-0" : "w-1/2 opacity-100 sm:w-auto sm:opacity-100"}`}>
-          <Filter
-            ariaLabel="Filter residents"
-            buttonLabel="Filters"
-            className="w-full"
-            description="Choose which residents should be shown in this list."
-            disabled={loading}
-            filters={[
-              {
-                ariaLabel: "Filter residents by purok",
-                className: "w-40",
-                id: "resident-purok-filter",
-                label: "Purok",
-                name: "residentPurok",
-                onValueChange: setPurok,
-                options: purokOptions,
-                value: purok,
-              },
-              {
-                ariaLabel: "Filter residents by recording status",
-                className: "w-52",
-                id: "resident-recording-status-filter",
-                label: "Recording status",
-                name: "residentRecordingStatus",
-                onValueChange: setRecordStatus,
-                options: [
-                  { label: "All residents", value: "all" },
-                  { label: "Not yet recorded", value: "unrecorded" },
-                  { label: "Recorded this month", value: "recorded" },
-                ],
-                value: recordStatus,
-              },
-            ]}
-            title="Resident Filters"
-          />
-        </div>
+      {/* Mobile controls: both filters stay exposed; search hides behind a toggle. */}
+      <div aria-label="Resident directory controls" className="flex items-center gap-2 sm:hidden" role="search">
+        {mobileSearchOpen ? (
+          <>
+            <Search ariaLabel="Search residents by name or account number" className="min-w-0 flex-1 [&_input]:min-h-11 [&_input]:py-2" id="mobile-resident-search" onValueChange={setQuery} placeholder="Search name or account number" value={query} />
+            <button aria-label="Close search" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setMobileSearchOpen(false)} type="button">
+              <X aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <Dropdown ariaLabel="Filter residents by purok" className="min-w-0 flex-1" disabled={loading} name="residentPurokMobile" onValueChange={setPurok} options={purokOptions} value={purok} />
+            <Dropdown ariaLabel="Filter residents by recording status" className="min-w-0 flex-1" disabled={loading} name="residentRecordingStatusMobile" onValueChange={setRecordStatus} options={recordStatusOptions} value={recordStatus} />
+            <button aria-label={query ? `Search residents, current search: ${query}` : "Search residents"} className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setMobileSearchOpen(true)} type="button">
+              <SearchIcon aria-hidden="true" className="h-5 w-5" />
+              {query && <span aria-hidden="true" className="absolute right-2 top-2 h-2 w-2 rounded-full bg-water-600" />}
+            </button>
+          </>
+        )}
+      </div>
+      {/* Desktop controls: search plus both filters inline. */}
+      <div aria-label="Resident directory controls" className="hidden items-center gap-2 sm:flex" role="search">
+        <Search ariaLabel="Search residents by name or account number" className="min-w-0 flex-1 sm:[&_input]:min-h-12 sm:[&_input]:py-3" onValueChange={setQuery} placeholder="Search name or account number" value={query} />
+        <Filter
+          ariaLabel="Filter residents"
+          buttonLabel="Filters"
+          className="w-auto shrink-0"
+          description="Choose which residents should be shown in this list."
+          disabled={loading}
+          filters={[
+            {
+              ariaLabel: "Filter residents by purok",
+              className: "w-40",
+              id: "resident-purok-filter",
+              label: "Purok",
+              name: "residentPurok",
+              onValueChange: setPurok,
+              options: purokOptions,
+              value: purok,
+            },
+            {
+              ariaLabel: "Filter residents by recording status",
+              className: "w-52",
+              id: "resident-recording-status-filter",
+              label: "Recording status",
+              name: "residentRecordingStatus",
+              onValueChange: setRecordStatus,
+              options: recordStatusOptions,
+              value: recordStatus,
+            },
+          ]}
+          title="Resident Filters"
+        />
       </div>
       {loading ? <LoadingSkeleton label="Loading residents and reading status" variant="list" /> : <ConsumerSelectionList consumers={visibleConsumers} emptyDescription={consumers.length ? "Try a different search, purok, or recording status." : undefined} emptyTitle={consumers.length ? "No matching residents" : undefined} onSelect={selectConsumer} selectedId={selectedConsumer?.id} selectingId={selectingId} />}
 

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, LoaderCircle } from "lucide-react";
 import Dropdown from "./Dropdown";
 
@@ -63,7 +63,7 @@ function isValidContactNumber(contactNumber) {
   return /^09\d{9}$/.test(digitsOnly);
 }
 
-function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onCancel }) {
+function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onDirtyChange, onCancel }) {
   const formRef = useRef(null);
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
@@ -71,6 +71,26 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Reports whether the form differs from its opening values so the parent
+  // can confirm before discarding. Only the dirty flag leaves this component.
+  const baseline = useMemo(() => createInitialState(initialData), [initialData]);
+  useEffect(() => {
+    if (!onDirtyChange) return;
+    const dirty =
+      String(password ?? "").trim() !== "" ||
+      [
+        "accountName",
+        "firstName",
+        "middleName",
+        "lastName",
+        "purok",
+        "email",
+        "contactNumber",
+        "status",
+      ].some((field) => String(consumer[field] ?? "") !== String(baseline[field] ?? ""));
+    onDirtyChange(dirty);
+  }, [baseline, consumer, password, onDirtyChange]);
 
   const updateField = (field, value) => {
     setConsumer((previous) => ({ ...previous, [field]: value }));

@@ -41,6 +41,13 @@ const compactDate = (value) => value
     }).format(new Date(`${value}T00:00:00Z`))
   : "None";
 
+const monthShortLabel = (value) => value
+  ? new Intl.DateTimeFormat("en-GB", {
+      month: "short",
+      timeZone: "UTC",
+    }).format(new Date(`${value}T00:00:00Z`))
+  : null;
+
 export default function ConsumerHome() {
   const [home, setHome] = useState(null);
   const [error, setError] = useState("");
@@ -93,6 +100,7 @@ export default function ConsumerHome() {
     ? null
     : home.reading.latestUsage - home.reading.previousUsage;
   const hasBalance = home.billing.outstandingBalance > 0;
+  const latestMonth = monthShortLabel(home.reading.latestDate);
 
   // The payment banner dismisses once per outstanding bill: the dismissal is
   // keyed by billing ID (falling back to the balance), so a new bill or a
@@ -177,8 +185,8 @@ export default function ConsumerHome() {
           trend={usageDifference == null
             ? undefined
             : usageDifference === 0
-              ? "No change"
-              : `${Math.abs(usageDifference).toFixed(1)} m³ ${usageDifference > 0 ? "higher" : "lower"}`}
+              ? latestMonth ? `${latestMonth} · No change` : "No change"
+              : `${latestMonth ? `${latestMonth} · ` : ""}${Math.abs(usageDifference).toFixed(1)} m³ ${usageDifference > 0 ? "higher" : "lower"}`}
           trendDirection={usageDifference > 0 ? "up" : usageDifference < 0 ? "down" : "neutral"}
           trendTone={usageDifference > 0 ? "warning" : usageDifference < 0 ? "positive" : "neutral"}
           unit="m³"
