@@ -130,7 +130,7 @@ export default function ConsumerReadingsPage() {
     : consumerReadings;
 
   return (
-    <main className="min-w-0 space-y-6">
+    <main className="min-w-0 space-y-4 sm:space-y-5">
       <button
         className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2 text-xs font-bold text-water-700 hover:bg-water-50 hover:text-water-900"
         onClick={() => navigate("/admin/readings")}
@@ -139,27 +139,26 @@ export default function ConsumerReadingsPage() {
         <ArrowLeft aria-hidden="true" className="h-4 w-4" />
         Back to readings
       </button>
-      <div>
-        <PageHeader compact title={consumer?.consumerName ?? "Consumer Readings"} />
-        {consumer && (
-          <p className="mt-1 text-sm text-slate-500">
-            {consumer.purok ?? "Unassigned"}
-          </p>
-        )}
-      </div>
-
-      {error && <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{error}</span><button className="font-bold underline" onClick={() => window.location.reload()} type="button">Try again</button></div>}
-      {!loading && yearOptions.length > 0 && (
-        <div className="flex justify-end">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <PageHeader compact title={consumer?.consumerName ?? "Consumer Readings"} />
+          {consumer && (
+            <p className="mt-1 text-sm text-slate-500">
+              {consumer.purok ?? "Unassigned"}
+            </p>
+          )}
+        </div>
+        {!loading && yearOptions.length > 0 && (
           <Filter
             ariaLabel="Filter readings by year"
-            className="w-full sm:w-32"
+            className="w-full sm:w-44"
             onValueChange={setYear}
             options={yearOptions.map((option) => ({ label: option, value: option }))}
             value={activeYear}
           />
-        </div>
-      )}
+        )}
+      </div>
+      {error && <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{error}</span><button className="font-bold underline" onClick={() => window.location.reload()} type="button">Try again</button></div>}
       {loading ? (
         <LoadingSkeleton label="Loading consumer readings" variant="table" />
       ) : (

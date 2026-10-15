@@ -46,7 +46,6 @@ export default function PaymentProcessingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [paymentQuery, setPaymentQuery] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("all");
   const [paymentCountFilter, setPaymentCountFilter] = useState("all");
 
   const preselectedBilling = billingRecords.find(
@@ -211,7 +210,6 @@ export default function PaymentProcessingPage() {
         oldestBilling,
         outstandingBillCount: residentBills.length,
         purok: oldestBilling.purok,
-        statuses: residentBills.map((billing) => billing.status),
         totalOutstanding: residentBills.reduce(
           (total, billing) => total + Number(billing.outstandingBalance || 0),
           0,
@@ -224,13 +222,11 @@ export default function PaymentProcessingPage() {
     const matchesName =
       !paymentSearchTerm ||
       String(resident.consumerName ?? "").toLowerCase().includes(paymentSearchTerm);
-    const matchesStatus =
-      paymentStatus === "all" || resident.statuses.includes(paymentStatus);
     const matchesCount =
       paymentCountFilter === "all" ||
       (paymentCountFilter === "1" ? resident.outstandingBillCount === 1 : resident.outstandingBillCount >= 2);
 
-    return matchesName && matchesStatus && matchesCount;
+    return matchesName && matchesCount;
   });
 
   return (
@@ -266,17 +262,6 @@ export default function PaymentProcessingPage() {
           onValueChange={setPaymentQuery}
           placeholder="Search resident name"
           value={paymentQuery}
-        />
-        <Filter
-          ariaLabel="Filter outstanding bills by status"
-          className="w-full sm:w-48"
-          onValueChange={setPaymentStatus}
-          options={[
-            { label: "All statuses", value: "all" },
-            { label: "Unpaid", value: "Unpaid" },
-            { label: "Partially paid", value: "Partially Paid" },
-          ]}
-          value={paymentStatus}
         />
         <Filter
           ariaLabel="Filter residents by outstanding bill count"

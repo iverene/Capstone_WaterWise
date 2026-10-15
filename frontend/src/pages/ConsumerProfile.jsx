@@ -132,7 +132,7 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
 
   if (error) {
     return (
-      <div className="space-y-5 sm:space-y-6">
+      <div className="space-y-5 sm:space-y-6 lg:pt-14">
         <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 sm:flex-row sm:items-center sm:justify-between" role="alert">
           <span>{error}</span>
           <button className="min-h-11 rounded-xl bg-red-700 px-4 font-bold text-white hover:bg-red-800" onClick={retry} type="button">
@@ -145,14 +145,14 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
 
   if (!consumer) {
     return (
-      <div className="space-y-5 sm:space-y-6">
+      <div className="space-y-5 sm:space-y-6 lg:pt-14">
         <LoadingSkeleton label="Loading consumer profile" variant="profile" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="space-y-5 sm:space-y-6 lg:pt-14">
       <AdminProfileBanner account={consumer} displayName={consumer.name} roleLabel="Resident" subtitle="WaterWise Resident" details={[{ label: "Account ID", value: consumer.accountId }, { label: "Username", value: consumer.username }, { label: "Email address", value: consumer.email }, { label: "Contact number", value: consumer.contactNumber }, { label: "Service area", value: consumer.purok }]} tagline={<>&ldquo;Clean water for<br />every home.&rdquo;</>} />
 
 

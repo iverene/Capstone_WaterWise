@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Building2, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import OtpInput from "../components/OtpInput";
+import AccountBackButton from "../components/AccountBackButton";
 import PageHeader from "../components/PageHeader";
 import {
   completeConsumerEmailChange,
@@ -36,6 +37,12 @@ function getSavedEmailOtpChallenge() {
 export default function ChangeEmailPage() {
   const navigate = useNavigate();
   const accountRole = getStoredAccount()?.role ?? "consumer";
+  const backPath =
+    accountRole === "meter-reader"
+      ? "/meter-reader/profile"
+      : accountRole === "consumer"
+        ? "/consumer/profile-details"
+        : "/admin/profile";
 
   const [savedChallenge] = useState(getSavedEmailOtpChallenge);
   const [challengeToken, setChallengeToken] = useState(savedChallenge?.challengeToken ?? "");
@@ -110,6 +117,7 @@ export default function ChangeEmailPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      <AccountBackButton fallbackPath={backPath} label="Back to profile" />
       <PageHeader title="Change Email Address" />
 
       <div className="mx-auto w-full max-w-md">
@@ -155,7 +163,7 @@ export default function ChangeEmailPage() {
         )}
 
         {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{error}</p>}
-        <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:mt-5 sm:gap-3 sm:rounded-xl sm:p-4"><Building2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 sm:h-5 sm:w-5" /><p className="text-xs leading-5 text-amber-900 sm:text-sm sm:leading-6"><strong>Can&apos;t remember or access your current email?</strong> {accountRole === "consumer" ? "Please visit the Sucol Water System office so staff can verify your identity and update the email safely." : "Contact the authorized system administrator for identity verification and account recovery."}</p></div>
+        {accountRole === "consumer" && <div className="mt-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:mt-5 sm:gap-3 sm:rounded-xl sm:p-4"><Building2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 sm:h-5 sm:w-5" /><p className="text-xs leading-5 text-amber-900 sm:text-sm sm:leading-6"><strong>Can&apos;t remember or access your current email?</strong> Please visit the Sucol Water System office so staff can verify your identity and update the email safely.</p></div>}
       </div>
     </div>
   );

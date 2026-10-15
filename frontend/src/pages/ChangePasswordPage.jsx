@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Eye, EyeOff, LoaderCircle, Mail, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import OtpInput from "../components/OtpInput";
+import AccountBackButton from "../components/AccountBackButton";
 import PageHeader from "../components/PageHeader";
 import { useToast } from "../components/Toast";
 import {
@@ -197,6 +198,7 @@ export default function ChangePasswordPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
+      <AccountBackButton fallbackPath={backPath} label="Back to profile" />
       <PageHeader title="Change Password" />
 
       <div className="mx-auto w-full max-w-md">

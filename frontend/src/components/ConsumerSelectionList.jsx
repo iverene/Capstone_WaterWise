@@ -15,13 +15,13 @@ export default function ConsumerSelectionList({ consumers = [], emptyDescription
           const disabled = (!consumer.hasReadingInSelectedMonth && !consumer.canRecord) || selectingId != null;
           return (
             <button
-              className={`flex min-h-20 w-full items-center gap-3 rounded-xl border p-3 text-left transition sm:min-h-24 sm:gap-4 sm:rounded-2xl sm:p-5 ${selectedId === consumer.id ? "border-water-500 bg-water-50 ring-4 ring-water-100" : consumer.hasReadingInSelectedMonth ? "border-water-200 bg-water-50/60 hover:border-water-400 hover:bg-water-50" : "border-slate-200 bg-white hover:border-water-300 hover:bg-water-50"} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70`}
+              className={`flex min-h-20 w-full items-center gap-3 rounded-xl border p-3 text-left transition sm:min-h-24 sm:gap-4 sm:rounded-2xl sm:p-5 ${selectedId === consumer.id ? "border-water-500 bg-water-50 ring-4 ring-water-100" : consumer.hasReadingInSelectedMonth ? "border-emerald-300 bg-emerald-50 hover:border-emerald-400 hover:bg-emerald-100/60" : "border-slate-200 bg-white hover:border-water-300 hover:bg-water-50"} disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70`}
               disabled={disabled}
               key={consumer.id}
               onClick={() => onSelect(consumer)}
               type="button"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-water-100 text-water-700 sm:h-11 sm:w-11 sm:rounded-xl"><UserRound aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" /></span>
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11 sm:rounded-xl ${consumer.hasReadingInSelectedMonth ? "bg-emerald-100 text-emerald-700" : "bg-water-100 text-water-700"}`}><UserRound aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" /></span>
               <span className="min-w-0">
                 <span className="block truncate text-[15px] font-extrabold text-slate-900 sm:text-base">{consumer.consumerName}</span>
                 <span className="mt-0.5 block text-xs font-semibold text-slate-500">{consumer.consumerNo} · {consumer.purok}</span>
@@ -29,7 +29,7 @@ export default function ConsumerSelectionList({ consumers = [], emptyDescription
                   {consumer.hasPendingReading ? (
                     <span className="inline-flex items-center gap-1 text-amber-700"><CloudOff aria-hidden="true" className="h-3.5 w-3.5" /> Saved offline · Waiting to sync</span>
                   ) : consumer.hasReadingInSelectedMonth ? (
-                    <span className="inline-flex items-center gap-1 text-water-700"><CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> Recorded this month · View receipt</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-800 ring-1 ring-inset ring-emerald-300"><CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> Recorded this month · View receipt</span>
                   ) : selectingId === consumer.id ? (
                     <span className="inline-flex items-center gap-1 text-water-700"><LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" /> Checking latest reading</span>
                   ) : consumer.status !== "active" ? (
