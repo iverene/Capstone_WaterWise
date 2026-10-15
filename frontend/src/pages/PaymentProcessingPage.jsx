@@ -251,6 +251,15 @@ export default function PaymentProcessingPage() {
         </div>
       )}
 
+      <div>
+        <h2 className="text-xl font-extrabold tracking-[-0.02em] text-navy-900" id="outstanding-payments-heading">
+          Residents needing payment
+        </h2>
+        <p className="mt-1 text-sm text-slate-600">
+          {paymentRows.length} {paymentRows.length === 1 ? "resident" : "residents"} with {unpaidBillings.length} outstanding {unpaidBillings.length === 1 ? "bill" : "bills"}.
+        </p>
+      </div>
+
       <div
         aria-label="Outstanding payment list controls"
         className="flex flex-col gap-3 sm:flex-row sm:items-center"
@@ -277,15 +286,6 @@ export default function PaymentProcessingPage() {
       </div>
 
       <section aria-labelledby="outstanding-payments-heading" className="space-y-3">
-        <div>
-          <h2 className="text-xl font-extrabold tracking-[-0.02em] text-navy-900" id="outstanding-payments-heading">
-            Residents needing payment
-          </h2>
-          <p className="mt-1 text-sm text-slate-600">
-            {paymentRows.length} {paymentRows.length === 1 ? "resident" : "residents"} with {unpaidBillings.length} outstanding {unpaidBillings.length === 1 ? "bill" : "bills"}.
-          </p>
-        </div>
-
         {loading ? (
           <LoadingSkeleton label="Loading residents with outstanding balances" variant="table" />
         ) : (

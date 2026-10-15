@@ -146,6 +146,7 @@ export default function AdminProfile() {
   const [showAdminConfirmPassword, setShowAdminConfirmPassword] = useState(false);
   const [selectedMeterReader, setSelectedMeterReader] = useState(null);
   const [meterReaderUpdates, setMeterReaderUpdates] = useState({ email: "", password: "", confirmPassword: "" });
+  const [staffDiscardTarget, setStaffDiscardTarget] = useState(null);
   const [meterReaderError, setMeterReaderError] = useState("");
   const [isUpdatingMeterReader, setIsUpdatingMeterReader] = useState(false);
   const [showMeterReaderPassword, setShowMeterReaderPassword] = useState(false);
@@ -167,6 +168,7 @@ export default function AdminProfile() {
   const [trustedDevicesError, setTrustedDevicesError] = useState("");
   const [isTrustedDevicesLoading, setIsTrustedDevicesLoading] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState(null);
+  const [deviceRevokeTarget, setDeviceRevokeTarget] = useState(null);
   const [unlockSettingsError, setUnlockSettingsError] = useState("");
   const [unlockStaffError, setUnlockStaffError] = useState("");
   const [requestingGateAction, setRequestingGateAction] = useState(null);
@@ -241,6 +243,14 @@ export default function AdminProfile() {
     } catch (error) {
       setTrustedDevicesError(error.message);
     } finally { setRevokingDeviceId(null); }
+  };
+
+  const confirmDeviceRevoke = async () => {
+    const target = deviceRevokeTarget;
+    setDeviceRevokeTarget(null);
+    if (!target) return;
+    if (target.type === "one") await removeTrustedDevice(target.device);
+    else await removeOtherTrustedDevices();
   };
 
   const removeOtherTrustedDevices = async () => {
@@ -439,6 +449,59 @@ export default function AdminProfile() {
     await beginStaffAuthorization(pendingAction);
   };
 
+  // Same accidental-close guard as the resident forms: the create/manage
+  // staff modals ignore overlay clicks and ask first when there is input.
+  const closeCreateStaff = () => {
+    setStaffType("");
+    setStaffError("");
+    setStaffForm({ username: "", email: "", password: "", confirmPassword: "" });
+    setShowTemporaryPassword(false);
+    setShowConfirmTemporaryPassword(false);
+  };
+  const closeManageAdmin = () => {
+    setSelectedAdmin(null);
+    setShowAdminPassword(false);
+    setShowAdminConfirmPassword(false);
+  };
+  const closeManageMeterReader = () => {
+    setSelectedMeterReader(null);
+    setShowMeterReaderPassword(false);
+    setShowMeterReaderConfirmPassword(false);
+  };
+
+  const isCreateStaffDirty = [staffForm.username, staffForm.email, staffForm.password, staffForm.confirmPassword]
+    .some((value) => String(value ?? "").trim() !== "");
+  const isManageAdminDirty = selectedAdmin != null && (
+    String(adminUpdates.email ?? "") !== String(selectedAdmin.email ?? "") ||
+    String(adminUpdates.password ?? "").trim() !== "" ||
+    String(adminUpdates.confirmPassword ?? "").trim() !== ""
+  );
+  const isManageMeterReaderDirty = selectedMeterReader != null && (
+    String(meterReaderUpdates.email ?? "") !== String(selectedMeterReader.email ?? "") ||
+    String(meterReaderUpdates.password ?? "").trim() !== "" ||
+    String(meterReaderUpdates.confirmPassword ?? "").trim() !== ""
+  );
+
+  const requestCloseCreateStaff = () => {
+    if (isCreateStaffDirty) setStaffDiscardTarget("create");
+    else closeCreateStaff();
+  };
+  const requestCloseManageAdmin = () => {
+    if (isManageAdminDirty) setStaffDiscardTarget("manage-admin");
+    else closeManageAdmin();
+  };
+  const requestCloseManageMeterReader = () => {
+    if (isManageMeterReaderDirty) setStaffDiscardTarget("manage-reader");
+    else closeManageMeterReader();
+  };
+
+  const confirmStaffDiscard = () => {
+    if (staffDiscardTarget === "create") closeCreateStaff();
+    else if (staffDiscardTarget === "manage-admin") closeManageAdmin();
+    else if (staffDiscardTarget === "manage-reader") closeManageMeterReader();
+    setStaffDiscardTarget(null);
+  };
+
   const verifyStaffAuthorization = async (event) => {
     event.preventDefault();
     if (!/^\d{6}$/.test(staffOtp)) return setStaffOtpError("Enter the 6-digit verification code.");
@@ -510,7 +573,7 @@ export default function AdminProfile() {
         <h2 className="text-xl font-extrabold tracking-tight text-navy-900" id="admin-account-settings-heading">Account settings</h2><p className="mt-1 text-sm leading-6 text-slate-600">Manage your password, email address, trusted devices, and sign out.</p>
         <div className="mt-5 grid gap-3"><button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50" onClick={() => navigate("/account/change-password")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><KeyRound className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Change password</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify using email OTP.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50" onClick={() => navigate("/account/change-email")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Mail className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify your current registered email first.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50" onClick={openTrustedDevices} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><ShieldCheck className="h-5 w-5" /></span><span><span className="block text-sm font-bold">Trusted devices</span><span className="mt-1 block text-xs leading-5 text-slate-500">Review browsers that can skip email OTP.</span></span></button><button className="flex min-h-16 items-center gap-3 rounded-xl bg-red-50 px-4 text-left hover:bg-red-100" onClick={() => window.dispatchEvent(new Event("waterwise:request-logout"))} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-700"><LogOut className="h-5 w-5" /></span><span><span className="block text-sm font-bold text-red-700">Log out</span><span className="mt-1 block text-xs leading-5 text-slate-500">End this session on this device.</span></span></button></div>
       </section>
-      {account?.role === "super-admin" && <section className="min-w-0" aria-labelledby="super-admin-permissions-heading"><p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-permissions-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts. These controls are hidden from regular administrators.</p>
+      {account?.role === "super-admin" && <section className="min-w-0" aria-labelledby="super-admin-permissions-heading"><p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-permissions-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts.</p>
         <div className="mt-5 grid gap-2">
           <button aria-busy={requestingGateAction === "manage-staff"} className="flex min-h-16 w-full items-center gap-3 rounded-xl bg-slate-50 px-4 text-left hover:bg-water-50 disabled:cursor-wait disabled:opacity-70" disabled={requestingGateAction !== null} onClick={() => beginStaffAuthorization({ action: "manage-staff" })} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700">{requestingGateAction === "manage-staff" ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}</span><span><span className="block text-sm font-bold py-1 text-navy-900">Super Admin permissions</span><span className="mt-1 block text-xs leading-5 text-slate-500">{requestingGateAction === "manage-staff" ? "Sending verification code…" : "Verify by email OTP to open staff management."}</span></span></button>
           {unlockStaffError && <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{unlockStaffError}</p>}
@@ -520,17 +583,16 @@ export default function AdminProfile() {
       </section>}
       </> : <>
       <button className="inline-flex min-h-10 items-center gap-2 rounded-xl px-2  text-xs font-bold text-water-700 hover:bg-water-50" onClick={() => navigate("/admin/profile", { replace: true })} type="button"><ArrowLeft className="h-4 w-4" />Back to administrator account</button>
-      <PageHeader compact description="Create and manage regular administrator and meter-reader accounts during this verified session." title="Super Admin Staff Management" />
       {!staffManagementPermission?.token && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="text-sm font-bold text-amber-900">Your staff-management permission has expired.</p><button className="mt-3 text-sm font-bold text-water-700" onClick={() => navigate("/admin/profile", { replace: true })} type="button">Return and verify again</button></section>}
       </>}
       {account?.role === "super-admin" && isStaffManagementPage && staffManagementPermission?.token && <section className="min-w-0" aria-labelledby="super-admin-tools-heading">
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-tools-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts. These controls are hidden from regular administrators.</p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-700">Restricted management</p><h2 className="mt-1 text-xl font-extrabold text-navy-900" id="super-admin-tools-heading">Super Admin only</h2><p className="mt-1 text-sm leading-6 text-slate-600">Create administrator and meter-reader accounts.</p>
         <div className="mt-5 grid gap-3">
           <button className="group flex min-h-16 min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setStaffType("admin")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserPlus className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-sm font-bold text-navy-900">Create Admin</span><span className="mt-1 block text-xs leading-5 text-slate-500">Add a regular administrator account.</span></span></button>
           <button className="group flex min-h-16 min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 text-left transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setStaffType("meter-reader")} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><UserRound className="h-5 w-5" /></span><span className="min-w-0"><span className="block text-sm font-bold text-navy-900">Create Meter Reader</span><span className="mt-1 block text-xs leading-5 text-slate-500">Add field personnel for meter readings.</span></span></button>
         </div>
       <div className="mt-8 border-t border-slate-200 pt-6">
-        <h2 className="text-xl font-extrabold text-navy-900">Staff directory</h2><p className="mt-1 text-sm leading-6 text-slate-600">Review staff accounts and update regular Admin or Meter Reader credentials. Super Admin accounts are protected.</p>
+        <h2 className="text-xl font-extrabold text-navy-900">Staff directory</h2><p className="mt-1 text-sm leading-6 text-slate-600">Review staff accounts and update regular Admin or Meter Reader credentials.</p>
           <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1"><button className={`min-h-11 rounded-lg text-sm font-bold ${directoryType === "admins" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { if (directoryType === "admins") return; setIsDirectoryLoading(true); setDirectoryError(""); setDirectoryType("admins"); setDirectoryPage(1); }} type="button">Admins</button><button className={`min-h-11 rounded-lg text-sm font-bold ${directoryType === "meterReaders" ? "bg-white text-water-800 shadow-sm" : "text-slate-600"}`} onClick={() => { if (directoryType === "meterReaders") return; setIsDirectoryLoading(true); setDirectoryError(""); setDirectoryType("meterReaders"); setDirectoryPage(1); }} type="button">Meter Readers</button></div>
         {isDirectoryLoading && <LoadingSkeleton count={2} label="Loading staff accounts" variant="table" />}
         {directoryError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{directoryError}</p>}
@@ -552,41 +614,102 @@ export default function AdminProfile() {
               return <div className="flex items-start gap-3 border-b border-slate-200 p-4 last:border-b-0" key={device.id}>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><Icon className="h-5 w-5" /></span>
                 <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-bold text-navy-900">{platform}</p>{device.isCurrent && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">This device</span>}</div><p className="mt-1 text-sm text-slate-600">{browser}</p><p className="mt-1 text-xs leading-5 text-slate-500">Last used {formatDeviceDate(device.lastUsedAt)}<span aria-hidden="true"> · </span>Expires {formatDeviceDate(device.expiresAt)}</p></div>
-                <button aria-label={`Remove ${platform}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50" disabled={revokingDeviceId !== null} onClick={() => removeTrustedDevice(device)} title="Remove trusted device" type="button">{revokingDeviceId === device.id ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}</button>
+                <button aria-label={`Remove ${platform}`} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-200 bg-white text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50" disabled={revokingDeviceId !== null} onClick={() => setDeviceRevokeTarget({ type: "one", device })} title="Remove trusted device" type="button">{revokingDeviceId === device.id ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}</button>
               </div>;
             })}
           </div>}
-          {!isTrustedDevicesLoading && trustedDevices.some((device) => device.isCurrent) && trustedDevices.some((device) => !device.isCurrent) && <button className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50" disabled={revokingDeviceId !== null} onClick={removeOtherTrustedDevices} type="button">{revokingDeviceId === "others" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}Remove all other devices</button>}
+          {!isTrustedDevicesLoading && trustedDevices.some((device) => device.isCurrent) && trustedDevices.some((device) => !device.isCurrent) && <button className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50" disabled={revokingDeviceId !== null} onClick={() => setDeviceRevokeTarget({ type: "others" })} type="button">{revokingDeviceId === "others" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}Remove all other devices</button>}
         </div>
       </Modal>}
-      {staffType && <Modal description={`Enter the new ${staffType === "admin" ? "administrator" : "meter reader"} credentials and assign a temporary password.`} eyebrow="Super Admin only" isOpen onClose={() => { setStaffType(""); setStaffError(""); setStaffForm({ username: "", email: "", password: "", confirmPassword: "" }); setShowTemporaryPassword(false); setShowConfirmTemporaryPassword(false); }} size="sm" title={`Create ${staffType === "admin" ? "Admin" : "Meter Reader"}`}>
+      <Modal
+        description={deviceRevokeTarget?.type === "others"
+          ? "Every other browser will need email OTP verification on its next sign-in. This browser stays trusted."
+          : "This browser will need email OTP verification on its next sign-in."}
+        eyebrow="Trusted devices"
+        isOpen={deviceRevokeTarget !== null}
+        onClose={() => setDeviceRevokeTarget(null)}
+        size="sm"
+        title={deviceRevokeTarget?.type === "others" ? "Remove all other devices?" : `Remove ${deviceRevokeTarget?.device ? describeDevice(deviceRevokeTarget.device.userAgent).platform : "device"}?`}
+      >
+        <div className="flex flex-col gap-2 p-5 sm:flex-row sm:justify-end sm:p-6">
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 sm:order-2"
+            onClick={confirmDeviceRevoke}
+            type="button"
+          >
+            {deviceRevokeTarget?.type === "others" ? "Remove all others" : "Remove device"}
+          </button>
+          <button
+            className="ww-primary-button inline-flex min-h-11 items-center justify-center px-5 text-sm sm:order-1"
+            onClick={() => setDeviceRevokeTarget(null)}
+            type="button"
+          >
+            Keep device
+          </button>
+        </div>
+      </Modal>
+      {staffType && <Modal description={`Enter the new ${staffType === "admin" ? "administrator" : "meter reader"} credentials and assign a temporary password.`} eyebrow="Super Admin only" isOpen onClose={requestCloseCreateStaff} closeOnOverlay={false} showCloseButton={false} size="sm" title={`Create ${staffType === "admin" ? "Admin" : "Meter Reader"}`}>
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={createStaff}>
           <div><label className="text-sm font-semibold" htmlFor="staff-username">Username</label><input autoComplete="off" className="ww-field mt-2 px-4 py-3" id="staff-username" onChange={(event) => { setStaffForm((current) => ({ ...current, username: event.target.value })); setStaffError(""); }} placeholder={staffType === "admin" ? "e.g. admin02" : "e.g. reader01"} value={staffForm.username} /></div>
           <div><label className="text-sm font-semibold" htmlFor="staff-email">Email address</label><input autoComplete="off" className="ww-field mt-2 px-4 py-3" id="staff-email" onChange={(event) => { setStaffForm((current) => ({ ...current, email: event.target.value })); setStaffError(""); }} placeholder={staffType === "admin" ? "e.g. admin02@example.com" : "e.g. reader01@example.com"} type="email" value={staffForm.email} /></div>
           <div><label className="text-sm font-semibold" htmlFor="staff-temporary-password">Temporary password</label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="staff-temporary-password" onChange={(event) => { setStaffForm((current) => ({ ...current, password: event.target.value })); setStaffError(""); }} placeholder="e.g. Staff@2026" type={showTemporaryPassword ? "text" : "password"} value={staffForm.password} /><button aria-label={showTemporaryPassword ? "Hide temporary password" : "Show temporary password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowTemporaryPassword((visible) => !visible)} type="button">{showTemporaryPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div><p className="mt-1.5 text-xs leading-5 text-slate-500">Example: Staff@2026. Use at least 8 characters with uppercase, lowercase, a number, and a symbol.</p></div>
           <div><label className="text-sm font-semibold" htmlFor="staff-confirm-temporary-password">Confirm temporary password</label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="staff-confirm-temporary-password" onChange={(event) => { setStaffForm((current) => ({ ...current, confirmPassword: event.target.value })); setStaffError(""); }} placeholder="Re-enter temporary password" type={showConfirmTemporaryPassword ? "text" : "password"} value={staffForm.confirmPassword} /><button aria-label={showConfirmTemporaryPassword ? "Hide confirmed temporary password" : "Show confirmed temporary password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowConfirmTemporaryPassword((visible) => !visible)} type="button">{showConfirmTemporaryPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>
           {staffError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{staffError}</p>}
-          <button className="ww-primary-button flex min-h-12 items-center justify-center gap-2" disabled={isCreatingStaff} type="submit"><UserPlus className="h-5 w-5" />{isCreatingStaff ? "Creating account…" : `Create ${staffType === "admin" ? "Admin" : "Meter Reader"}`}</button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button className="ww-primary-button flex min-h-12 flex-1 items-center justify-center gap-2 sm:order-2" disabled={isCreatingStaff} type="submit"><UserPlus className="h-5 w-5" />{isCreatingStaff ? "Creating account…" : `Create ${staffType === "admin" ? "Admin" : "Meter Reader"}`}</button>
+            <button className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:order-1" onClick={requestCloseCreateStaff} type="button">Cancel</button>
+          </div>
         </form>
       </Modal>}
-      {selectedAdmin && <Modal description={`Update ${selectedAdmin.username}'s email or assign a new temporary password.`} eyebrow="Regular administrator management" isOpen onClose={() => { setSelectedAdmin(null); setShowAdminPassword(false); setShowAdminConfirmPassword(false); }} size="sm" title="Manage Administrator">
+      {selectedAdmin && <Modal description={`Update ${selectedAdmin.username}'s email or assign a new temporary password.`} eyebrow="Regular administrator management" isOpen onClose={requestCloseManageAdmin} closeOnOverlay={false} showCloseButton={false} size="sm" title="Manage Administrator">
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={updateRegularAdmin}>
           <div><label className="text-sm font-semibold" htmlFor="managed-admin-email">Email address</label><input className="ww-field mt-2 px-4 py-3" id="managed-admin-email" onChange={(event) => { setAdminUpdates((current) => ({ ...current, email: event.target.value })); setAdminError(""); }} type="email" value={adminUpdates.email} /></div>
           <div><label className="text-sm font-semibold" htmlFor="managed-admin-password">New temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-admin-password" onChange={(event) => { setAdminUpdates((current) => ({ ...current, password: event.target.value })); setAdminError(""); }} placeholder="e.g. Staff@2026" type={showAdminPassword ? "text" : "password"} value={adminUpdates.password} /><button aria-label={showAdminPassword ? "Hide administrator password" : "Show administrator password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowAdminPassword((visible) => !visible)} type="button">{showAdminPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div><p className="mt-1.5 text-xs leading-5 text-slate-500">Leave blank to keep the existing password.</p></div>
           <div><label className="text-sm font-semibold" htmlFor="managed-admin-confirm-password">Confirm new temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-admin-confirm-password" onChange={(event) => { setAdminUpdates((current) => ({ ...current, confirmPassword: event.target.value })); setAdminError(""); }} placeholder="Re-enter temporary password" type={showAdminConfirmPassword ? "text" : "password"} value={adminUpdates.confirmPassword} /><button aria-label={showAdminConfirmPassword ? "Hide confirmed administrator password" : "Show confirmed administrator password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowAdminConfirmPassword((visible) => !visible)} type="button">{showAdminConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>
           {adminError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{adminError}</p>}
-          <button className="ww-primary-button min-h-12" disabled={isUpdatingAdmin} type="submit">{isUpdatingAdmin ? "Saving changes…" : "Save changes"}</button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button className="ww-primary-button min-h-12 flex-1 sm:order-2" disabled={isUpdatingAdmin} type="submit">{isUpdatingAdmin ? "Saving changes…" : "Save changes"}</button>
+            <button className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:order-1" onClick={requestCloseManageAdmin} type="button">Cancel</button>
+          </div>
         </form>
       </Modal>}
-      {selectedMeterReader && <Modal description={`Update ${selectedMeterReader.username}'s email or assign a new temporary password.`} eyebrow="Meter reader management" isOpen onClose={() => { setSelectedMeterReader(null); setShowMeterReaderPassword(false); setShowMeterReaderConfirmPassword(false); }} size="sm" title="Manage Meter Reader">
+      {selectedMeterReader && <Modal description={`Update ${selectedMeterReader.username}'s email or assign a new temporary password.`} eyebrow="Meter reader management" isOpen onClose={requestCloseManageMeterReader} closeOnOverlay={false} showCloseButton={false} size="sm" title="Manage Meter Reader">
         <form className="grid gap-4 p-5 sm:p-6" onSubmit={updateMeterReader}>
           <div><label className="text-sm font-semibold" htmlFor="managed-reader-email">Email address</label><input className="ww-field mt-2 px-4 py-3" id="managed-reader-email" onChange={(event) => { setMeterReaderUpdates((current) => ({ ...current, email: event.target.value })); setMeterReaderError(""); }} type="email" value={meterReaderUpdates.email} /></div>
           <div><label className="text-sm font-semibold" htmlFor="managed-reader-password">New temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-reader-password" onChange={(event) => { setMeterReaderUpdates((current) => ({ ...current, password: event.target.value })); setMeterReaderError(""); }} placeholder="e.g. Staff@2026" type={showMeterReaderPassword ? "text" : "password"} value={meterReaderUpdates.password} /><button aria-label={showMeterReaderPassword ? "Hide meter reader password" : "Show meter reader password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowMeterReaderPassword((visible) => !visible)} type="button">{showMeterReaderPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div><p className="mt-1.5 text-xs leading-5 text-slate-500">Leave blank to keep the existing password.</p></div>
           <div><label className="text-sm font-semibold" htmlFor="managed-reader-confirm-password">Confirm new temporary password <span className="font-normal text-slate-500">(optional)</span></label><div className="relative mt-2"><input autoComplete="new-password" className="ww-field py-3 pl-4 pr-12" id="managed-reader-confirm-password" onChange={(event) => { setMeterReaderUpdates((current) => ({ ...current, confirmPassword: event.target.value })); setMeterReaderError(""); }} placeholder="Re-enter temporary password" type={showMeterReaderConfirmPassword ? "text" : "password"} value={meterReaderUpdates.confirmPassword} /><button aria-label={showMeterReaderConfirmPassword ? "Hide confirmed meter reader password" : "Show confirmed meter reader password"} className="absolute inset-y-0 right-0 flex w-12 items-center justify-center text-slate-500" onClick={() => setShowMeterReaderConfirmPassword((visible) => !visible)} type="button">{showMeterReaderConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></div></div>
           {meterReaderError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{meterReaderError}</p>}
-          <button className="ww-primary-button min-h-12" disabled={isUpdatingMeterReader} type="submit">{isUpdatingMeterReader ? "Saving changes…" : "Save changes"}</button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button className="ww-primary-button min-h-12 flex-1 sm:order-2" disabled={isUpdatingMeterReader} type="submit">{isUpdatingMeterReader ? "Saving changes…" : "Save changes"}</button>
+            <button className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-5 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:order-1" onClick={requestCloseManageMeterReader} type="button">Cancel</button>
+          </div>
         </form>
       </Modal>}
+      <Modal
+        description="Your unsent changes will be lost if you discard them."
+        eyebrow="Unsaved changes"
+        isOpen={staffDiscardTarget !== null}
+        onClose={() => setStaffDiscardTarget(null)}
+        size="sm"
+        title="Discard changes?"
+      >
+        <div className="flex flex-col gap-2 p-5 sm:flex-row sm:justify-end sm:p-6">
+          <button
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 sm:order-2"
+            onClick={confirmStaffDiscard}
+            type="button"
+          >
+            Discard changes
+          </button>
+          <button
+            className="ww-primary-button inline-flex min-h-11 items-center justify-center px-5 text-sm sm:order-1"
+            onClick={() => setStaffDiscardTarget(null)}
+            type="button"
+          >
+            Keep editing
+          </button>
+        </div>
+      </Modal>
       {staffAuthorization && <Modal description="This code can be used only for this staff action." eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); setStaffOtpResendSeconds(0); }} size="sm" title="Confirm Staff Action">
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={verifyStaffAuthorization}>
           <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{staffAuthorization.maskedEmail}</strong>. It expires in 5 minutes.</p>
