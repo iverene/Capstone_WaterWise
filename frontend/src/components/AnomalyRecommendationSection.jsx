@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BrainCircuit,
   ChevronDown,
@@ -11,8 +11,12 @@ import {
   fetchAllPuroksMonthlyHistory,
   fetchAllPuroksYearlyHistory,
   fetchConsumptionRanking,
+  fetchMonthlyHistory,
+  fetchYearlyHistory,
 } from "../services/consumptionAPI";
 import { fetchAllRecommendations } from "../services/recommendationAPI";
+import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
+import { useToast } from "./Toast";
 import LoadingSkeleton from "./LoadingSkeleton";
 
 const EMPTY_RECOMMENDATIONS = {
@@ -156,6 +160,13 @@ export default function AnomalyRecommendationSection() {
   const [errorMessage, setErrorMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("monthly");
+  const [baselineMonthlyCount, setBaselineMonthlyCount] = useState(null);
+  const [baselineYearlyCount, setBaselineYearlyCount] = useState(null);
+  const [baselineMonthlyHistory, setBaselineMonthlyHistory] = useState([]);
+  const [baselineYearlyHistory, setBaselineYearlyHistory] = useState([]);
+  const toast = useToast();
+  const prescriptiveToastKey = useRef(null);
+  const prescriptiveToastId = useRef(null);
   const [expandedPurok, setExpandedPurok] = useState(null);
 
   const loadRecommendations = useCallback(async (signal) => {
@@ -168,11 +179,15 @@ export default function AnomalyRecommendationSection() {
         rankingResponse,
         monthlyHistoryResponse,
         yearlyHistoryResponse,
+        overallMonthlyResponse,
+        overallYearlyResponse,
       ] = await Promise.all([
         fetchAllRecommendations({ signal }),
         fetchConsumptionRanking({ signal }).catch(() => null),
         fetchAllPuroksMonthlyHistory().catch(() => null),
         fetchAllPuroksYearlyHistory().catch(() => null),
+        fetchMonthlyHistory().catch(() => null),
+        fetchYearlyHistory().catch(() => null),
       ]);
       setRecommendations({
         ...EMPTY_RECOMMENDATIONS,
@@ -192,6 +207,14 @@ export default function AnomalyRecommendationSection() {
           monthly: buildConsumptionMap(monthlyHistoryResponse, "monthly"),
           yearly: buildConsumptionMap(yearlyHistoryResponse, "yearly"),
         });
+        const overallMonthlyData = overallMonthlyResponse?.data?.data ?? overallMonthlyResponse?.data ?? overallMonthlyResponse;
+        const overallMonthlyList = Array.isArray(overallMonthlyData) ? overallMonthlyData : (overallMonthlyData?.monthlyHistory ?? overallMonthlyData?.history ?? []);
+        setBaselineMonthlyCount(overallMonthlyList.length);
+        setBaselineMonthlyHistory(overallMonthlyList);
+        const overallYearlyData = overallYearlyResponse?.data?.data ?? overallYearlyResponse?.data ?? overallYearlyResponse;
+        const overallYearlyList = Array.isArray(overallYearlyData) ? overallYearlyData : (overallYearlyData?.yearlyHistory ?? overallYearlyData?.history ?? []);
+        setBaselineYearlyCount(overallYearlyList.length);
+        setBaselineYearlyHistory(overallYearlyList);
       }
     } catch (error) {
       if (!isCanceledRequest(error)) {
@@ -221,6 +244,32 @@ export default function AnomalyRecommendationSection() {
   const overall = period === "monthly"
     ? recommendations.overallMonthly
     : recommendations.overallYearly;
+  const baselineStatus = period === "monthly"
+    ? (baselineMonthlyCount === null ? null : getMonthlyBaselineStatus(baselineMonthlyCount, baselineMonthlyHistory, "recommendation"))
+    : (baselineYearlyCount === null ? null : getYearlyBaselineStatus(baselineYearlyCount, baselineYearlyHistory, "recommendation"));
+
+  useEffect(() => {
+    if (loading || errorMessage || !baselineStatus || baselineStatus.isComplete) return;
+    const signature = `${period}|${baselineStatus.message}`;
+    if (prescriptiveToastKey.current === signature) return;
+    prescriptiveToastKey.current = signature;
+    if (prescriptiveToastId.current) toast.dismiss(prescriptiveToastId.current);
+    const toastId = toast.warning(baselineStatus.title ?? "Baseline incomplete", baselineStatus.message, {
+      key: `prescriptive-baseline-${period}`,
+      duration: 0,
+      wide: true,
+      actions: [{ label: "Dismiss", onClick: () => toast.dismiss(toastId) }],
+    });
+    prescriptiveToastId.current = toastId;
+  }, [loading, errorMessage, period, baselineStatus, toast]);
+
+  useEffect(() => () => {
+    if (prescriptiveToastId.current) {
+      toast.dismiss(prescriptiveToastId.current);
+      prescriptiveToastId.current = null;
+    }
+    prescriptiveToastKey.current = null;
+  }, [toast]);
 
   const purokItems = useMemo(() => {
     const source = period === "monthly"

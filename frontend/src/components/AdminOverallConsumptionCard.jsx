@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { Database } from "lucide-react";
-import { fetchOverallConsumptionHistory } from "../services/consumptionAPI";
+import { fetchMonthlyHistory, fetchOverallConsumptionHistory } from "../services/consumptionAPI";
 import AnalyticsMetricCard from "./AnalyticsMetricCard";
+
+const extractMonthlyCount = (monthlyResponse) => {
+  const monthlyData = monthlyResponse?.data?.data ?? monthlyResponse?.data ?? monthlyResponse;
+  const monthlyList = Array.isArray(monthlyData)
+    ? monthlyData
+    : (monthlyData?.monthlyHistory ?? monthlyData?.history ?? []);
+  return Array.isArray(monthlyList) ? monthlyList.length : null;
+};
 
 export default function AdminOverallConsumptionCard({ compact = false }) {
   const [consumption, setConsumption] = useState(null);
   const [recordCount, setRecordCount] = useState(0);
+  const [monthlyCount, setMonthlyCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -13,7 +22,11 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
     try {
       setLoading(true);
       setError("");
-      const response = await fetchOverallConsumptionHistory();
+      const [overallResponse, monthlyResponse] = await Promise.all([
+        fetchOverallConsumptionHistory(),
+        fetchMonthlyHistory().catch(() => null),
+      ]);
+      const response = overallResponse;
       const responseData = response?.data?.data ?? response?.data ?? response;
       const directTotal =
         responseData?.overallConsumption ??
@@ -30,6 +43,7 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
         const numericTotal = Number(directTotal);
         setConsumption(Number.isFinite(numericTotal) ? numericTotal : 0);
         setRecordCount(Number(directCount) || 0);
+        setMonthlyCount(extractMonthlyCount(monthlyResponse));
         return;
       }
 
@@ -46,6 +60,7 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
       if (!Array.isArray(records)) {
         setConsumption(0);
         setRecordCount(0);
+        setMonthlyCount(0);
         return;
       }
 
@@ -67,6 +82,7 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
 
       setConsumption(total);
       setRecordCount(records.length);
+      setMonthlyCount(extractMonthlyCount(monthlyResponse) ?? records.length);
     } catch (requestError) {
       setError(
         requestError?.response?.data?.message ??
@@ -75,6 +91,7 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
       );
       setConsumption(null);
       setRecordCount(0);
+      setMonthlyCount(0);
     } finally {
       setLoading(false);
     }
@@ -84,14 +101,24 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
     queueMicrotask(loadOverallConsumption);
   }, [loadOverallConsumption]);
 
+  const description = (() => {
+    if (monthlyCount === null) {
+      return recordCount > 0
+        ? <>Baseline calculated from {recordCount} historical {recordCount === 1 ? "record" : "records"}</>
+        : "No History Yet";
+    }
+    if (monthlyCount === 0) return "No History Yet";
+    const baselineRecords = Math.floor(monthlyCount / 6);
+    if (baselineRecords < 1) {
+      return <>1 historical baseline is not enough — {monthlyCount} month{monthlyCount === 1 ? "" : "s"} with record{monthlyCount === 1 ? "" : "s"}</>;
+    }
+    return <>Baseline calculated from {baselineRecords} historical {baselineRecords === 1 ? "record" : "records"}</>;
+  })();
+
   return (
     <AnalyticsMetricCard
       compact={compact}
-      description={
-        recordCount > 0
-          ? <>Baseline calculated from {recordCount} historical {recordCount === 1 ? "record" : "records"}</>
-          : "No History Yet"
-      }
+      description={description}
       error={error}
       icon={Database}
       label="Historical Baseline"
