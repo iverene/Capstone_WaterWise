@@ -1,4 +1,5 @@
 import { Info } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import AnalyticsDescriptivePanel from "../components/AnalyticsDescriptivePanel";
 import AdminOverallConsumptionCard from "../components/AdminOverallConsumptionCard";
@@ -9,6 +10,9 @@ import MonthlyConsumptionTrend from "../components/MonthlyConsumptionTrend";
 import YearlyConsumptionTrend from "../components/YearlyConsumptionTrend";
 import PerPurokConsumptionTrend from "../components/PerPurokConsumptionTrend";
 import AnomalyRecommendationSection from "../components/AnomalyRecommendationSection";
+import { fetchMonthlyHistory, fetchYearlyHistory } from "../services/consumptionAPI";
+import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
+import { useToast } from "../components/Toast";
 import PageHeader from "../components/PageHeader";
 
 const TABS = [
@@ -32,6 +36,47 @@ export default function AnalyticsDashboard() {
   const activeTab = TABS.some((tab) => tab.id === requestedTab)
     ? requestedTab
     : "descriptive";
+  const toast = useToast();
+  const predictiveToastKey = useRef(null);
+  const predictiveToastId = useRef(null);
+
+  useEffect(() => {
+    if (activeTab !== "prediction") return;
+    let active = true;
+    Promise.all([fetchMonthlyHistory(), fetchYearlyHistory().catch(() => null)])
+      .then(([monthlyResponse, yearlyResponse]) => {
+        if (!active) return;
+        const monthlyData = monthlyResponse?.data?.data ?? monthlyResponse?.data ?? monthlyResponse;
+        const monthlyHistory = Array.isArray(monthlyData) ? monthlyData : (monthlyData?.monthlyHistory ?? monthlyData?.history ?? []);
+        const monthlyStatus = getMonthlyBaselineStatus(monthlyHistory.length, monthlyHistory, "prediction");
+        const yearlyData = yearlyResponse?.data?.data ?? yearlyResponse?.data ?? yearlyResponse;
+        const yearlyHistory = Array.isArray(yearlyData) ? yearlyData : (yearlyData?.yearlyHistory ?? yearlyData?.history ?? []);
+        const yearlyStatus = getYearlyBaselineStatus(yearlyHistory.length, yearlyHistory, "prediction");
+        const parts = [];
+        if (!monthlyStatus.isComplete) parts.push(monthlyStatus.message);
+        if (!yearlyStatus.isComplete) parts.push(yearlyStatus.message);
+        if (parts.length === 0) return;
+        const signature = parts.join("|");
+        if (predictiveToastKey.current === signature) return;
+        predictiveToastKey.current = signature;
+        const toastId = toast.warning("Baseline incomplete", parts.join(" "), {
+          key: "predictive-baseline",
+          duration: 0,
+          wide: true,
+          actions: [{ label: "Dismiss", onClick: () => toast.dismiss(toastId) }],
+        });
+        predictiveToastId.current = toastId;
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      if (predictiveToastId.current) {
+        toast.dismiss(predictiveToastId.current);
+        predictiveToastId.current = null;
+      }
+      predictiveToastKey.current = null;
+    };
+  }, [activeTab, toast]);
 
   const selectTab = (tabId) => {
     const nextParams = new URLSearchParams(searchParams);

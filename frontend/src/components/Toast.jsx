@@ -88,6 +88,7 @@ export function ToastProvider({ children }) {
       message: options.message ?? "",
       title: options.title || toastStyles[type].label,
       type,
+      wide: options.wide === true,
     };
 
     // Spam guard: an identical toast already on screen collapses into this
@@ -161,14 +162,14 @@ export function ToastProvider({ children }) {
       {typeof document !== "undefined" && createPortal(
         <div
           aria-label="System notifications"
-          className="pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[100] flex max-h-[calc(100dvh-7rem)] flex-col items-center gap-2 overflow-y-auto overscroll-contain sm:inset-x-auto sm:right-6 sm:top-[4.5rem] sm:w-[25rem] sm:items-stretch sm:gap-3 lg:right-6 lg:top-6"
+          className="pointer-events-none fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4rem)] z-[100] flex max-h-[calc(100dvh-7rem)] flex-col items-center gap-2 overflow-y-auto overscroll-contain sm:inset-x-auto sm:right-6 sm:top-[4.5rem] sm:w-auto sm:min-w-[25rem] sm:max-w-[calc(100vw-3rem)] sm:items-stretch sm:gap-3 lg:right-6 lg:top-6"
         >
           {toasts.map((item) => {
             const { badge, border, icon, Icon, label } = toastStyles[item.type];
             return (
               <div
                 aria-atomic="true"
-                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full overflow-hidden rounded-xl border bg-white sm:max-w-md sm:rounded-2xl ${border}`}
+                className={`${item.exiting ? "ww-toast-exit" : "ww-toast-enter"} pointer-events-auto relative w-full overflow-hidden rounded-xl border bg-white sm:rounded-2xl ${item.wide ? "sm:max-w-[32rem]" : "sm:max-w-md"} ${border}`}
                 key={item.id}
                 role={item.type === "error" ? "alert" : "status"}
               >
