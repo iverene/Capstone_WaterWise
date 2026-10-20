@@ -43,6 +43,8 @@ import {
   verifyTrustedDevice,
 } from "../models/trustedDeviceModels.js";
 import {
+  clearRefreshCookie,
+  clearSessionCookie,
   getRefreshCookieName,
   getSessionCookieName,
   readRefreshToken,
@@ -175,24 +177,6 @@ function getRefreshCookieMaxAgeMs(role = "consumer") {
 
 function setRefreshCookie(res, token, req, maxAgeMs, role) {
   res.cookie(getRefreshCookieName(), token, refreshCookieOptions(req, maxAgeMs ?? getRefreshCookieMaxAgeMs(role)));
-}
-
-function clearRefreshCookie(res, req) {
-  const options = refreshCookieOptions(req);
-  res.clearCookie(getRefreshCookieName(), options);
-  const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
-  if (flipped.secure) flipped.partitioned = true;
-  else delete flipped.partitioned;
-  res.clearCookie(getRefreshCookieName(), flipped);
-}
-
-function clearSessionCookie(res, req) {
-  const options = sessionCookieOptions(req);
-  res.clearCookie(getSessionCookieName(), options);
-  const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
-  if (flipped.secure) flipped.partitioned = true;
-  else delete flipped.partitioned;
-  res.clearCookie(getSessionCookieName(), flipped);
 }
 
 function createAccessToken(user, passwordHash) {
@@ -605,6 +589,9 @@ export async function refreshSession(req, res) {
     // Intentionally no touchSessionActivity(): the 5min refresh renews the
     // access token only; the 15m inactivity logout still applies.
     const user = { id: account.id, username: account.username, email: account.email, name: account.username, role, status: account.status };
+    if (role === "consumer") {
+      user.onboardingCompleted = await readConsumerOnboardingCompleted(userId);
+    }
     const loginAt = Number(payload.loginAt) > 0 ? Number(payload.loginAt) : Date.now();
     const absoluteExp = Number(payload.exp);
     setSessionCookie(res, createAccessToken(user, account.password), req, role);
@@ -622,6 +609,17 @@ export async function refreshSession(req, res) {
   }
 }
 
+// First-login onboarding is consumer-only. Staff responses keep their existing
+// shape, so this helper is never called for admin or meter-reader sessions.
+async function readConsumerOnboardingCompleted(consumerId) {
+  const { data } = await supabase
+    .from("consumers")
+    .select("onboarding_completed")
+    .eq("id", consumerId)
+    .maybeSingle();
+  return data?.onboarding_completed === true;
+}
+
 export async function currentAccount(req, res) {
   try {
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
@@ -637,10 +635,11 @@ export async function currentAccount(req, res) {
     // new tabs without stored session still display the real name instead of
     // falling back to a generic label.
     let name = account.username;
+    let onboardingCompleted;
     if (req.user.role === "consumer") {
       const { data: profile } = await supabase
         .from("consumers")
-        .select("first_name, middle_name, last_name, username, email")
+        .select("first_name, middle_name, last_name, username, email, onboarding_completed")
         .eq("id", req.user.id)
         .maybeSingle();
       if (profile) {
@@ -651,6 +650,7 @@ export async function currentAccount(req, res) {
         username = profile.username ?? username;
         email = profile.email ?? email;
         name = composed || profile.username || name;
+        onboardingCompleted = profile.onboarding_completed === true;
       }
     }
     return res.status(200).json({
@@ -663,6 +663,9 @@ export async function currentAccount(req, res) {
         role: req.user.role,
         status: account.status,
         created_at: req.user.created_at,
+        ...(req.user.role === "consumer"
+          ? { onboardingCompleted: onboardingCompleted === true }
+          : {}),
       },
     });
   } catch {

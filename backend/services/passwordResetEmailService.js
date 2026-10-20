@@ -217,10 +217,11 @@ export async function sendConsumerPasswordChangeOtp({ email, otp, username, cons
     return;
   }
 
-  const escapeHtml = (value) => String(value ?? "").replace(
-    /[&<>"']/g,
-    (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character],
-  );
+  // NOTE: the module-level escapeHtml() is used on purpose. A local
+  // `const escapeHtml` used to be declared further down in this function,
+  // which shadowed the module-level one and left it in the temporal dead zone
+  // for the hosted-template branch above (TDZ: "Cannot access 'escapeHtml'
+  // before initialization").
   const safeUsername = escapeHtml(username || "Administrator");
   const safeConsumerName = escapeHtml(consumerName || "the resident");
   await sendTransactionalEmail({

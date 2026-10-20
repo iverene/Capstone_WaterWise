@@ -9,6 +9,7 @@ import { useToast } from "../components/Toast";
 import { requestSettingsChangeOtp, verifySettingsChangeOtp, updateSystemSetting, fetchSystemSettings } from "../services/systemSettingsService";
 import { getStoredAccount } from "../services/authToken";
 import { SETTINGS_PERMISSION_KEY } from "./AdminProfile";
+import { isChallengeExpired } from "../utils/otpChallenge";
 
 const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 
@@ -121,22 +122,21 @@ export default function AdminSettingsPage() {
     setEditingKey(key);
     setEditValue(String(currentValue));
     setSaveError("");
-    setOtpChallenge(null);
+    // The verification code is kept: the backend only allows one code every
+    // 5 minutes, so throwing it away would cost a full wait before the next
+    // attempt.
     setOtp("");
     setOtpError("");
     setOtpSuccess(false);
-    setCooldownSeconds(0);
   };
 
   const cancelEdit = () => {
     setEditingKey(null);
     setEditValue("");
     setSaveError("");
-    setOtpChallenge(null);
     setOtp("");
     setOtpError("");
     setOtpSuccess(false);
-    setCooldownSeconds(0);
   };
 
   const handleRequestOtp = async () => {
@@ -200,7 +200,9 @@ export default function AdminSettingsPage() {
       setSaveError("Please enter a valid non-negative number.");
       return;
     }
-    if (!otpChallenge) {
+    // Reuse the code that was already sent instead of asking for another one,
+    // which the backend would rate limit for five minutes.
+    if (!otpChallenge || isChallengeExpired(otpChallenge.challengeToken)) {
       await handleRequestOtp();
       return;
     }
@@ -284,8 +286,9 @@ export default function AdminSettingsPage() {
 
       <Modal
         closeLabel="Close settings editor"
+        closeOnOverlay={false}
         description={`Update "${editingKey}"`}
-        dismissible={!saving && !verifying}
+        dismissible={false}
         eyebrow="System settings"
         isOpen={Boolean(editingKey)}
         onClose={cancelEdit}
@@ -351,8 +354,12 @@ export default function AdminSettingsPage() {
                   onClick={cancelEdit}
                   type="button"
                 >
-                  Cancel
+                  Close
                 </button>
+                <p className="text-center text-xs leading-5 text-slate-500">
+                  You can close this and keep typing the code later — the code stays valid for 5
+                  minutes and will still be here when you update a setting again.
+                </p>
               </>
             ) : (
               <>
@@ -371,7 +378,7 @@ export default function AdminSettingsPage() {
                   onClick={cancelEdit}
                   type="button"
                 >
-                  Cancel
+                  Close
                 </button>
               </>
             )}

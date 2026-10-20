@@ -5,6 +5,7 @@ import {
   duplicateAccountIdentityMessage,
   ensureAccountIdentityIsUnique,
 } from "./accountIdentityModels.js";
+import { hashAccountPassword } from "./authModels.js";
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -18,17 +19,20 @@ const normalizeContactNumber = (contactNumber) => {
   }
 
   const compactNumber = contactNumber.trim().replace(/[\s()-]/g, "");
-  const normalizedNumber = compactNumber.startsWith("09")
-    ? `+63${compactNumber.slice(1)}`
+  // Always store the local 09xxxxxxxxx form so the database matches what the
+  // resident and the office actually type. The older +639xxxxxxxxx form is
+  // still accepted on input so anything already in flight keeps working.
+  const localNumber = compactNumber.startsWith("+63")
+    ? `0${compactNumber.slice(3)}`
     : compactNumber;
 
-  if (!/^\+639\d{9}$/.test(normalizedNumber)) {
+  if (!/^09\d{9}$/.test(localNumber)) {
     throw createError(
       "Enter a valid Philippine mobile number, such as 09171234567."
     );
   }
 
-  return normalizedNumber;
+  return localNumber;
 };
 
 const normalizeNamePart = (value) => {
@@ -168,7 +172,7 @@ export const createConsumer = async (
       purok_no: purokNo === null || purokNo === undefined ? null : Number(purokNo),
       password: hashedPassword,
     })
-    .select("id, username, first_name, middle_name, last_name, email, contact_number, purok_no, status, created_at")
+    .select("id, username, first_name, middle_name, last_name, email, contact_number, purok_no, status, onboarding_completed, created_at")
     .single();
 
   if (error) {
@@ -182,7 +186,7 @@ export const createConsumer = async (
 };
 
 const CONSUMER_FIELDS =
-  "id, username, first_name, middle_name, last_name, email, contact_number, purok_no, status, created_at, updated_at";
+  "id, username, first_name, middle_name, last_name, email, contact_number, purok_no, status, onboarding_completed, created_at, updated_at";
 
 const parseId = (id) => {
   const parsedId = Number(id);
@@ -382,6 +386,203 @@ export const updateConsumer = async (id, updates = {}) => {
     throw createError(`Failed to update consumer account: ${error.message}`, 500);
   }
   if (!data) {
+    throw createError("Consumer account not found.", 404);
+  }
+
+  return data;
+};
+
+// Fields a consumer may change on their own account from the portal.
+// Everything else stays staff-managed: the name appears on bills and receipts,
+// the username is a login identifier, the email has its own OTP-verified flow
+// (completeConsumerEmailChange), and status is an office decision.
+const CONSUMER_SELF_EDITABLE_FIELDS = ["contactNumber", "purokNo"];
+
+// While the first-login onboarding is still pending the resident may also
+// replace the email address they were issued, without the emailed
+// verification code. The account has not been claimed yet, so there is no
+// established address to protect. Once onboarding is done the email falls
+// back to CONSUMER_SELF_EDITABLE_FIELDS and can only be changed through the
+// OTP flow in Profile -> Account settings -> Change email.
+const CONSUMER_ONBOARDING_EDITABLE_FIELDS = ["contactNumber", "purokNo", "email"];
+
+export const updateConsumerSelfProfile = async (id, updates = {}) => {
+  const consumerId = parseId(id);
+  const suppliedFields = Object.keys(updates).filter(
+    (key) => updates[key] !== undefined
+  );
+
+  if (suppliedFields.length === 0) {
+    throw createError("At least one profile field must be provided.");
+  }
+
+  // Read first: the set of fields a consumer may touch depends on whether
+  // their first-login onboarding is still pending.
+  const { data: current, error: readError } = await supabase
+    .from("consumers")
+    .select("id, email, onboarding_completed")
+    .eq("id", consumerId)
+    .maybeSingle();
+
+  if (readError) {
+    throw createError(`Failed to read your profile: ${readError.message}`, 500);
+  }
+  if (!current) {
+    throw createError("Consumer account not found.", 404);
+  }
+
+  const allowedFields = current.onboarding_completed
+    ? CONSUMER_SELF_EDITABLE_FIELDS
+    : CONSUMER_ONBOARDING_EDITABLE_FIELDS;
+
+  const rejectedFields = suppliedFields.filter(
+    (key) => !allowedFields.includes(key)
+  );
+  if (rejectedFields.length > 0) {
+    // Reject instead of silently ignoring: a client that sends `status` or
+    // `password` here is either buggy or probing for privilege escalation.
+    throw createError(
+      rejectedFields.includes("email")
+        ? "Changing your email address needs a verification code. Use Profile -> Account settings -> Change email instead."
+        : "Only your contact number, purok and email can be updated from your account.",
+      403
+    );
+  }
+
+  const updateData = {};
+
+  if (updates.email !== undefined) {
+    if (
+      typeof updates.email !== "string" ||
+      !validator.isEmail(updates.email.trim())
+    ) {
+      throw createError("A valid email address is required.");
+    }
+    const normalizedEmail =
+      validator.normalizeEmail(updates.email.trim()) ??
+      updates.email.trim().toLowerCase();
+    if (normalizedEmail.toLowerCase() === String(current.email ?? "").toLowerCase()) {
+      throw createError(
+        "Enter a new email address that is different from your current email."
+      );
+    }
+    updateData.email = normalizedEmail;
+  }
+
+  if (updates.contactNumber !== undefined) {
+    updateData.contact_number = normalizeContactNumber(updates.contactNumber);
+  }
+
+  if (updates.purokNo !== undefined) {
+    if (updates.purokNo === null || updates.purokNo === "") {
+      updateData.purok_no = null;
+    } else {
+      const parsedPurok = Number(updates.purokNo);
+      if (!Number.isInteger(parsedPurok) || parsedPurok < 1) {
+        throw createError("Purok number must be a positive integer.");
+      }
+      updateData.purok_no = parsedPurok;
+    }
+  }
+
+  let update = supabase
+    .from("consumers")
+    .update({ ...updateData, updated_at: new Date().toISOString() })
+    .eq("id", consumerId);
+
+  // The email may only be replaced while onboarding is still pending. Making
+  // the write conditional keeps that guarantee even when onboarding finishes
+  // between the check above and this update.
+  if (updateData.email !== undefined) {
+    update = update.eq("onboarding_completed", false);
+  }
+
+  const { data, error } = await update.select(CONSUMER_FIELDS).maybeSingle();
+
+  if (error) {
+    // The unique index on email surfaces a duplicate as a database error;
+    // report it as the conflict it is instead of a generic failure.
+    if (String(error.message ?? "").toLowerCase().includes("email")) {
+      throw createError(duplicateAccountIdentityMessage(error), 409);
+    }
+    throw createError(`Failed to update your profile: ${error.message}`, 500);
+  }
+  if (!data) {
+    if (updateData.email !== undefined) {
+      throw createError(
+        "Your account is already set up. Change your email address from your profile instead.",
+        403
+      );
+    }
+    throw createError("Consumer account not found.", 404);
+  }
+
+  return data;
+};
+
+export const completeConsumerOnboarding = async (id, newPassword) => {
+  const consumerId = parseId(id);
+  const wantsPassword = typeof newPassword === "string" && newPassword.length > 0;
+
+  if (wantsPassword) {
+    // Setting the password here does not need the current one: the account
+    // still carries the password issued by the office and onboarding has
+    // never been completed, so there is nothing to protect yet. The flag is
+    // checked first so that once onboarding is done the resident can only
+    // change their password through the profile flow, which does verify the
+    // current password.
+    const { data: current, error: readError } = await supabase
+      .from("consumers")
+      .select("id, onboarding_completed")
+      .eq("id", consumerId)
+      .maybeSingle();
+
+    if (readError) {
+      throw createError(`Failed to complete onboarding: ${readError.message}`, 500);
+    }
+    if (!current) {
+      throw createError("Consumer account not found.", 404);
+    }
+    if (current.onboarding_completed) {
+      throw createError(
+        "Your account is already set up. Change your password from your profile instead.",
+        403
+      );
+    }
+  }
+
+  const updateData = {
+    onboarding_completed: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (wantsPassword) {
+    updateData.password = await hashAccountPassword(newPassword);
+    updateData.failed_login_attempts = 0;
+    updateData.locked_until = null;
+  }
+
+  let update = supabase.from("consumers").update(updateData).eq("id", consumerId);
+
+  // A password may only be set while onboarding is still pending. Making the
+  // write itself conditional closes the window between the check above and
+  // this update, so two concurrent requests cannot both slip through.
+  if (wantsPassword) {
+    update = update.eq("onboarding_completed", false);
+  }
+
+  const { data, error } = await update.select(CONSUMER_FIELDS).maybeSingle();
+
+  if (error) {
+    throw createError(`Failed to complete onboarding: ${error.message}`, 500);
+  }
+  if (!data) {
+    if (wantsPassword) {
+      throw createError(
+        "Your account is already set up. Change your password from your profile instead.",
+        403
+      );
+    }
     throw createError("Consumer account not found.", 404);
   }
 

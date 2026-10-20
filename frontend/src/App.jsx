@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RateLimitToast from "./components/RateLimitToast";
@@ -13,6 +13,7 @@ import BillingLedger from "./pages/BillingLedger";
 import ConsumerProfile from "./pages/ConsumerProfile";
 import ConsumerAccountInformation from "./pages/ConsumerAccountInformation";
 import ConsumerHome from "./pages/ConsumerHome";
+import ConsumerOnboarding from "./pages/ConsumerOnboarding";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -40,6 +41,7 @@ import RecordConsumptionPage from "./pages/RecordConsumptionPage";
 import MeterReaderProfile from "./pages/MeterReaderProfile";
 import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation";
 import { clearApiCache } from "./services/apiCache";
+import { getCurrentAccount } from "./services/auth.service";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
 import { startSessionRefresh } from "./services/sessionRefresh";
 
@@ -83,6 +85,7 @@ const roleAccess = {
     paths: [
       "/consumer",
       "/consumer/home",
+      "/consumer/onboarding",
       "/consumer/announcements",
       "/consumer/profile-details",
       "/consumer/account-information",
@@ -156,6 +159,50 @@ function AnyRoleRouteGuard({ children }) {
   }
 
   return children;
+}
+
+// Consumers who have not finished first-login onboarding are sent to the
+// wizard once, on the first consumer page they open in this page load.
+// Only "completed" is memoized: after the wizard finishes we must be able to
+// re-verify, otherwise the cached "false" would bounce the resident straight
+// back into onboarding.
+const consumerOnboardingVerified = new Map();
+
+function ConsumerOnboardingGate() {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!location.pathname.startsWith("/consumer")) return;
+    if (location.pathname === "/consumer/onboarding") return;
+
+    const account = getSessionAccount();
+    if (account?.role !== "consumer") return;
+    if (consumerOnboardingVerified.get(account.id) === true) return;
+
+    let cancelled = false;
+    getCurrentAccount()
+      .then(({ user }) => {
+        if (cancelled) return;
+        // Fail open on a missing flag: only an explicit false blocks access.
+        // Onboarding is not a security control, so a partial payload or a
+        // backend hiccup must never lock a resident out of their dashboard.
+        if (user.onboardingCompleted === false) {
+          navigate("/consumer/onboarding", { replace: true });
+          return;
+        }
+        consumerOnboardingVerified.set(user.id, true);
+      })
+      .catch(() => {
+        // Ignore: apiClient already handles 401 by moving to the login page.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname, navigate]);
+
+  return null;
 }
 
 export function AppRoutes() {
@@ -362,6 +409,14 @@ export function AppRoutes() {
       <Route
         element={
           <RoleRouteGuard requiredRole="consumer">
+            <ConsumerOnboarding />
+          </RoleRouteGuard>
+        }
+        path="/consumer/onboarding"
+      />
+      <Route
+        element={
+          <RoleRouteGuard requiredRole="consumer">
             <AppLayout>
               <ConsumerHome />
             </AppLayout>
@@ -462,6 +517,11 @@ export default function App() {
 
   useEffect(() => subscribeToDataChanges(() => {
     clearApiCache();
+    // The first-login wizard holds local step and form state. Any mutation
+    // anywhere in the system bumps the revision and remounts the whole route
+    // tree, which would throw the resident back to step 1 mid-flow, so
+    // revision remounts are paused while the wizard is open.
+    if (window.location.pathname === "/consumer/onboarding") return;
     setDataRevision((revision) => revision + 1);
   }), [sessionRevision]);
 
@@ -478,6 +538,7 @@ export default function App() {
       <SessionExpiryGuard />
       <SessionInactivityGuard />
       <RateLimitToast />
+      <ConsumerOnboardingGate />
       <AppRoutes key={dataRevision} />
       <PWAInstallPrompt />
     </BrowserRouter>
