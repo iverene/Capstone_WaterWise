@@ -38,3 +38,25 @@ export function sessionCookieOptions(req, maxAgeMs) {
   }
   return options;
 }
+
+// A browser only honours a clear whose attributes match the ones used when
+// the cookie was set, so each cookie is cleared twice: once with the current
+// request flavour and once with the secure/sameSite pair flipped. That covers
+// the CHIPS partitioned variant and the plain HTTP one.
+export function clearRefreshCookie(res, req) {
+  const options = sessionCookieOptions(req);
+  res.clearCookie(REFRESH_COOKIE, options);
+  const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
+  if (flipped.secure) flipped.partitioned = true;
+  else delete flipped.partitioned;
+  res.clearCookie(REFRESH_COOKIE, flipped);
+}
+
+export function clearSessionCookie(res, req) {
+  const options = sessionCookieOptions(req);
+  res.clearCookie(SESSION_COOKIE, options);
+  const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
+  if (flipped.secure) flipped.partitioned = true;
+  else delete flipped.partitioned;
+  res.clearCookie(SESSION_COOKIE, flipped);
+}

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, CircleOff, Eye, EyeOff, Phone, ShieldCheck, UserRound, UsersRound, Mail, LockKeyhole, LoaderCircle } from "lucide-react";
 import Dropdown from "./Dropdown";
+import { DEFAULT_RESIDENT_PASSWORD } from "../utils/residentCredentials";
+import { toLocalMobileNumber } from "../utils/phoneNumber";
+import { isValidEmail } from "../utils/email";
 
 const initialState = {
   accountName: "",
@@ -21,14 +24,6 @@ function splitLegacyFullName(fullName) {
   return { firstName: parts[0], middleName: parts.slice(1, -1).join(" "), lastName: parts[parts.length - 1] };
 }
 
-function normalizeTo09Input(value) {
-  const raw = String(value ?? "").trim().replace(/[\s()-]/g, "");
-  if (/^\+639\d{9}$/.test(raw)) {
-    return `09${raw.slice(4)}`;
-  }
-  return String(value ?? "").replace(/\D/g, "").slice(0, 11);
-}
-
 function createInitialState(initialData) {
   if (!initialData) return initialState;
 
@@ -43,7 +38,7 @@ function createInitialState(initialData) {
     lastName: String(legacy?.lastName ?? initialData.lastName ?? ""),
     purok: String(initialData.purok ?? ""),
     email: String(initialData.email ?? ""),
-    contactNumber: normalizeTo09Input(initialData.contactNumber ?? initialData.contact_number ?? ""),
+    contactNumber: toLocalMobileNumber(initialData.contactNumber ?? initialData.contact_number ?? ""),
     status: String(initialData.status ?? "active"),
   };
 }
@@ -68,7 +63,13 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
   const submittingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [consumer, setConsumer] = useState(() => createInitialState(initialData));
-  const [password, setPassword] = useState("");
+  // New residents start with the office default password so the staff member
+  // does not have to invent one at the counter. Editing an existing resident
+  // must start blank, otherwise an untouched field would silently reset their
+  // password on save.
+  const defaultPassword = requirePassword && !initialData ? DEFAULT_RESIDENT_PASSWORD : "";
+  const isNewResident = requirePassword && !initialData;
+  const [password, setPassword] = useState(defaultPassword);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -78,7 +79,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
   useEffect(() => {
     if (!onDirtyChange) return;
     const dirty =
-      String(password ?? "").trim() !== "" ||
+      String(password ?? "") !== defaultPassword ||
       [
         "accountName",
         "firstName",
@@ -90,7 +91,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
         "status",
       ].some((field) => String(consumer[field] ?? "") !== String(baseline[field] ?? ""));
     onDirtyChange(dirty);
-  }, [baseline, consumer, password, onDirtyChange]);
+  }, [baseline, consumer, password, defaultPassword, onDirtyChange]);
 
   const updateField = (field, value) => {
     setConsumer((previous) => ({ ...previous, [field]: value }));
@@ -114,7 +115,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
     }
     if (!String(consumer.email ?? "").trim()) {
       validationErrors.email = "Enter the resident's email address.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(consumer.email ?? "").trim())) {
+    } else if (!isValidEmail(consumer.email)) {
       validationErrors.email = "Enter a valid email address with a domain, such as name@example.com.";
     }
     if (!String(consumer.contactNumber ?? "").trim()) {
@@ -157,7 +158,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
       if (saved === false) return;
 
       setConsumer(initialState);
-      setPassword("");
+      setPassword(defaultPassword);
       setShowPassword(false);
       setErrors({});
     } finally {
@@ -352,7 +353,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
                   setPassword(event.target.value);
                   setErrors((previous) => ({ ...previous, password: "" }));
                 }}
-                placeholder={allowPasswordChange ? "Leave blank to keep current password" : "Create a strong password"}
+                placeholder={allowPasswordChange ? "Leave blank to keep current password" : "Office default password"}
                 type={showPassword ? "text" : "password"}
                 value={password}
               />
@@ -367,8 +368,22 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
               </button>
             </div>
             <p className="mt-1.5 text-xs leading-5 text-slate-500" id="password-helper">
-              {allowPasswordChange ? "Changing the password requires verification through your administrator email OTP." : "Use 8 or more characters with uppercase, lowercase, a number, and a symbol."}
+              {allowPasswordChange
+                ? "Changing the password requires verification through your administrator email OTP."
+                : "Pre-filled with the office default password. The resident can change it during first sign-in. Use 8 or more characters with uppercase, lowercase, a number, and a symbol."}
             </p>
+            {isNewResident && password !== DEFAULT_RESIDENT_PASSWORD && (
+              <button
+                className="mt-1.5 text-xs font-bold text-water-700 underline-offset-2 hover:underline"
+                onClick={() => {
+                  setPassword(DEFAULT_RESIDENT_PASSWORD);
+                  setErrors((previous) => ({ ...previous, password: "" }));
+                }}
+                type="button"
+              >
+                Use the office default password
+              </button>
+            )}
             {errors.password && <p className={errorClass} id="password-error" role="alert">{errors.password}</p>}
           </div>
         )}
@@ -403,7 +418,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
           </div>
         )}
 
-        {registrationDesign && <div className="resident-security"><span><ShieldCheck aria-hidden="true" size={24} /></span><div><p className="font-bold text-navy-900">Account Security</p><p>The resident will use this username and password to sign in to their account.</p></div></div>}
+        {registrationDesign && <div className="resident-security"><span><ShieldCheck aria-hidden="true" size={24} /></span><div><p className="font-bold text-navy-900">Account Security</p><p>The resident will use this username and password to sign in, and will be asked to set their own password on first sign-in.</p></div></div>}
         <div className={`resident-form-actions flex flex-row items-start gap-2 ${registrationDesign ? "sm:col-span-3" : "sm:col-span-2"}`}>
           {onCancel && (
             <button className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50" onClick={onCancel} type="button">

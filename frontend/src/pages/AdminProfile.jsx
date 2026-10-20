@@ -10,6 +10,7 @@ import StaffPasswordConfirmModal from "../components/StaffPasswordConfirmModal";
 import { useToast } from "../components/Toast";
 import { getCurrentAccount, createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp, verifyStaffActionPassword } from "../services/auth.service";
 import { getStoredAccount } from "../services/authToken";
+import { isChallengeExpired } from "../utils/otpChallenge";
 
 const STAFF_PAGE_SIZE = 2;
 const STAFF_PERMISSION_KEY = "waterwise:super-admin-staff-permission";
@@ -152,6 +153,10 @@ export default function AdminProfile() {
   const [showMeterReaderPassword, setShowMeterReaderPassword] = useState(false);
   const [showMeterReaderConfirmPassword, setShowMeterReaderConfirmPassword] = useState(false);
   const [staffAuthorization, setStaffAuthorization] = useState(null);
+  // Visibility is tracked separately from the challenge itself. The backend
+  // only allows one verification code per action every 5 minutes, so the
+  // challenge has to survive the dialog being closed.
+  const [isStaffOtpOpen, setIsStaffOtpOpen] = useState(false);
   const [staffOtp, setStaffOtp] = useState("");
   const [staffOtpSuccess, setStaffOtpSuccess] = useState(false);
   const [staffOtpError, setStaffOtpError] = useState("");
@@ -287,6 +292,23 @@ export default function AdminProfile() {
   };
 
   const beginStaffOtpAuthorization = async (pendingAction) => {
+    // Reuse the code that was already sent for this exact action. The
+    // backend only allows one verification code per action every 5 minutes,
+    // so asking again after the dialog was closed would cost a full wait.
+    if (
+      staffAuthorization?.challengeToken &&
+      staffAuthorization.action === pendingAction.action &&
+      String(staffAuthorization.targetId ?? "") === String(pendingAction.targetId ?? "") &&
+      !isChallengeExpired(staffAuthorization.challengeToken)
+    ) {
+      setStaffOtp("");
+      setStaffOtpError("");
+      setStaffOtpResendSeconds(
+        Math.max(0, Math.ceil((Number(staffAuthorization.expiresAt ?? 0) - Date.now()) / 1000)),
+      );
+      setIsStaffOtpOpen(true);
+      return;
+    }
     // Reuse: if a valid 15m page-view permission already exists, skip OTP and
     // navigate straight back in. Per-write actions still need their own
     // password/OTP each time.
@@ -312,6 +334,7 @@ export default function AdminProfile() {
         setStaffOtp("");
         setStaffOtpError("");
         setStaffOtpResendSeconds(Math.max(0, Math.ceil((Number(existingChallenge.expiresAt) - Date.now()) / 1000)));
+        setIsStaffOtpOpen(true);
         return;
       }
     }
@@ -322,6 +345,7 @@ export default function AdminProfile() {
         setStaffOtp("");
         setStaffOtpError("");
         setStaffOtpResendSeconds(Math.max(0, Math.ceil((Number(existingChallenge.expiresAt) - Date.now()) / 1000)));
+        setIsStaffOtpOpen(true);
         return;
       }
     }
@@ -343,6 +367,7 @@ export default function AdminProfile() {
       setStaffAuthorization(authorization);
       setStaffOtp("");
       setStaffOtpResendSeconds(Number(result.cooldownSeconds ?? 300));
+      setIsStaffOtpOpen(true);
     } catch (error) {
       if (error.retryAfterSeconds) setStaffOtpResendSeconds(error.retryAfterSeconds);
       if (error.retryAfterSeconds) { toast.warning("Too many requests", error.message); }
@@ -509,7 +534,7 @@ export default function AdminProfile() {
     try {
       const result = await verifyStaffActionOtp(staffAuthorization.challengeToken, staffOtp);
       const pendingAction = staffAuthorization;
-      setStaffAuthorization(null); setStaffOtp("");
+      setStaffAuthorization(null); setStaffOtp(""); setIsStaffOtpOpen(false);
       if (pendingAction.action === "manage-staff") {
         window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
         const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() };
@@ -710,14 +735,26 @@ export default function AdminProfile() {
           </button>
         </div>
       </Modal>
-      {staffAuthorization && <Modal description="This code can be used only for this staff action." eyebrow="Super Admin verification" isOpen onClose={() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpError(""); setStaffOtpResendSeconds(0); }} size="sm" title="Confirm Staff Action">
+      {staffAuthorization && <Modal closeOnOverlay={false} description="This code can be used only for this staff action." dismissible={false} eyebrow="Super Admin verification" isOpen={isStaffOtpOpen} onClose={() => setIsStaffOtpOpen(false)} showCloseButton={false} size="sm" title="Confirm Staff Action">
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={verifyStaffAuthorization}>
           <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{staffAuthorization.maskedEmail}</strong>. It expires in 5 minutes.</p>
           <div className="rounded-xl border border-water-200 bg-water-50 p-4 text-sm leading-6 text-water-900"><ShieldCheck className="mr-2 inline h-5 w-5" />For extra security, this action requires approval through the Super Admin’s registered email.</div>
-          <div><label className="text-xs font-semibold sm:text-sm" htmlFor="staff-action-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isAuthorizingStaff} id="staff-action-otp" invalid={Boolean(staffOtpError)} onChange={(nextOtp) => { setStaffOtp(nextOtp); setStaffOtpError(""); setStaffOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsAuthorizingStaff(true); setStaffOtpError(""); verifyStaffActionOtp(staffAuthorization.challengeToken, otpValue).then(result => { const pendingAction = staffAuthorization; setStaffOtpSuccess(true); setTimeout(() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpSuccess(false); if (pendingAction.action === "manage-staff") { window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() }; window.sessionStorage.setItem(STAFF_PERMISSION_KEY, JSON.stringify(permission)); setStaffManagementPermission(permission); navigate("/admin/staff-management"); return; } if (pendingAction.action === "manage-system-settings") { window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() }; window.sessionStorage.setItem(SETTINGS_PERMISSION_KEY, JSON.stringify(permission)); navigate("/admin/settings"); return; } return completeAuthorizedAction(result.authorizationToken, pendingAction); }, 600); }).catch(e => { setStaffOtpError(e.message); setStaffOtp(""); }).finally(() => setIsAuthorizingStaff(false)); } }} success={staffOtpSuccess} value={staffOtp} /></div></div>
+          <div><label className="text-xs font-semibold sm:text-sm" htmlFor="staff-action-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isAuthorizingStaff} id="staff-action-otp" invalid={Boolean(staffOtpError)} onChange={(nextOtp) => { setStaffOtp(nextOtp); setStaffOtpError(""); setStaffOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue)) { setIsAuthorizingStaff(true); setStaffOtpError(""); verifyStaffActionOtp(staffAuthorization.challengeToken, otpValue).then(result => { const pendingAction = staffAuthorization; setStaffOtpSuccess(true); setTimeout(() => { setStaffAuthorization(null); setStaffOtp(""); setStaffOtpSuccess(false); setIsStaffOtpOpen(false); if (pendingAction.action === "manage-staff") { window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() }; window.sessionStorage.setItem(STAFF_PERMISSION_KEY, JSON.stringify(permission)); setStaffManagementPermission(permission); navigate("/admin/staff-management"); return; } if (pendingAction.action === "manage-system-settings") { window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY); const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() }; window.sessionStorage.setItem(SETTINGS_PERMISSION_KEY, JSON.stringify(permission)); navigate("/admin/settings"); return; } return completeAuthorizedAction(result.authorizationToken, pendingAction); }, 600); }).catch(e => { setStaffOtpError(e.message); setStaffOtp(""); }).finally(() => setIsAuthorizingStaff(false)); } }} success={staffOtpSuccess} value={staffOtp} /></div></div>
           {staffAuthorization.message && !staffOtpError && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs font-semibold text-emerald-800 sm:text-sm">{staffAuthorization.message}</p>}
           {staffOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{staffOtpError}</p>}
           <button className="w-full text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm" disabled={isAuthorizingStaff || staffOtpResendSeconds > 0} onClick={() => beginStaffAuthorization(staffAuthorization)} type="button">{staffOtpResendSeconds > 0 ? `Resend code in ${formatOtpCountdown(staffOtpResendSeconds)}` : "Resend code"}</button>
+          <p className="text-center text-xs leading-5 text-slate-500">
+            You can close this and keep typing the code later — the code stays valid for 5 minutes
+            and will still be here when you try this action again.
+          </p>
+          <button
+            className="w-full min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+            disabled={isAuthorizingStaff}
+            onClick={() => setIsStaffOtpOpen(false)}
+            type="button"
+          >
+            Close
+          </button>
         </form>
       </Modal>}
       {staffPasswordPrompt && (

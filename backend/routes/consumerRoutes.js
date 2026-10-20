@@ -1,11 +1,13 @@
 import express from "express";
 import {
+  completeOwnOnboarding,
   editConsumer,
   disconnectConsumer,
   listConsumers,
   registerConsumer,
   removeConsumer,
   showConsumer,
+  updateOwnProfile,
 } from "../controllers/consumerControllers.js";
 import {
   authenticate,
@@ -18,6 +20,10 @@ const router = express.Router();
 
 router.use(authenticate);
 router.get("/", authorizeRoles("admin", "meter-reader"), listConsumers);
+// Self-service routes must be declared before "/:id", otherwise Express matches
+// the literal "me" as a consumer id.
+router.patch("/me", authorizeRoles("consumer"), updateOwnProfile);
+router.patch("/me/onboarding", authorizeRoles("consumer"), completeOwnOnboarding);
 router.get(
   "/:id",
   authorizeOwnerOrRoles("id", "consumer", "admin", "meter-reader"),

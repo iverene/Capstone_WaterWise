@@ -1,11 +1,17 @@
 import {
+  completeConsumerOnboarding,
   createConsumer,
   deleteConsumer,
   disconnectFlaggedConsumer,
   getConsumerById,
   getConsumers,
   updateConsumer,
+  updateConsumerSelfProfile,
 } from "../models/consumerModels.js";
+import {
+  clearRefreshCookie,
+  clearSessionCookie,
+} from "../models/sessionCookieModels.js";
 
 const sendError = (res, error, fallbackMessage) => {
   console.error(fallbackMessage, error);
@@ -100,5 +106,46 @@ export const removeConsumer = async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, "Failed to delete consumer account.");
+  }
+};
+
+// Self-service profile update. The target account always comes from the
+// session (req.user.id), never from the URL or body, so a consumer can only
+// ever edit their own record. The model enforces the field allowlist too.
+export const updateOwnProfile = async (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      message: "Your profile has been updated.",
+      data: await updateConsumerSelfProfile(req.user.id, req.body ?? {}),
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to update your profile.");
+  }
+};
+
+export const completeOwnOnboarding = async (req, res) => {
+  try {
+    const password =
+      typeof req.body?.password === "string" ? req.body.password : undefined;
+
+    const data = await completeConsumerOnboarding(req.user.id, password);
+
+    // Setting the password invalidates the session: the access token carries
+    // a fingerprint of the password hash, so every further request with it is
+    // rejected. Clear both cookies right away instead of leaving a dead
+    // session behind on a shared device.
+    if (password) {
+      clearSessionCookie(res, req);
+      clearRefreshCookie(res, req);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Onboarding completed.",
+      data,
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to complete onboarding.");
   }
 };

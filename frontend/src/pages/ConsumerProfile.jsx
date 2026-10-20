@@ -167,7 +167,7 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
           </button>
           <button className="flex min-h-16 items-center gap-3 rounded-xl bg-slate-50 px-4 py-1 text-left transition-colors hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => navigate("/account/change-email")} type="button">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-100 text-water-700"><Mail aria-hidden="true" className="h-5 w-5" /></span>
-            <span><span className="block text-sm font-bold text-navy-900">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">Verify through registered email.</span></span>
+            <span><span className="block text-sm font-bold text-navy-900">Change email</span><span className="mt-1 block text-xs leading-5 text-slate-500">We&apos;ll send a 6-digit code to your current email address. You&apos;ll sign in again afterwards.</span></span>
           </button>
           <PushNotificationSetting />
           <button className="flex min-h-16 items-center gap-3 rounded-xl bg-red-50 px-4 py-1 text-left transition-colors hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600" onClick={() => window.dispatchEvent(new Event("waterwise:request-logout"))} type="button">

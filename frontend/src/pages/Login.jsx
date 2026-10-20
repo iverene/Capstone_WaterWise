@@ -12,6 +12,7 @@ import {
   FiShield,
 } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router";
+import { isValidEmail } from "../utils/email";
 import { fetchTrustedDevices, hasVerifiedSession, login, noteSessionStored, resendAdminLoginOtp, verifyAdminLoginOtp } from "../services/auth.service";
 import { useToast } from "../components/Toast";
 import OtpInput from "../components/OtpInput";
@@ -223,8 +224,7 @@ export default function Login() {
     const trimmedIdentifier = identifier.trim();
     const nextIdentifierError = !trimmedIdentifier
       ? "Enter your email address or username."
-      : trimmedIdentifier.includes("@") &&
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier)
+      : trimmedIdentifier.includes("@") && !isValidEmail(trimmedIdentifier)
         ? "Enter a valid email address, such as name@example.com."
         : "";
     const nextPasswordError = !password
@@ -275,10 +275,15 @@ export default function Login() {
         throw new Error("This account does not have access to a WaterWise workspace.");
       }
 
+      const nextPath =
+        authenticatedRole === "consumer" && result.user?.onboardingCompleted === false
+          ? "/consumer/onboarding"
+          : destination;
+
       storeSession(result);
       noteSessionStored(result.user);
       toast.success("Signed in", `Welcome back, ${result.user?.username ?? "WaterWise user"}.`);
-      navigate(destination, { replace: true });
+      navigate(nextPath, { replace: true });
     } catch (error) {
       const status = error.cause?.response?.status;
       const errorField = error.cause?.response?.data?.field;

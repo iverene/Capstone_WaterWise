@@ -1,5 +1,6 @@
 import { apiRequest } from "./apiClient";
 import { getStoredAccount } from "./authToken";
+import { toLocalMobileNumber } from "../utils/phoneNumber";
 
 const dateFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -134,11 +135,51 @@ export async function fetchConsumerProfile(options) {
     name: composeProfileName(consumer, consumer.username),
     username: consumer.username,
     purok: consumer.purok_no != null ? `Purok ${consumer.purok_no}` : null,
+    purokNo: consumer.purok_no ?? null,
     email: consumer.email,
-    contactNumber: consumer.contact_number || null,
+    contactNumber: consumer.contact_number ? toLocalMobileNumber(consumer.contact_number) : null,
     status: consumer.status,
+    onboardingCompleted: consumer.onboarding_completed === true,
     accountCreatedDate: formatDate(String(consumer.created_at ?? "").slice(0, 10)),
   };
+}
+
+// Self-service profile update. Only contact number and purok are accepted by
+// the backend; anything else is rejected with 403 rather than ignored.
+export async function updateConsumerProfile({ contactNumber, purokNo, email }, options) {
+  try {
+    const body = {};
+    if (contactNumber !== undefined) body.contactNumber = contactNumber;
+    if (purokNo !== undefined) body.purokNo = purokNo;
+    if (email !== undefined) body.email = email;
+
+    const payload = await apiRequest("/consumers/me", {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      ...options,
+    });
+    return payload.data;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message ?? "Unable to update your profile.",
+      { cause: error },
+    );
+  }
+}
+
+export async function completeConsumerOnboarding(password) {
+  try {
+    const payload = await apiRequest("/consumers/me/onboarding", {
+      method: "PATCH",
+      body: JSON.stringify(password ? { password } : {}),
+    });
+    return payload.data;
+  } catch (error) {
+    throw new Error(
+      error.response?.data?.message ?? "Unable to complete onboarding.",
+      { cause: error },
+    );
+  }
 }
 
 export async function fetchConsumerHome(options) {

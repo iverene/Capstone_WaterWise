@@ -10,6 +10,7 @@ import {
   verifyConsumerEmailChangeOtp,
 } from "../services/auth.service";
 import { getStoredAccount, clearSession } from "../services/authToken";
+import { isValidEmail } from "../utils/email";
 
 const formatCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 const EMAIL_OTP_SESSION_KEY = "waterwise:email-change-otp-challenge";
@@ -93,7 +94,7 @@ export default function ChangeEmailPage() {
   const changeEmail = async (event) => {
     event.preventDefault();
     const normalizedEmail = newEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return setError("Enter a valid complete email address, such as name@example.com.");
+    if (!isValidEmail(normalizedEmail)) return setError("Enter a valid complete email address, such as name@example.com.");
     setIsSubmitting(true); setError("");
     try {
       const result = await completeConsumerEmailChange(emailChangeToken, normalizedEmail);

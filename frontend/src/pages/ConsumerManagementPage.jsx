@@ -13,6 +13,7 @@ import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { createConsumer, fetchConsumerDirectory, requestConsumerPasswordOtp, updateConsumer, verifyConsumerPasswordOtp } from "../services/consumerDirectoryAPI";
+import { isChallengeExpired } from "../utils/otpChallenge";
 
 function toManagementConsumer(consumer) {
   if (!consumer) return null;
@@ -56,6 +57,11 @@ function ConsumerManagementPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [passwordChallenge, setPasswordChallenge] = useState(null);
+  // Visibility is tracked separately from the challenge itself. The backend
+  // only allows one verification code per resident every 5 minutes, so the
+  // challenge has to survive the dialog being closed: dismissing it must not
+  // cost the administrator another five minute wait.
+  const [isPasswordOtpOpen, setIsPasswordOtpOpen] = useState(false);
   const [pendingConsumerUpdate, setPendingConsumerUpdate] = useState(null);
   const [passwordOtp, setPasswordOtp] = useState("");
   const [passwordOtpSuccess, setPasswordOtpSuccess] = useState(false);
@@ -149,11 +155,23 @@ function ConsumerManagementPage() {
 
   const editConsumer = async (consumer) => {
     if (!consumer.password) return saveConsumerUpdate(consumer);
+    // A code was already sent for this resident: reuse it instead of asking
+    // for another one, which the backend would rate limit for five minutes.
+    if (
+      passwordChallenge?.challengeToken &&
+      String(passwordChallenge.consumerId) === String(selectedConsumer?.id) &&
+      !isChallengeExpired(passwordChallenge.challengeToken)
+    ) {
+      setPendingConsumerUpdate(consumer);
+      setIsPasswordOtpOpen(true);
+      return false;
+    }
     setIsPasswordVerifying(true); setError(""); setPasswordOtpError("");
     try {
       const result = await requestConsumerPasswordOtp(selectedConsumer.id);
       setPendingConsumerUpdate(consumer);
-      setPasswordChallenge(result);
+      setPasswordChallenge({ ...result, consumerId: selectedConsumer.id });
+      setIsPasswordOtpOpen(true);
       setPasswordOtp("");
       setResendSeconds(Number(result.cooldownSeconds ?? 300));
     } catch (requestError) {
@@ -169,7 +187,8 @@ function ConsumerManagementPage() {
     setIsPasswordVerifying(true); setPasswordOtpError("");
     try {
       const result = await requestConsumerPasswordOtp(selectedConsumer.id);
-      setPasswordChallenge(result); setPasswordOtp(""); setPasswordOtpSuccess(false);
+      setPasswordChallenge({ ...result, consumerId: selectedConsumer.id });
+      setPasswordOtp(""); setPasswordOtpSuccess(false);
       setResendSeconds(Number(result.cooldownSeconds ?? 300));
     } catch (requestError) {
       setPasswordOtpError(getConsumerRequestError(requestError, "Unable to send the verification code."));
@@ -184,9 +203,17 @@ function ConsumerManagementPage() {
     try {
       const result = await verifyConsumerPasswordOtp(passwordChallenge.challengeToken, passwordOtp);
       const saved = await saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken);
-      if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setResendSeconds(0); }
+      if (saved) { setPasswordChallenge(null); setIsPasswordOtpOpen(false); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); setResendSeconds(0); }
     } catch (requestError) {
-      setPasswordOtpError(getConsumerRequestError(requestError, "Unable to verify the code."));
+      const message = getConsumerRequestError(requestError, "Unable to verify the code.");
+      setPasswordOtpError(message);
+      // The server rejected the session itself: drop it so the next attempt
+      // asks for a fresh code instead of failing the same way.
+      if (/invalid or expired|already been used|no longer be used/i.test(message)) {
+        setPasswordChallenge(null);
+        setPendingConsumerUpdate(null);
+        setIsPasswordOtpOpen(false);
+      }
     } finally { setIsPasswordVerifying(false); }
   };
 
@@ -218,6 +245,7 @@ function ConsumerManagementPage() {
     setSelectedConsumer(null);
     setError("");
     setPasswordChallenge(null);
+    setIsPasswordOtpOpen(false);
     setPendingConsumerUpdate(null);
     setPasswordOtp("");
     setPasswordOtpError("");
@@ -322,13 +350,35 @@ function ConsumerManagementPage() {
         </div>
       </Modal>
 
-      <Modal description="This code can be used only for this resident password change." eyebrow="Password security" isOpen={Boolean(passwordChallenge)} onClose={() => { if (!isPasswordVerifying) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpError(""); setResendSeconds(0); } }} size="sm" title="Verify Resident Password Change">
+      <Modal
+        closeOnOverlay={false}
+        description="This code can be used only for this resident password change."
+        dismissible={false}
+        eyebrow="Password security"
+        isOpen={isPasswordOtpOpen}
+        onClose={() => setIsPasswordOtpOpen(false)}
+        showCloseButton={false}
+        size="sm"
+        title="Verify Resident Password Change"
+      >
         {passwordChallenge && (
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={confirmPasswordChange}>
           <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{passwordChallenge?.maskedEmail ?? "your email"}</strong>. It expires in 5 minutes.</p>
           <div><label className="text-xs font-semibold text-slate-900 sm:text-sm" htmlFor="resident-password-otp">Verification code</label><div className="mt-2 sm:mt-3"><OtpInput compact disabled={isPasswordVerifying} id="resident-password-otp" invalid={Boolean(passwordOtpError)} onChange={(nextOtp) => { setPasswordOtp(nextOtp); setPasswordOtpError(""); setPasswordOtpSuccess(false); }} onAutoVerify={(otpValue) => { if (/^\d{6}$/.test(otpValue) && passwordChallenge?.challengeToken) { setIsPasswordVerifying(true); setPasswordOtpError(""); verifyConsumerPasswordOtp(passwordChallenge.challengeToken, otpValue).then(result => { setPasswordOtpSuccess(true); setTimeout(() => { saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken).then(saved => { if (saved) { setPasswordChallenge(null); setPendingConsumerUpdate(null); setPasswordOtp(""); setPasswordOtpSuccess(false); } }); }, 600); }).catch(e => { setPasswordOtpError(getConsumerRequestError(e, "Unable to verify the code.")); setPasswordOtp(""); }).finally(() => setIsPasswordVerifying(false)); } }} success={passwordOtpSuccess} value={passwordOtp} /></div></div>
           {passwordOtpError && <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{passwordOtpError}</p>}
           <button className="w-full text-xs font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:text-sm" disabled={isPasswordVerifying || resendSeconds > 0} onClick={resendPasswordOtp} type="button">{resendSeconds > 0 ? `Resend code in ${formatOtpCountdown(resendSeconds)}` : "Resend code"}</button>
+          <p className="text-center text-xs leading-5 text-slate-500">
+            You can close this and keep typing the code later — the code stays valid for 5 minutes
+            and will still be here when you update the resident again.
+          </p>
+          <button
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+            disabled={isPasswordVerifying}
+            onClick={() => setIsPasswordOtpOpen(false)}
+            type="button"
+          >
+            Close
+          </button>
         </form>
         )}
       </Modal>

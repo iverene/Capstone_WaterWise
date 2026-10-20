@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { requestPasswordReset, verifyPasswordResetOtp } from "../services/auth.service";
 import OtpInput from "../components/OtpInput";
 import { useToast } from "../components/Toast";
+import { isValidEmail } from "../utils/email";
 
 const formatCountdown = (totalSeconds) => {
   const minutes = Math.floor(totalSeconds / 60);
@@ -82,7 +83,7 @@ export default function ForgotPassword() {
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    if (!isValidEmail(normalizedEmail)) {
       setError("Enter a valid email address, such as name@example.com.");
       return;
     }

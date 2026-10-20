@@ -24,10 +24,13 @@ export default function StaffPasswordConfirmModal({
   return (
     <Modal
       closeLabel="Cancel staff action confirmation"
+      closeOnOverlay={false}
       description={`Enter your Super Admin password to authorize: ${actionLabel}. This approval is single-use and expires in 5 minutes.`}
+      dismissible={false}
       eyebrow="Super Admin verification"
       isOpen={isOpen}
       onClose={onClose}
+      showCloseButton={false}
       size="sm"
       title="Confirm Staff Action"
     >
@@ -82,6 +85,14 @@ export default function StaffPasswordConfirmModal({
         </button>
         <button className="w-full text-sm font-bold text-water-700 disabled:cursor-not-allowed disabled:text-slate-400" disabled={isVerifying} onClick={onUseEmailOtp} type="button">
           Use email code instead
+        </button>
+        <button
+          className="w-full min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"
+          disabled={isVerifying}
+          onClick={onClose}
+          type="button"
+        >
+          Close
         </button>
       </form>
     </Modal>

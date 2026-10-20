@@ -29,7 +29,9 @@ const createLockoutError = (lockedUntil) => {
 const findAccount = async (table, identifier) => {
   const fields = table === "admins"
     ? "id, username, email, password, status, role, failed_login_attempts, locked_until"
-    : "id, username, email, password, status, failed_login_attempts, locked_until";
+    : table === "consumers"
+      ? "id, username, email, password, status, failed_login_attempts, locked_until, onboarding_completed"
+      : "id, username, email, password, status, failed_login_attempts, locked_until";
   const emailResult = await supabase
     .from(table)
     .select(fields)
@@ -170,6 +172,11 @@ export async function authenticateAccount(identifier, password) {
       name: account.username,
       status: account.status,
       role: source.role === "admin" && account.role === "super-admin" ? "super-admin" : source.role,
+      // Only consumers have first-login onboarding. Omitted for staff so the
+      // response shape for admins and meter readers stays unchanged.
+      ...(source.table === "consumers"
+        ? { onboardingCompleted: account.onboarding_completed === true }
+        : {}),
     };
   }
 
@@ -221,25 +228,43 @@ export async function reservePasswordResetOtpRequest(requestKey) {
   };
 }
 
-export async function resetAccountPassword({ accountId, password, role }) {
-  const source = getAccountSource(role);
-  if (!source) return false;
+// The same wording the admin create/edit paths already use, so every entry
+// point reports an identical policy failure.
+export const PASSWORD_POLICY_MESSAGE =
+  "Password must contain at least 8 characters, including uppercase, lowercase, number, and symbol.";
 
-  if (
-    typeof password !== "string" ||
-    password.length < 8 ||
-    !/[a-z]/.test(password) ||
-    !/[A-Z]/.test(password) ||
-    !/\d/.test(password) ||
-    !/[^A-Za-z0-9]/.test(password)
-  ) {
-    const error = new Error(
-      "Use at least 8 characters with uppercase, lowercase, a number, and a symbol.",
-    );
+// Shared password policy. It runs the same checks the admin create and edit
+// paths already run (validator.isStrongPassword plus the bcrypt 72-byte
+// limit), so every entry point enforces one rule and one message.
+//
+// The 72-byte limit matters because bcrypt silently truncates: two different
+// long passwords would end up as the same hash.
+export function assertStrongPassword(password) {
+  if (typeof password !== "string" || !validator.isStrongPassword(password)) {
+    const error = new Error(PASSWORD_POLICY_MESSAGE);
     error.statusCode = 400;
     error.field = "password";
     throw error;
   }
+
+  if (Buffer.byteLength(password, "utf8") > 72) {
+    const error = new Error("Password must not exceed 72 bytes.");
+    error.statusCode = 400;
+    error.field = "password";
+    throw error;
+  }
+}
+
+export async function hashAccountPassword(password) {
+  assertStrongPassword(password);
+  return bcrypt.hash(password, 10);
+}
+
+export async function resetAccountPassword({ accountId, password, role }) {
+  const source = getAccountSource(role);
+  if (!source) return false;
+
+  assertStrongPassword(password);
 
   const { data: account, error: findError } = await supabase
     .from(source.table)
