@@ -76,7 +76,13 @@ export function subscribeToDataChanges(onChange) {
       });
       if (controller.signal.aborted || isLoggingOut()) return;
       if (response.status === 401) {
-        handleStreamUnauthorized();
+        await handleStreamUnauthorized();
+        // Retry while a session still exists. handleStreamUnauthorized either
+        // refreshed the session (the stream must come back) or cleared it
+        // (the reconnect loop then stops on its own).
+        if (!controller.signal.aborted && getStoredAccount()) {
+          retryTimer = window.setTimeout(connect, RETRY_DELAY_MS);
+        }
         return;
       }
       if (!response.ok || !response.body) throw new Error("Change stream unavailable.");

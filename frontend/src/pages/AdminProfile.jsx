@@ -10,8 +10,7 @@ import StaffPasswordConfirmModal from "../components/StaffPasswordConfirmModal";
 import { useToast } from "../components/Toast";
 import { getCurrentAccount, createStaffAccount, fetchStaffAccounts, fetchTrustedDevices, requestStaffActionOtp, revokeOtherTrustedDevices, revokeTrustedDevice, updateAdminAccount, updateMeterReaderAccount, verifyStaffActionOtp, verifyStaffActionPassword } from "../services/auth.service";
 import { getStoredAccount } from "../services/authToken";
-import { isChallengeExpired } from "../utils/otpChallenge";
-
+import { clearOtpChallenge, loadOtpChallenge, saveOtpChallenge } from "../utils/otpChallenge";
 const STAFF_PAGE_SIZE = 2;
 const STAFF_PERMISSION_KEY = "waterwise:super-admin-staff-permission";
 const STAFF_OTP_CHALLENGE_KEY = "waterwise:super-admin-staff-otp";
@@ -292,19 +291,19 @@ export default function AdminProfile() {
   };
 
   const beginStaffOtpAuthorization = async (pendingAction) => {
+    const scope = `staff-action:${pendingAction.action}:${pendingAction.targetId ?? "new"}`;
     // Reuse the code that was already sent for this exact action. The
-    // backend only allows one verification code per action every 5 minutes,
-    // so asking again after the dialog was closed would cost a full wait.
-    if (
-      staffAuthorization?.challengeToken &&
-      staffAuthorization.action === pendingAction.action &&
-      String(staffAuthorization.targetId ?? "") === String(pendingAction.targetId ?? "") &&
-      !isChallengeExpired(staffAuthorization.challengeToken)
-    ) {
+    // backend only allows one code per action every 5 minutes, so asking
+    // again after the dialog was closed would cost a full wait. The
+    // challenge is read from session storage because requesting it is itself
+    // a mutation, and the app remounts its route tree whenever data changes.
+    const savedChallenge = loadOtpChallenge(scope);
+    if (savedChallenge) {
+      setStaffAuthorization(savedChallenge);
       setStaffOtp("");
       setStaffOtpError("");
       setStaffOtpResendSeconds(
-        Math.max(0, Math.ceil((Number(staffAuthorization.expiresAt ?? 0) - Date.now()) / 1000)),
+        Math.max(0, Math.ceil((Number(savedChallenge.expiresAt ?? 0) - Date.now()) / 1000)),
       );
       setIsStaffOtpOpen(true);
       return;
@@ -364,6 +363,10 @@ export default function AdminProfile() {
         authorization.expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
         window.sessionStorage.setItem(SETTINGS_OTP_CHALLENGE_KEY, JSON.stringify(authorization));
       }
+      // Persisted for every action so the challenge survives the remount the
+      // request itself triggers.
+      authorization.expiresAt = Date.now() + Number(result.cooldownSeconds ?? 300) * 1000;
+      saveOtpChallenge(scope, authorization);
       setStaffAuthorization(authorization);
       setStaffOtp("");
       setStaffOtpResendSeconds(Number(result.cooldownSeconds ?? 300));
@@ -535,6 +538,7 @@ export default function AdminProfile() {
       const result = await verifyStaffActionOtp(staffAuthorization.challengeToken, staffOtp);
       const pendingAction = staffAuthorization;
       setStaffAuthorization(null); setStaffOtp(""); setIsStaffOtpOpen(false);
+      clearOtpChallenge(`staff-action:${pendingAction.action}:${pendingAction.targetId ?? "new"}`);
       if (pendingAction.action === "manage-staff") {
         window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
         const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() };

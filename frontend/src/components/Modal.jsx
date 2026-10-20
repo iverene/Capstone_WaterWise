@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-
-const modalStack = [];
+import { lockBodyScroll, modalStack, pushModal, removeModal, unlockBodyScroll } from "./modalStack";
 
 const sizes = {
   sm: "max-w-lg",
@@ -68,10 +67,8 @@ export default function Modal({
 
     const token = stackTokenRef.current;
     const previouslyFocused = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    modalStack.push(token);
-    document.body.style.overflow = "hidden";
-
+    pushModal(token);
+    lockBodyScroll();
     const handleKeyDown = (event) => {
       if (modalStack.at(-1) !== token) return;
       if (event.key === "Escape" && dismissibleRef.current) {
@@ -105,10 +102,9 @@ export default function Modal({
     });
 
     return () => {
-      const stackIndex = modalStack.lastIndexOf(token);
-      if (stackIndex >= 0) modalStack.splice(stackIndex, 1);
+      removeModal(token);
       document.removeEventListener("keydown", handleKeyDown);
-      if (modalStack.length === 0) document.body.style.overflow = previousOverflow;
+      unlockBodyScroll();
       previouslyFocused?.focus?.();
     };
   }, [initialFocusRef, isOpen]);

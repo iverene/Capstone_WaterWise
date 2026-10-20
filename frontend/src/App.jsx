@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
+import { isAnyModalOpen, subscribeToModalStack } from "./components/modalStack";
 import AppLayout from "./components/AppLayout";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RateLimitToast from "./components/RateLimitToast";
@@ -514,6 +515,15 @@ export function AppRoutes() {
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
   const [sessionRevision, setSessionRevision] = useState(0);
+  // A data change normally remounts the whole route tree so every screen
+  // refetches. A remount while a dialog is open would tear the dialog down
+  // and destroy its state, so it is deferred until the last dialog closes.
+  const pendingRevisionRef = useRef(false);
+  const remountTimerRef = useRef(null);
+
+  const applyRevision = useCallback(() => {
+    setDataRevision((revision) => revision + 1);
+  }, []);
 
   useEffect(() => subscribeToDataChanges(() => {
     clearApiCache();
@@ -522,8 +532,37 @@ export default function App() {
     // tree, which would throw the resident back to step 1 mid-flow, so
     // revision remounts are paused while the wizard is open.
     if (window.location.pathname === "/consumer/onboarding") return;
-    setDataRevision((revision) => revision + 1);
-  }), [sessionRevision]);
+    // Same for an open dialog: a write flow that spans one (the resident
+    // password verification code) must be able to finish.
+    if (isAnyModalOpen()) {
+      pendingRevisionRef.current = true;
+      return;
+    }
+    // Coalesce a burst of mutations into a single remount. One write often
+    // produces several change events, and remounting for each of them makes
+    // the screen look frozen.
+    window.clearTimeout(remountTimerRef.current);
+    remountTimerRef.current = window.setTimeout(() => {
+      remountTimerRef.current = null;
+      // A dialog may have opened while the timer was pending; never tear the
+      // UI down under an open dialog.
+      if (isAnyModalOpen()) {
+        pendingRevisionRef.current = true;
+        return;
+      }
+      applyRevision();
+    }, 150);
+  }), [sessionRevision, applyRevision]);
+
+  useEffect(() => subscribeToModalStack((open) => {
+    if (open || !pendingRevisionRef.current) return;
+    pendingRevisionRef.current = false;
+    window.clearTimeout(remountTimerRef.current);
+    remountTimerRef.current = null;
+    applyRevision();
+  }), [applyRevision]);
+
+  useEffect(() => () => window.clearTimeout(remountTimerRef.current), []);
 
   useEffect(() => startSessionRefresh(), []);
 
