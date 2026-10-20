@@ -9,7 +9,7 @@ import { useToast } from "../components/Toast";
 import { requestSettingsChangeOtp, verifySettingsChangeOtp, updateSystemSetting, fetchSystemSettings } from "../services/systemSettingsService";
 import { getStoredAccount } from "../services/authToken";
 import { SETTINGS_PERMISSION_KEY } from "./AdminProfile";
-import { isChallengeExpired } from "../utils/otpChallenge";
+import { clearOtpChallenge, isChallengeExpired, loadOtpChallenge, saveOtpChallenge } from "../utils/otpChallenge";
 
 const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 
@@ -57,12 +57,20 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const [otpChallenge, setOtpChallenge] = useState(null);
+  // Restore a pending verification code. Requesting a code is itself a
+  // mutation, and the app remounts its route tree whenever data changes, so
+  // without this the code section would come back empty after the remount.
+  const [restoredOtpChallenge] = useState(() => loadOtpChallenge("update-system-settings"));
+  const [otpChallenge, setOtpChallenge] = useState(restoredOtpChallenge);
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
   const [otpSuccess, setOtpSuccess] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(() =>
+    restoredOtpChallenge
+      ? Math.max(0, Math.ceil((Number(restoredOtpChallenge.expiresAt ?? 0) - Date.now()) / 1000))
+      : 0,
+  );
   const [needsReverify, setNeedsReverify] = useState(false);
 
   const loadSettings = useCallback(async () => {
@@ -140,12 +148,24 @@ export default function AdminSettingsPage() {
   };
 
   const handleRequestOtp = async () => {
+    const scope = "update-system-settings";
+    // Reuse the code that was already sent. The backend only allows one code
+    // every 5 minutes, and requesting a code is itself a mutation that
+    // remounts the app, so the challenge is kept in session storage.
+    const saved = loadOtpChallenge(scope);
+    if (saved) {
+      setOtpChallenge(saved);
+      setCooldownSeconds(Math.max(0, Math.ceil((Number(saved.expiresAt ?? 0) - Date.now()) / 1000)));
+      return;
+    }
     try {
       setSaving(true);
       setSaveError("");
       setOtpError("");
       const result = await requestSettingsChangeOtp();
-      setOtpChallenge(result);
+      const challenge = { ...result, expiresAt: Date.now() + Number(result.cooldownSeconds ?? 300) * 1000 };
+      saveOtpChallenge(scope, challenge);
+      setOtpChallenge(challenge);
       setCooldownSeconds(result.cooldownSeconds ?? 300);
       toast.success("Code sent", result.message);
     } catch (error) {
@@ -172,6 +192,12 @@ export default function AdminSettingsPage() {
       setVerifying(true);
       setOtpError("");
       const result = await verifySettingsChangeOtp(otpChallenge.challengeToken, otpValue);
+      // The code is consumed by the server now. Drop the stored copy and the
+      // code section BEFORE the save: the save is itself a mutation, and the
+      // app remounts its route tree whenever data changes, so a remount in
+      // the middle of the save would otherwise bring the code section back.
+      clearOtpChallenge("update-system-settings");
+      setOtpChallenge(null);
       setOtpSuccess(true);
       setTimeout(async () => {
         try {
