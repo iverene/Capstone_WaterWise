@@ -40,6 +40,9 @@ const consumptionReceiptData = (consumerName, receipt, rates = TIER_DEFAULTS) =>
   previousReading: receipt.previousReading,
   presentReading: receipt.currentReading,
   consumption: receipt.consumption,
+  readingSource: receipt.readingSource ?? "actual",
+  carriedConsumption: Number(receipt.carriedConsumption ?? 0),
+  newBaseline: receipt.newBaseline ?? null,
   baselineBill: receipt.baselineBill ?? computeTieredBill(receipt.consumption, rates),
   billBreakdown: receipt.billBreakdown ?? breakdownTieredBill(receipt.consumption, rates),
   arrears30Days: Number(receipt.arrears30Days ?? 0),
@@ -292,7 +295,9 @@ export default function RecordConsumptionPage() {
       } finally {
         setReceiptLoading(false);
       }
-      toast.success("Meter reading recorded", `${payload.consumerName}'s ${result.consumption.toLocaleString()} m³ consumption and billing were saved.`);
+      toast.success("Meter reading recorded", result.carriedConsumption > 0
+        ? `${payload.consumerName}: ${result.carriedConsumption.toLocaleString()} m³ was carried from the old meter and the bill is ready.`
+        : `${payload.consumerName}'s ${result.consumption.toLocaleString()} m³ consumption and billing were saved.`);
       return result;
     } catch (requestError) {
       const message = requestMessage(requestError, "Unable to save the reading.");

@@ -9,6 +9,7 @@ import {
   FiGrid,
   FiHome,
   FiMessageSquare,
+  FiRefreshCw,
   FiTrash2,
   FiUsers,
   FiWifiOff,
@@ -53,6 +54,7 @@ const ROLE_CONFIG = {
     links: [
       { label: "Dashboard", path: "/admin/dashboard", Icon: FiGrid },
       { label: "Readings", path: "/admin/readings", Icon: FiBookOpen },
+      { label: "Meter Incidents", path: "/admin/meter-incidents", Icon: FiRefreshCw },
       { label: "Billings", path: "/admin/billings", Icon: FiFileText },
       { label: "Payments", path: "/admin/payments", Icon: FiCreditCard },
       { label: "Residents", path: "/admin/consumers", Icon: FiUsers },
@@ -78,6 +80,11 @@ const ROLE_CONFIG = {
         label: "Readings Entry",
         path: "/meter-reader/readings-entry",
         Icon: FiBookOpen,
+      },
+      {
+        label: "Meter Incidents",
+        path: "/meter-reader/meter-incidents",
+        Icon: FiRefreshCw,
       },
     ],
   },

@@ -2,6 +2,15 @@
 
 import { supabase } from "../config/supabase.js";
 import { composeFullName } from "./consumerModels.js";
+import {
+  getAuthorizationDays,
+  getAveragePriorUsage,
+  getAverageWindowMonths,
+  listOpenIncidents,
+  listPendingReviewConsumerIds,
+  normalizeIncident,
+  resolveIncidentPriorUsage,
+} from "./meterIncidentModels.js";
 
 const consumerDisplayName = (consumer, fallback = "Unknown consumer") => {
   if (!consumer) return fallback;
@@ -52,6 +61,11 @@ const fetchConsumptionRecords =
           previous_reading,
           present_reading,
           consumption,
+          reading_source,
+          carried_consumption,
+          prior_usage_basis,
+          new_baseline,
+          meter_incident_id,
           consumers!consumption_consumer_id_fkey (
             id,
             first_name,
@@ -260,9 +274,10 @@ export const getPurokConsumptionRanking =
     );
   };
 
-const readingError = (message, statusCode = 400) => {
+const readingError = (message, statusCode = 400, code = null) => {
   const error = new TypeError(message);
   error.statusCode = statusCode;
+  if (code) error.code = code;
   return error;
 };
 
@@ -314,7 +329,8 @@ const calculateArrears = (billings, currentBillingId, readingDate) => {
   }, { over_30_days: 0, over_60_days: 0, over_90_days: 0 });
 };
 
-const buildReadingContext = (consumer, records, billings, readingDate) => {
+const buildReadingContext = (consumer, records, billings, readingDate, options = {}) => {
+  const { openIncident = null, paymentHold = false, averageWindow = 3 } = options;
   const billingByConsumption = new Map(
     billings.map((billing) => [billing.consumption_id, billing]),
   );
@@ -327,10 +343,16 @@ const buildReadingContext = (consumer, records, billings, readingDate) => {
     : null;
   const latestBilling = latest ? billingByConsumption.get(latest.id) ?? null : null;
   const arrears = calculateArrears(billings, selectedMonthBilling?.id, readingDate);
+  const currentMonth = monthKey(readingDate);
   const recentConsumptions = records
-    .slice(0, 3)
+    .filter((record) => (record.reading_source ?? "actual") === "actual")
+    .filter((record) => Number(record.carried_consumption ?? 0) === 0)
+    .filter((record) => monthKey(record.reading_date) !== currentMonth)
+    .slice(0, averageWindow)
     .map((record) => Number(record.consumption))
-    .filter(Number.isFinite);
+    // A month with no usage says nothing about typical usage, and including it
+    // drags the average down (0, 22 and 20 would average 14 instead of 21).
+    .filter((value) => Number.isFinite(value) && value > 0);
   const averageConsumption = recentConsumptions.length
     ? recentConsumptions.reduce((total, value) => total + value, 0) / recentConsumptions.length
     : null;
@@ -360,6 +382,7 @@ const buildReadingContext = (consumer, records, billings, readingDate) => {
     has_previous_record: Boolean(latest),
     latest_reading_id: latest?.id ?? null,
     latest_reading_date: latest?.reading_date ?? null,
+    latest_reading_source: latest?.reading_source ?? "actual",
     latest_created_at: latest?.created_at ?? latestBilling?.created_at ?? null,
     latest_previous_reading: latest ? Number(latest.previous_reading) : null,
     latest_present_reading: latest ? Number(latest.present_reading) : null,
@@ -367,6 +390,23 @@ const buildReadingContext = (consumer, records, billings, readingDate) => {
     average_recent_consumption: averageConsumption == null
       ? null
       : Number(averageConsumption.toFixed(2)),
+    average_window: averageWindow,
+    average_sample_count: recentConsumptions.length,
+    payment_hold: Boolean(paymentHold),
+    open_incident: openIncident
+      ? {
+          id: openIncident.id,
+          incident_type: openIncident.incidentType,
+          effective_date: openIncident.effectiveDate,
+          prior_usage: openIncident.priorUsage,
+          prior_usage_basis: openIncident.priorUsageBasis,
+          new_baseline: openIncident.newBaseline,
+          new_meter_serial: openIncident.newMeterSerial,
+          expires_at: openIncident.expiresAt,
+          review_status: openIncident.reviewStatus,
+          status: openIncident.status,
+        }
+      : null,
     has_reading_in_selected_month: hasReadingInSelectedMonth,
     can_record: canRecord,
     recording_block_reason: recordingBlockReason,
@@ -377,6 +417,10 @@ const buildReadingContext = (consumer, records, billings, readingDate) => {
       previous_reading: Number(selectedMonthReading.previous_reading),
       present_reading: Number(selectedMonthReading.present_reading),
       consumption: Number(selectedMonthReading.consumption),
+      reading_source: selectedMonthReading.reading_source ?? "actual",
+      carried_consumption: Number(selectedMonthReading.carried_consumption ?? 0),
+      new_baseline: selectedMonthReading.new_baseline == null ? null : Number(selectedMonthReading.new_baseline),
+      meter_incident_id: selectedMonthReading.meter_incident_id ?? null,
       baseline_bill: Number(selectedMonthBilling?.total_bill ?? 0),
       billing_id: selectedMonthBilling?.id ?? null,
       due_date: selectedMonthBilling?.due_date ?? null,
@@ -391,6 +435,9 @@ export const getConsumptionRecordingContexts = async () => {
     { data: consumers, error: consumerError },
     { data: readings, error: readingQueryError },
     { data: billings, error: billingQueryError },
+    openIncidents,
+    pendingConsumerIds,
+    averageWindow,
   ] =
     await Promise.all([
       supabase
@@ -400,12 +447,15 @@ export const getConsumptionRecordingContexts = async () => {
         .order("first_name", { ascending: true }),
       supabase
         .from("consumption")
-        .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, created_at")
+        .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, reading_source, carried_consumption, prior_usage_basis, new_baseline, meter_incident_id, created_at")
         .order("reading_date", { ascending: false })
         .order("id", { ascending: false }),
       supabase
         .from("billing")
         .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at"),
+      listOpenIncidents(),
+      listPendingReviewConsumerIds(),
+      getAverageWindowMonths(),
     ]);
 
   if (consumerError) {
@@ -430,6 +480,10 @@ export const getConsumptionRecordingContexts = async () => {
     records.push(billing);
     billingsByConsumer.set(billing.user_id, records);
   });
+  const openIncidentByConsumer = new Map(
+    (openIncidents ?? []).map((incident) => [incident.consumerId, incident]),
+  );
+  const pendingHoldSet = new Set(pendingConsumerIds ?? []);
 
   return (consumers ?? []).map((consumer) =>
     buildReadingContext(
@@ -437,6 +491,11 @@ export const getConsumptionRecordingContexts = async () => {
       readingsByConsumer.get(consumer.id) ?? [],
       billingsByConsumer.get(consumer.id) ?? [],
       normalizedDate,
+      {
+        openIncident: openIncidentByConsumer.get(consumer.id) ?? null,
+        paymentHold: pendingHoldSet.has(consumer.id),
+        averageWindow,
+      },
     ));
 };
 
@@ -451,6 +510,9 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     { data: consumer, error: consumerError },
     { data: readings, error: readingQueryError },
     { data: billings, error: billingQueryError },
+    openIncidents,
+    pendingConsumerIds,
+    averageWindow,
   ] =
     await Promise.all([
       supabase
@@ -460,7 +522,7 @@ export const getConsumptionRecordingContext = async (consumerId) => {
         .maybeSingle(),
       supabase
         .from("consumption")
-        .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, created_at")
+        .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, reading_source, carried_consumption, prior_usage_basis, new_baseline, meter_incident_id, created_at")
         .eq("consumer_id", parsedConsumerId)
         .order("reading_date", { ascending: false })
         .order("id", { ascending: false }),
@@ -468,6 +530,9 @@ export const getConsumptionRecordingContext = async (consumerId) => {
         .from("billing")
         .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at")
         .eq("user_id", parsedConsumerId),
+      listOpenIncidents(),
+      listPendingReviewConsumerIds(),
+      getAverageWindowMonths(),
     ]);
 
   if (consumerError || readingQueryError || billingQueryError) {
@@ -483,6 +548,11 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     readings ?? [],
     billings ?? [],
     normalizedDate,
+    {
+      openIncident: (openIncidents ?? []).find((incident) => incident.consumerId === parsedConsumerId) ?? null,
+      paymentHold: (pendingConsumerIds ?? []).includes(parsedConsumerId),
+      averageWindow,
+    },
   );
 };
 
@@ -504,6 +574,11 @@ export const getAllConsumptionReadings = async () => {
         previous_reading: record.previous_reading,
         present_reading: record.present_reading,
         consumption: record.consumption,
+        reading_source: record.reading_source ?? "actual",
+        carried_consumption: record.carried_consumption ?? 0,
+        prior_usage_basis: record.prior_usage_basis ?? null,
+        new_baseline: record.new_baseline ?? null,
+        meter_incident_id: record.meter_incident_id ?? null,
       };
     })
     .sort((a, b) => {
@@ -523,7 +598,7 @@ export const getConsumptionByConsumer = async (consumerId) => {
   const { data, error } = await supabase
     .from("consumption")
     .select(
-      "id, consumer_id, reading_date, previous_reading, present_reading, consumption, created_at, updated_at"
+      "id, consumer_id, reading_date, previous_reading, present_reading, consumption, reading_source, carried_consumption, prior_usage_basis, new_baseline, meter_incident_id, created_at, updated_at"
     )
     .eq("consumer_id", parsedConsumerId)
     .order("reading_date", { ascending: true })
@@ -559,9 +634,14 @@ export const createConsumptionReading = async ({
   idempotencyKey,
   initialPreviousReading,
   presentReading,
+  readingSource = "actual",
+  estimateValue,
+  incident,
+  recordedById,
+  recordedByRole,
 }) => {
   const parsedConsumerId = Number(consumerId);
-  const parsedPresentReading = Number(presentReading);
+  const source = readingSource === "estimated" ? "estimated" : "actual";
 
   if (!Number.isInteger(parsedConsumerId) || parsedConsumerId < 1) {
     throw readingError("A valid consumer ID is required.");
@@ -570,39 +650,124 @@ export const createConsumptionReading = async ({
     throw readingError("A valid reading request key is required.");
   }
 
+  const parsedPresentReading = presentReading == null || presentReading === ""
+    ? null
+    : Number(presentReading);
   const parsedInitialPreviousReading = initialPreviousReading == null
     ? null
     : Number(initialPreviousReading);
+  const parsedEstimate = estimateValue == null || estimateValue === ""
+    ? null
+    : Number(estimateValue);
 
   if (
-    !Number.isFinite(parsedPresentReading) ||
-    parsedPresentReading < 0 ||
-    (parsedInitialPreviousReading != null &&
-      (!Number.isFinite(parsedInitialPreviousReading) || parsedInitialPreviousReading < 0))
+    source === "actual" &&
+    (parsedPresentReading == null || !Number.isFinite(parsedPresentReading) || parsedPresentReading < 0)
   ) {
     throw readingError("Meter readings must be non-negative numbers.");
   }
 
-  if (parsedInitialPreviousReading != null && parsedPresentReading < parsedInitialPreviousReading) {
-    throw readingError(
-      "Present reading cannot be lower than the previous reading."
-    );
+  if (
+    parsedInitialPreviousReading != null &&
+    (!Number.isFinite(parsedInitialPreviousReading) || parsedInitialPreviousReading < 0)
+  ) {
+    throw readingError("Meter readings must be non-negative numbers.");
+  }
+
+  if (
+    source === "estimated" &&
+    (parsedEstimate == null || !Number.isFinite(parsedEstimate) || parsedEstimate <= 0)
+  ) {
+    throw readingError("An estimate value greater than zero is required.");
+  }
+
+  if (
+    incident == null &&
+    parsedInitialPreviousReading != null &&
+    parsedPresentReading != null &&
+    parsedPresentReading < parsedInitialPreviousReading
+  ) {
+    throw readingError("Present reading cannot be lower than the previous reading.");
+  }
+
+  let incidentPayload = null;
+  if (incident && typeof incident === "object") {
+    if (incident.id != null) {
+      // The RPC owns the billing math, so it needs the average to estimate a
+      // meter change that measured nothing. It is resolved here on the server,
+      // never taken from the browser, and only used when the gap reads as zero.
+      const average = await getAveragePriorUsage(
+        parsedConsumerId,
+        await getAverageWindowMonths(),
+      );
+      incidentPayload = {
+        id: Number(incident.id),
+        averageFallback: average.average,
+        forceZero: incident.forceZero === true,
+      };
+    } else if (
+      incident.priorUsage != null ||
+      incident.oldFinalReading != null ||
+      incident.priorUsageBasis != null
+    ) {
+      const recorderId = recordedById ?? incident.recordedById;
+      if (!Number.isInteger(Number(recorderId)) || Number(recorderId) < 1) {
+        throw readingError("The meter incident must be recorded by an authenticated user.", 401);
+      }
+      // Re-derive on the server. The closing reading and the system average are
+      // authoritative, so a tampered field payload cannot change the bill.
+      const resolved = await resolveIncidentPriorUsage(parsedConsumerId, {
+        oldFinalReading: incident.oldFinalReading == null
+          ? null
+          : Number(incident.oldFinalReading),
+        priorUsageBasis: incident.priorUsageBasis ?? "average",
+        suppliedUsage: incident.priorUsage == null ? null : Number(incident.priorUsage),
+        allowOverride: false,
+      });
+      incidentPayload = {
+        incidentType: incident.incidentType ?? "replacement",
+        effectiveDate: incident.effectiveDate ?? null,
+        oldMeterSerial: incident.oldMeterSerial ?? null,
+        oldFinalReading: incident.oldFinalReading ?? null,
+        priorUsage: resolved.priorUsage,
+        priorUsageBasis: resolved.basis,
+        averageWindow: resolved.window,
+        averageValue: resolved.averageValue,
+        autoAuthorize: incident.autoAuthorize === true,
+        newMeterSerial: incident.newMeterSerial ?? null,
+        newBaseline: incident.newBaseline ?? 0,
+        notes: incident.notes ?? null,
+        idempotencyKey: incident.idempotencyKey ?? `${idempotencyKey.trim()}-incident`,
+        recordedById: Number(recorderId),
+        recordedByRole: recordedByRole ?? incident.recordedByRole ?? "meter-reader",
+        authorizationDays: await getAuthorizationDays(),
+      };
+    }
   }
 
   const { data, error } = await supabase.rpc("record_consumption_and_billing", {
     p_consumer_id: parsedConsumerId,
-    p_present_reading: parsedPresentReading,
+    p_present_reading: source === "estimated" ? null : parsedPresentReading,
     p_initial_previous_reading: parsedInitialPreviousReading,
     p_idempotency_key: idempotencyKey.trim(),
+    p_reading_source: source,
+    p_estimate_value: source === "estimated" ? parsedEstimate : null,
+    p_incident: incidentPayload,
   });
 
   if (error) {
     const message = error.message ?? "Failed to create meter reading.";
-    const statusCode = error.code === "23505" || /already has|already used/i.test(message)
+    if (
+      error.hint === "METER_RESET_REQUIRED" ||
+      /below the previous baseline|meter incident is required/i.test(message)
+    ) {
+      throw readingError(message, 409, "METER_RESET_REQUIRED");
+    }
+    const statusCode = error.code === "23505" || /already has|already used|open meter incident/i.test(message)
       ? 409
       : error.code === "23503" || /not found/i.test(message)
         ? 404
-        : /required|cannot|inactive|assign the consumer|later than|only be supplied/i.test(message)
+        : /required|cannot|inactive|assign the consumer|later than|only be supplied|negative|not valid|requires at least/i.test(message)
           ? 400
           : 500;
     throw readingError(message, statusCode);

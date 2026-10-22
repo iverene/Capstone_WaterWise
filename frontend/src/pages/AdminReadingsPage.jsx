@@ -167,7 +167,17 @@ export default function AdminReadingsPage() {
                 {row.reading.currentReading} m³
               </td>
               <td className="font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-center">
-                {row.reading.consumption} m³
+                <span className="block">{row.reading.consumption} m³</span>
+                {row.reading.readingSource === "incident" && (
+                  <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-200">
+                    includes {row.reading.carriedConsumption} m³ carried
+                  </span>
+                )}
+                {row.reading.readingSource === "estimated" && (
+                  <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+                    estimated
+                  </span>
+                )}
               </td>
               <td className="md:px-4 md:py-4 md:text-right">
                 <button

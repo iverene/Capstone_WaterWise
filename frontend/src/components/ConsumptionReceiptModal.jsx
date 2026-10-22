@@ -62,6 +62,9 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
     previousReading,
     presentReading,
     consumption,
+    readingSource = "actual",
+    carriedConsumption = 0,
+    newBaseline = null,
     baselineBill,
     billBreakdown = null,
     arrears30Days = 0,
@@ -82,8 +85,15 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
       lines: [
         ["Meter Name", meterName],
         ["Run Date", runDate],
-        ["Previous Reading", `${previousReading} m³`],
+        [
+          readingSource === "incident" ? "Previous Reading (old meter)" : "Previous Reading",
+          `${previousReading} m³`,
+        ],
         ["Present Reading", `${presentReading} m³`],
+        ...(readingSource === "incident"
+          ? [["New Meter Starts At", `${Number(newBaseline ?? 0)} m³`]]
+          : []),
+        ...(Number(carriedConsumption) > 0 ? [["Carried From Old Meter", `${Number(carriedConsumption)} m³`]] : []),
         ["Cubic Meters Used", `${cubicMetersUsed} m³`],
         ...(Array.isArray(billBreakdown)
           ? billBreakdown.map((line) => [line.label, `₱${Number(line.amount).toFixed(2)}`])
@@ -169,8 +179,26 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
             Readings
           </h3>
           <dl className="mt-2">
-            <ReceiptLine label="Previous" testId="telemetry-prev" value={`${previousReading} m³`} />
+            <ReceiptLine
+              label={readingSource === "incident" ? "Previous (old meter)" : "Previous"}
+              testId="telemetry-prev"
+              value={`${previousReading} m³`}
+            />
             <ReceiptLine label="Present" testId="telemetry-pres" value={`${presentReading} m³`} />
+            {readingSource === "incident" && (
+              <ReceiptLine
+                label="New meter starts at"
+                testId="telemetry-new-baseline"
+                value={`${Number(newBaseline ?? 0)} m³`}
+              />
+            )}
+            {Number(carriedConsumption) > 0 && (
+              <ReceiptLine
+                label="Carried from old meter"
+                testId="telemetry-carried"
+                value={`${Number(carriedConsumption)} m³`}
+              />
+            )}
             <ReceiptLine label="Used" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
             <ReceiptLine label="Baseline bill" testId="telemetry-baseline" value={currency(baselineBill)} />
             {Array.isArray(billBreakdown) && billBreakdown.length > 0 && (

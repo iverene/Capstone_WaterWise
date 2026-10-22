@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { isAnyModalOpen, subscribeToModalStack } from "./components/modalStack";
 import AppLayout from "./components/AppLayout";
+import ErrorBoundary from "./components/ErrorBoundary";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RateLimitToast from "./components/RateLimitToast";
 import RouteAccessError from "./components/RouteAccessError";
@@ -38,7 +39,9 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 import AdminProfile from "./pages/AdminProfile";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminAccountInformation from "./pages/AdminAccountInformation";
+import MeterIncidentsPage from "./pages/MeterIncidentsPage";
 import RecordConsumptionPage from "./pages/RecordConsumptionPage";
+import ReportMeterIncidentPage from "./pages/ReportMeterIncidentPage";
 import MeterReaderProfile from "./pages/MeterReaderProfile";
 import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation";
 import { clearApiCache } from "./services/apiCache";
@@ -59,6 +62,7 @@ const roleAccess = {
       "/admin/account-information",
       "/admin/consumers",
       "/admin/readings",
+      "/admin/meter-incidents",
       "/admin/consumer-readings",
       "/admin/consumer-billings",
       "/admin/billings",
@@ -76,6 +80,7 @@ const roleAccess = {
     paths: [
       "/meter-reader",
       "/meter-reader/readings-entry",
+      "/meter-reader/meter-incidents",
       "/meter-reader/profile",
       "/meter-reader/account-information",
     ],
@@ -240,6 +245,14 @@ export function AppRoutes() {
       <Route
         element={
           <RoleRouteGuard requiredRole="meter-reader">
+            <AppLayout><ReportMeterIncidentPage /></AppLayout>
+          </RoleRouteGuard>
+        }
+        path="/meter-reader/meter-incidents"
+      />
+      <Route
+        element={
+          <RoleRouteGuard requiredRole="meter-reader">
             <AppLayout><MeterReaderProfile /></AppLayout>
           </RoleRouteGuard>
         }
@@ -337,6 +350,16 @@ export function AppRoutes() {
           <RoleRouteGuard requiredRole="admin">
             <AppLayout>
               <AdminReadingsPage />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+      />
+      <Route
+        path="/admin/meter-incidents"
+        element={
+          <RoleRouteGuard requiredRole="admin">
+            <AppLayout>
+              <MeterIncidentsPage />
             </AppLayout>
           </RoleRouteGuard>
         }
@@ -578,7 +601,9 @@ export default function App() {
       <SessionInactivityGuard />
       <RateLimitToast />
       <ConsumerOnboardingGate />
-      <AppRoutes key={dataRevision} />
+      <ErrorBoundary>
+        <AppRoutes key={dataRevision} />
+      </ErrorBoundary>
       <PWAInstallPrompt />
     </BrowserRouter>
   );
