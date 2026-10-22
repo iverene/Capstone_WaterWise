@@ -82,6 +82,7 @@ async function consumptionRecords(startDate, endDate) {
     .from("consumption")
     .select(`
       id, consumer_id, reading_date, previous_reading, present_reading, consumption,
+      reading_source, carried_consumption, meter_incident_id,
       consumers!consumption_consumer_id_fkey (id, username, first_name, middle_name, last_name, purok_no)
     `)
     .gte("reading_date", startDate)
@@ -98,6 +99,9 @@ async function consumptionRecords(startDate, endDate) {
     previousReading: number(record.previous_reading),
     currentReading: number(record.present_reading),
     consumption: number(record.consumption),
+    readingSource: record.reading_source ?? "actual",
+    carriedConsumption: number(record.carried_consumption),
+    meterIncidentId: record.meter_incident_id ?? null,
   }));
 }
 

@@ -22,7 +22,7 @@ import {
 
 export const addConsumptionReading = async (req, res) => {
   try {
-    const result = await createReading(req.body ?? {});
+    const result = await createReading(req.body ?? {}, req.user);
     const consumerId = result?.consumer_id ?? req.body?.consumerId;
     const purok = await getConsumerPurok(consumerId);
     await invalidateConsumptionCache({ purok });
@@ -38,6 +38,7 @@ export const addConsumptionReading = async (req, res) => {
     return res.status(error.statusCode ?? 500).json({
       success: false,
       message: error.message || "Failed to create meter reading.",
+      ...(error.code ? { code: error.code } : {}),
     });
   }
 };

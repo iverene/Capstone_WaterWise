@@ -17,11 +17,13 @@ import reportRoutes from "./routes/reportRoutes.js";
 import changeEventRoutes from "./routes/changeEventRoutes.js";
 import rateLimitRoutes from "./routes/rateLimitRoutes.js";
 import systemSettingsRoutes from "./routes/systemSettingsRoutes.js";
+import meterIncidentRoutes from "./routes/meterIncidentRoutes.js";
 import { globalLimiter } from "./middleware/rateLimit.js";
 import { publishDataChange } from "./services/changeEventService.js";
 import { startDeviceSessionPruneScheduler } from "./services/deviceSessionPruneService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
 import { startPushNotificationWorker } from "./services/pushNotificationService.js";
+import { startMeterIncidentExpiryScheduler } from "./services/meterIncidentExpiryService.js";
 
 const app = express();
 
@@ -163,6 +165,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/changes", changeEventRoutes);
 app.use("/api/admin/rate-limits", rateLimitRoutes);
 app.use("/api/system-settings", systemSettingsRoutes);
+app.use("/api/meter-incidents", meterIncidentRoutes);
 
 app.use((error, req, res, next) => {
   if (error instanceof SyntaxError && "body" in error) {
@@ -196,6 +199,7 @@ app.listen(PORT, () => {
   startNotificationReminderScheduler();
   startDeviceSessionPruneScheduler();
   startPushNotificationWorker();
+  startMeterIncidentExpiryScheduler();
 });
 
 export default app;

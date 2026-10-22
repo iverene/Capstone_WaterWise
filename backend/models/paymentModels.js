@@ -1,5 +1,6 @@
 import { supabase } from "../config/supabase.js";
 import { randomUUID } from "node:crypto";
+import { hasPendingIncident } from "./meterIncidentModels.js";
 
 const PAYMENT_FIELDS =
   "id, billing_id, total_paid, amount_tendered, change_given, remaining_balance, payment_date, payment_method, reference_number, created_at, updated_at";
@@ -60,10 +61,36 @@ const parseOptionalReference = (value) => {
 };
 
 const paymentErrorStatus = (message) => {
+  if (/on hold until the meter incident is reviewed/i.test(message)) return 409;
   if (message.includes("not found")) return 404;
   if (message.includes("already fully paid")) return 409;
   if (message.includes("No outstanding bills")) return 409;
   return 400;
+};
+
+const toPaymentError = (message, fallback) => {
+  const text = message || fallback;
+  const error = createError(text, paymentErrorStatus(text));
+  if (/on hold until the meter incident is reviewed/i.test(text)) {
+    error.code = "METER_INCIDENT_HOLD";
+  }
+  return error;
+};
+
+/**
+ * A bill funded by a field-declared meter incident cannot be paid until an
+ * admin reviews the incident. Admin-created incidents are pre-approved, so
+ * they never trigger this hold.
+ */
+const assertNoIncidentHold = async (consumerId) => {
+  if (await hasPendingIncident(consumerId)) {
+    const error = createError(
+      "This resident has a meter incident awaiting approval. Approve or reject it before accepting payment.",
+      409,
+    );
+    error.code = "METER_INCIDENT_HOLD";
+    throw error;
+  }
 };
 
 export async function createPayment({
@@ -124,6 +151,8 @@ export async function createPayment({
       throw createError("Billing record not found.", 404);
     }
 
+    await assertNoIncidentHold(targetBilling.user_id);
+
     const { data: oldestUnpaidBills, error: oldestUnpaidError } = await supabase
       .from("billing")
       .select("id")
@@ -152,8 +181,7 @@ export async function createPayment({
   });
 
   if (error) {
-    const message = error.message || "Failed to record payment.";
-    throw createError(message, paymentErrorStatus(message));
+    throw toPaymentError(error.message, "Failed to record payment.");
   }
 
   if (!data?.id || !data?.billing) {
@@ -249,6 +277,8 @@ export async function createWaterfallPayment({
   idempotencyKey,
 }) {
   const userId = parsePositiveId(consumerId, "consumer ID");
+  await assertNoIncidentHold(userId);
+
   const applied = parsePaymentAmount(totalApplied ?? amount);
   const tendered = parsePaymentAmount(amountTendered ?? applied);
   const normalizedDate = parsePaymentDate(paymentDate);
@@ -288,6 +318,6 @@ export async function createWaterfallPayment({
     p_payment_method: normalizedMethod,
     p_reference_number: normalizedReference,
   });
-  if (error) throw createError(error.message || "Failed to record payment.", paymentErrorStatus(error.message || ""));
+  if (error) throw toPaymentError(error.message, "Failed to record payment.");
   return { ...data, changeGiven: Number(data?.change_given ?? Math.max(tendered - cappedApplied, 0)), totalApplied: Number(data?.total_applied ?? cappedApplied) };
 }

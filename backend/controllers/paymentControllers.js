@@ -12,6 +12,7 @@ const sendError = (res, error, fallbackMessage) => {
   return res.status(error.statusCode ?? 500).json({
     success: false,
     message: error.message || fallbackMessage,
+    ...(error.code ? { code: error.code } : {}),
   });
 };
 

@@ -25,8 +25,12 @@ const yearlyTotal = (record) =>
     0
   );
 
-export const createReading = async (reading) =>
-  createConsumptionReading(reading);
+export const createReading = async (reading, actor = null) =>
+  createConsumptionReading({
+    ...reading,
+    recordedById: actor?.id ?? null,
+    recordedByRole: actor?.role ?? null,
+  });
 
 export const getConsumptionRanking = async () => {
   const data = await getPurokConsumptionRanking();

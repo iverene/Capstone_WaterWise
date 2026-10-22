@@ -19,6 +19,8 @@ function normalizeMeterReadings(records) {
         previousReading: Number(record.previous_reading ?? 0),
         currentReading: Number(record.present_reading ?? 0),
         consumption: Number(record.consumption ?? 0),
+        readingSource: record.reading_source ?? "actual",
+        carriedConsumption: Number(record.carried_consumption ?? 0),
         readingDate: record.reading_date,
         status: "Recorded",
       }))
@@ -38,6 +40,20 @@ function normalizeRecordingContext(record) {
   const hasReadingInSelectedMonth = Boolean(record.has_reading_in_selected_month);
   const latestReadingDate = record.latest_reading_date ?? null;
   const fallbackBlockedByDate = Boolean(latestReadingDate && latestReadingDate >= today);
+  const openIncident = record.open_incident
+    ? {
+        id: record.open_incident.id,
+        incidentType: record.open_incident.incident_type,
+        effectiveDate: record.open_incident.effective_date,
+        priorUsage: Number(record.open_incident.prior_usage ?? 0),
+        priorUsageBasis: record.open_incident.prior_usage_basis,
+        newBaseline: Number(record.open_incident.new_baseline ?? 0),
+        newMeterSerial: record.open_incident.new_meter_serial ?? "",
+        expiresAt: record.open_incident.expires_at ?? null,
+        reviewStatus: record.open_incident.review_status,
+        status: record.open_incident.status,
+      }
+    : null;
   const canRecord = record.can_record == null
     ? record.status !== "inactive" && record.purok_no != null && !hasReadingInSelectedMonth && !fallbackBlockedByDate
     : Boolean(record.can_record);
@@ -54,7 +70,12 @@ function normalizeRecordingContext(record) {
     latestPreviousReading: record.latest_previous_reading == null ? null : Number(record.latest_previous_reading),
     latestPresentReading: record.latest_present_reading == null ? null : Number(record.latest_present_reading),
     latestConsumption: record.latest_consumption == null ? null : Number(record.latest_consumption),
+    latestReadingSource: record.latest_reading_source ?? "actual",
     averageRecentConsumption: record.average_recent_consumption == null ? null : Number(record.average_recent_consumption),
+    averageWindow: Number(record.average_window ?? 3),
+    averageSampleCount: Number(record.average_sample_count ?? 0),
+    paymentHold: Boolean(record.payment_hold),
+    openIncident,
     hasReadingInSelectedMonth,
     canRecord,
     recordingBlockReason: record.recording_block_reason ?? (
@@ -69,6 +90,9 @@ function normalizeRecordingContext(record) {
       previousReading: Number(receipt.previous_reading),
       currentReading: Number(receipt.present_reading),
       consumption: Number(receipt.consumption),
+      readingSource: receipt.reading_source ?? "actual",
+      carriedConsumption: Number(receipt.carried_consumption ?? 0),
+      newBaseline: receipt.new_baseline == null ? null : Number(receipt.new_baseline),
       baselineBill: Number(receipt.baseline_bill),
       billingId: receipt.billing_id,
       dueDate: receipt.due_date,
@@ -88,6 +112,10 @@ function normalizeCreatedReading(record) {
     previousReading: Number(record.previous_reading),
     currentReading: Number(record.present_reading),
     consumption: Number(record.consumption),
+    readingSource: record.reading_source ?? "actual",
+    carriedConsumption: Number(record.carried_consumption ?? 0),
+    meterIncidentId: record.meter_incident_id ?? null,
+    incident: record.incident ?? null,
     billing: record.billing ? {
       ...record.billing,
       totalBill: Number(record.billing.total_bill),
@@ -110,8 +138,13 @@ export async function createMeterReading(payload, options = {}) {
   const response = await client.post("/readings", {
     consumerId: Number(payload.consumerId),
     idempotencyKey: payload.idempotencyKey,
-    presentReading: Number(payload.currentReading),
+    readingSource: payload.readingSource === "estimated" ? "estimated" : "actual",
+    presentReading: payload.currentReading == null || payload.currentReading === ""
+      ? null
+      : Number(payload.currentReading),
+    ...(payload.estimateValue != null ? { estimateValue: Number(payload.estimateValue) } : {}),
     ...(payload.initialPreviousReading != null ? { initialPreviousReading: Number(payload.initialPreviousReading) } : {}),
+    ...(payload.incident ? { incident: payload.incident } : {}),
   }, options);
   return normalizeCreatedReading(response.data?.data ?? response.data);
 }

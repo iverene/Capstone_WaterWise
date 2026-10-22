@@ -20,6 +20,17 @@ const TIER_LABELS = {
   rate_16_25: "Excess 16-25 (₱ per m³)",
   rate_26_50: "Excess 26-50 (₱ per m³)",
   rate_51_up: "Excess 51 & up (₱ per m³)",
+  average_window_months: "Billing average window (months)",
+  incident_authorization_days: "Field incident validity (days)",
+};
+
+// Settings that only accept whole numbers.
+const WHOLE_NUMBER_SETTINGS = new Set(["average_window_months", "incident_authorization_days"]);
+
+const SETTING_UNITS = {
+  minimum_m3: " m³",
+  average_window_months: " months",
+  incident_authorization_days: " days",
 };
 
 function getStoredSettingsPermission() {
@@ -294,7 +305,9 @@ export default function AdminSettingsPage() {
                       ? `${Number(setting.setting_value)} m³`
                       : setting.setting_key.startsWith("rate_") || setting.setting_key === "minimum_charge"
                         ? `₱${Number(setting.setting_value).toFixed(2)}`
-                        : String(setting.setting_value)}
+                        : SETTING_UNITS[setting.setting_key]
+                          ? `${Number(setting.setting_value)}${SETTING_UNITS[setting.setting_key]}`
+                          : String(setting.setting_value)}
                   </span>
                   <button
                     className="min-h-10 rounded-xl border border-water-200 bg-water-50 px-4 text-sm font-semibold text-water-700 transition-colors hover:bg-water-100"
@@ -334,7 +347,7 @@ export default function AdminSettingsPage() {
               id="setting-value"
               min="0"
               onChange={(e) => { setEditValue(e.target.value); setSaveError(""); }}
-              step="0.01"
+              step={WHOLE_NUMBER_SETTINGS.has(editingKey) ? "1" : "0.01"}
               type="number"
               value={editValue}
             />
