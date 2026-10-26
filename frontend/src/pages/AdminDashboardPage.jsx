@@ -23,6 +23,7 @@ const STATUS_COLORS = {
   "Paid This Month": "#34d399",
   "Partially Paid": "#fbbf24",
   Unpaid: "#f87171",
+  "No billing": "#cbd5e1",
 };
 
 const compactPeso = (value) => {
@@ -40,7 +41,7 @@ const compactCubicMeters = (value) => {
 const formatCubicMeters = (value) =>
   `${Number(value ?? 0).toLocaleString("en-PH", { maximumFractionDigits: 1 })} m³`;
 
-function ChartCard({ badge, children, title }) {
+function ChartCard({ badge, chartClassName = "h-48", children, title }) {
   return (
     <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -51,8 +52,24 @@ function ChartCard({ badge, children, title }) {
           </span>
         ) : null}
       </div>
-      <div className="mt-3 h-48">{children}</div>
+      <div className={`mt-3 ${chartClassName}`}>{children}</div>
     </section>
+  );
+}
+
+function PurokAxisTick({ x, y, payload, series }) {
+  const entry = series.find((item) => item.purok === payload.value);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text fill="#64748b" fontSize={12} textAnchor="end" x={0} y={entry?.hasRecords ? 4 : -3}>
+        {payload.value}
+      </text>
+      {entry && !entry.hasRecords && (
+        <text fill="#94a3b8" fontSize={9} textAnchor="end" x={0} y={10}>
+          No consumption yet
+        </text>
+      )}
+    </g>
   );
 }
 
@@ -84,6 +101,10 @@ export default function AdminDashboardPage() {
   const collectedChange = metrics && metrics.collectedPrevious > 0
     ? ((metrics.collectedMonth - metrics.collectedPrevious) / metrics.collectedPrevious) * 100
     : null;
+  const hasBillingStatus = metrics?.billingStatus.some((entry) => Number(entry.value) > 0) ?? false;
+  const billingStatusData = hasBillingStatus
+    ? metrics.billingStatus
+    : [{ name: "No billing", value: 1 }];
 
   return (
     <main className="space-y-5 sm:space-y-6" data-testid="admin-dashboard">
@@ -190,13 +211,13 @@ export default function AdminDashboardPage() {
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard badge="All Bills" title="Billing Status">
+            <ChartCard badge={hasBillingStatus ? "All Bills" : "No Billing"} title="Billing Status">
               <div className="flex h-full items-center gap-3">
                 <div className="h-full min-w-0 flex-1">
                   <ResponsiveContainer height="100%" width="100%">
                     <PieChart>
-                      <Pie data={metrics.billingStatus} dataKey="value" innerRadius="62%" nameKey="name" outerRadius="88%" paddingAngle={5} strokeWidth={0} cornerRadius={7}>
-                        {metrics.billingStatus.map((entry) => (
+                      <Pie data={billingStatusData} dataKey="value" innerRadius="62%" nameKey="name" outerRadius="88%" paddingAngle={5} strokeWidth={0} cornerRadius={7}>
+                        {billingStatusData.map((entry) => (
                           <Cell fill={STATUS_COLORS[entry.name] ?? "#94a3b8"} key={entry.name} />
                         ))}
                       </Pie>
@@ -205,26 +226,28 @@ export default function AdminDashboardPage() {
                   </ResponsiveContainer>
                 </div>
                 <ul className="grid shrink-0 gap-3 pr-1">
-                  {metrics.billingStatus.map((entry) => (
+                  {billingStatusData.map((entry) => (
                     <li key={entry.name}>
                       <p className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
                         <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS[entry.name] ?? "#94a3b8" }} />
                         {entry.name}
                       </p>
-                      <p className="mt-0.5 font-mono text-sm font-extrabold tabular-nums text-navy-900">
-                        {currency(entry.value)}
-                      </p>
+                      {hasBillingStatus && (
+                        <p className="mt-0.5 font-mono text-sm font-extrabold tabular-nums text-navy-900">
+                          {currency(entry.value)}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>
               </div>
             </ChartCard>
 
-            <ChartCard badge={metrics.currentMonthLabel} title="Consumption by Purok">
+            <ChartCard badge={metrics.currentMonthLabel} chartClassName="h-60" title="Consumption by Purok">
               <ResponsiveContainer height="100%" width="100%">
                 <BarChart data={metrics.purokTop} layout="vertical" margin={{ bottom: 0, left: 0, right: 40, top: 0 }}>
                   <XAxis axisLine={false} tick={{ fill: "#64748b", fontSize: 11 }} tickFormatter={compactCubicMeters} tickLine={false} type="number" />
-                  <YAxis axisLine={false} dataKey="purok" tick={{ fill: "#64748b", fontSize: 12 }} tickLine={false} type="category" width={76} />
+                  <YAxis axisLine={false} dataKey="purok" interval={0} tick={(props) => <PurokAxisTick {...props} series={metrics.purokTop} />} tickLine={false} type="category" width={132} />
                   <Tooltip content={<ChartTooltip unit="" valueFormatter={(value) => formatCubicMeters(value)} />} cursor={{ fill: "#f1f5f9" }} />
                   <Bar background={{ fill: "#f1f5f9", radius: 7 }} barSize={14} dataKey="cubicMeters" fill="#0284c7" name="Consumption" radius={[7, 7, 7, 7]}>
                   </Bar>

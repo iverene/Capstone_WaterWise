@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, CircleHelp, Pencil } from "lucide-react";
+import { AlertCircle, CheckCircle2, Pencil } from "lucide-react";
 import LoadingSkeleton from "./LoadingSkeleton";
 import Table from "./Table";
 
@@ -10,17 +10,13 @@ function AccountStatus({ status }) {
       Icon: CheckCircle2,
       label: "Active",
     },
-    inactive: {
+    disconnected: {
       className: "border-red-200 bg-red-50 text-red-700",
       Icon: AlertCircle,
-      label: "Inactive",
+      label: "Disconnected",
     },
   };
-  const config = statusConfig[normalizedStatus] ?? {
-    className: "border-slate-200 bg-slate-50 text-slate-700",
-    Icon: CircleHelp,
-    label: status || "Unknown",
-  };
+  const config = statusConfig[normalizedStatus === "active" ? "active" : "disconnected"];
   const { Icon } = config;
 
   return (

@@ -155,7 +155,9 @@ export async function authenticateAccount(identifier, password) {
       continue;
     }
 
-    if (account.status && account.status !== "active") {
+    const canAccessDisconnectedConsumer =
+      source.role === "consumer" && ["inactive", "disconnected"].includes(account.status);
+    if (account.status && account.status !== "active" && !canAccessDisconnectedConsumer) {
       const error = new Error("This account is inactive.");
       error.statusCode = 403;
       throw error;

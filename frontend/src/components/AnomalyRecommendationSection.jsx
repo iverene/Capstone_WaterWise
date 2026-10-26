@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BrainCircuit,
   ChevronDown,
@@ -16,6 +16,7 @@ import {
 } from "../services/consumptionAPI";
 import { fetchAllRecommendations } from "../services/recommendationAPI";
 import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
+import { hasShownAnalyticsBaselineWarning, markAnalyticsBaselineWarningShown } from "../utils/analyticsBaselineToastSession";
 import { useToast } from "./Toast";
 import LoadingSkeleton from "./LoadingSkeleton";
 
@@ -165,8 +166,6 @@ export default function AnomalyRecommendationSection() {
   const [baselineMonthlyHistory, setBaselineMonthlyHistory] = useState([]);
   const [baselineYearlyHistory, setBaselineYearlyHistory] = useState([]);
   const toast = useToast();
-  const prescriptiveToastKey = useRef(null);
-  const prescriptiveToastId = useRef(null);
   const [expandedPurok, setExpandedPurok] = useState(null);
 
   const loadRecommendations = useCallback(async (signal) => {
@@ -250,26 +249,15 @@ export default function AnomalyRecommendationSection() {
 
   useEffect(() => {
     if (loading || errorMessage || !baselineStatus || baselineStatus.isComplete) return;
-    const signature = `${period}|${baselineStatus.message}`;
-    if (prescriptiveToastKey.current === signature) return;
-    prescriptiveToastKey.current = signature;
-    if (prescriptiveToastId.current) toast.dismiss(prescriptiveToastId.current);
-    const toastId = toast.warning(baselineStatus.title ?? "Baseline incomplete", baselineStatus.message, {
+    if (hasShownAnalyticsBaselineWarning("prescriptive")) return;
+    markAnalyticsBaselineWarningShown("prescriptive");
+    const toastId = toast.info("Prescriptive baseline information", baselineStatus.message, {
       key: `prescriptive-baseline-${period}`,
       duration: 0,
       wide: true,
       actions: [{ label: "Dismiss", onClick: () => toast.dismiss(toastId) }],
     });
-    prescriptiveToastId.current = toastId;
   }, [loading, errorMessage, period, baselineStatus, toast]);
-
-  useEffect(() => () => {
-    if (prescriptiveToastId.current) {
-      toast.dismiss(prescriptiveToastId.current);
-      prescriptiveToastId.current = null;
-    }
-    prescriptiveToastKey.current = null;
-  }, [toast]);
 
   const purokItems = useMemo(() => {
     const source = period === "monthly"

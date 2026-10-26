@@ -37,7 +37,7 @@ export default function ConsumerSelectionList({ consumers = [], emptyDescription
                   ) : selectingId === consumer.id ? (
                     <span className="inline-flex items-center gap-1 text-water-700"><LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" /> Checking latest reading</span>
                   ) : consumer.status !== "active" ? (
-                    <span className="text-slate-500">Inactive account</span>
+                    <span className="text-slate-500">Disconnected account</span>
                   ) : consumer.purok === "Unassigned" ? (
                     <span className="text-amber-700">Assign a purok before recording</span>
                   ) : !consumer.canRecord ? (

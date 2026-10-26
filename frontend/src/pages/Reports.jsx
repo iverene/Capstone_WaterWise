@@ -25,6 +25,7 @@ const typeLabels = {
   analytics: "Analytics",
   billing: "Billing",
   consumption: "Consumption",
+  incidents: "Meter change incidents",
   residents: "Residents",
 };
 

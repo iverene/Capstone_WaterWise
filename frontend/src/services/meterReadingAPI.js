@@ -53,7 +53,7 @@ function normalizeRecordingContext(record) {
       }
     : null;
   const canRecord = record.can_record == null
-    ? record.status !== "inactive" && record.purok_no != null && !hasReadingInSelectedMonth && !fallbackBlockedByDate
+    ? record.status === "active" && record.purok_no != null && !hasReadingInSelectedMonth && !fallbackBlockedByDate
     : Boolean(record.can_record);
   return {
     id: record.consumer_id,

@@ -97,7 +97,7 @@ function notificationActionPath(notification, notificationType, isBillingAlert) 
     return "/consumer/profile-details";
   }
   if (notificationType === "payment_received" && notification.payment_id) {
-    return `/consumer/billing-ledger?paymentId=${notification.payment_id}&view=payment-receipt`;
+    return `/consumer/payments?paymentId=${notification.payment_id}`;
   }
   if (notificationType === "bill_generated" && notification.billing_id) {
     return `/consumer/billing-ledger?billingId=${notification.billing_id}&view=consumption-receipt`;

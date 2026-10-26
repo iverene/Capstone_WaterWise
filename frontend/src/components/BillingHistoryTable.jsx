@@ -68,40 +68,59 @@ function MobileBillCard({ canViewReceipt, onViewReceipt, row, showConsumerDetail
               <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Billing period</span>
               <span className="block truncate text-sm font-extrabold text-navy-900">{title}</span>
             </span>
-            <span className="min-w-0">
-              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Invoice</span>
-              <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.invoiceNumber}</span>
-            </span>
-            <span className="min-w-0">
-              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Reading date</span>
-              <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.readingDate}</span>
-            </span>
+          </>
+        )}
+        {!showConsumerDetails && (
+          <span className="col-span-2 grid grid-cols-2 items-center gap-x-3 gap-y-3">
             <span className="min-w-0">
               <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Consumption</span>
               <span className="block font-mono text-xs font-semibold text-slate-700">{row.cubicMetersConsumed} m³</span>
             </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Total bill</span>
+              <span className="block truncate font-mono text-xs font-extrabold tabular-nums text-navy-900">{"\u20B1"}{Number(row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Status</span>
+              <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClassName}`} data-status={row.status}>
+                <StatusIcon aria-hidden="true" className="h-3 w-3" />
+                {statusLabel}
+              </span>
+            </span>
+            {receiptAvailable && (
+              <span className="min-w-0">
+                <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Receipt</span>
+                <Eye aria-hidden="true" className="h-4 w-4 text-slate-500" />
+              </span>
+            )}
+          </span>
+        )}
+        {showConsumerDetails && (
+          <>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Total bill</span>
+              <span className="block truncate font-mono text-xs font-extrabold tabular-nums text-navy-900">{"\u20B1"}{Number(row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Due date</span>
+              <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.dueDate || "Not available"}</span>
+            </span>
           </>
         )}
-        <span className="min-w-0">
-          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Total bill</span>
-          <span className="block truncate font-mono text-xs font-extrabold tabular-nums text-navy-900">{"\u20B1"}{Number(row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-        </span>
-        <span className="min-w-0">
-          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Due date</span>
-          <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.dueDate || "Not available"}</span>
-        </span>
-        <span className="min-w-0">
+        {showConsumerDetails && <span className="min-w-0">
           <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Status</span>
           <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClassName}`} data-status={row.status}>
             <StatusIcon aria-hidden="true" className="h-3 w-3" />
             {statusLabel}
           </span>
-        </span>
-        <span className="min-w-0">
-          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Balance</span>
-          <span className="block truncate font-mono text-xs font-semibold tabular-nums text-slate-700">{"\u20B1"}{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-        </span>
-        {receiptAvailable && (
+        </span>}
+        {showConsumerDetails && (
+          <span className="min-w-0">
+            <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Balance</span>
+            <span className="block truncate font-mono text-xs font-semibold tabular-nums text-slate-700">{"\u20B1"}{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+          </span>
+        )}
+        {showConsumerDetails && receiptAvailable && (
           <span className="col-start-2 min-w-0">
             <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Receipt</span>
             <Eye aria-hidden="true" className="h-4 w-4 text-slate-500" />

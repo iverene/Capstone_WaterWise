@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
+import { verifyEmailDomain } from "../services/emailDomainService.js";
 import {
   duplicateAccountIdentityMessage,
   ensureAccountIdentityIsUnique,
@@ -158,6 +159,7 @@ export const createConsumer = async (
     email: normalizedEmail,
     fullName: composedFullName,
   });
+  await verifyEmailDomain(normalizedEmail);
 
   const hashedPassword = await bcrypt.hash(password, 10);
   const { data, error } = await supabase
@@ -296,6 +298,7 @@ export const updateConsumer = async (id, updates = {}) => {
     updateData.email =
       validator.normalizeEmail(updates.email.trim()) ??
       updates.email.trim().toLowerCase();
+    await verifyEmailDomain(updateData.email);
   }
 
   if (updates.contactNumber !== undefined) {
@@ -330,8 +333,8 @@ export const updateConsumer = async (id, updates = {}) => {
   }
 
   if (updates.status !== undefined) {
-    if (!["active", "inactive"].includes(updates.status)) {
-      throw createError("Status must be either active or inactive.");
+    if (!["active", "inactive", "disconnected"].includes(updates.status)) {
+      throw createError("Status must be active, inactive, or disconnected.");
     }
     updateData.status = updates.status;
   }
@@ -466,6 +469,7 @@ export const updateConsumerSelfProfile = async (id, updates = {}) => {
         "Enter a new email address that is different from your current email."
       );
     }
+    await verifyEmailDomain(normalizedEmail);
     updateData.email = normalizedEmail;
   }
 
@@ -533,7 +537,7 @@ export const completeConsumerOnboarding = async (id, newPassword) => {
     // current password.
     const { data: current, error: readError } = await supabase
       .from("consumers")
-      .select("id, onboarding_completed")
+      .select("id, password, onboarding_completed")
       .eq("id", consumerId)
       .maybeSingle();
 
@@ -548,6 +552,9 @@ export const completeConsumerOnboarding = async (id, newPassword) => {
         "Your account is already set up. Change your password from your profile instead.",
         403
       );
+    }
+    if (await bcrypt.compare(newPassword, current.password)) {
+      throw createError("Choose a new password that is different from your current password.");
     }
   }
 
@@ -642,7 +649,7 @@ export const disconnectFlaggedConsumer = async (id) => {
     throw createError(`Failed to notify the resident: ${notificationError.message}`, 500);
   }
 
-  return updateConsumer(consumerId, { status: "inactive" });
+  return updateConsumer(consumerId, { status: "disconnected" });
 };
 
 export const deleteConsumer = async (id) => {

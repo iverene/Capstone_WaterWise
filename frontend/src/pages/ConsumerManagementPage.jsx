@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiAlertCircle, FiCheckCircle, FiMapPin, FiPlus, FiUsers } from "react-icons/fi";
+import { FiAlertCircle, FiCheckCircle, FiPlus, FiUsers } from "react-icons/fi";
 import ResidentRegistrationIntro from "../components/ResidentRegistrationIntro";
 import { UserRound } from "lucide-react";
 import "../components/ResidentRegistration.css";
@@ -61,6 +61,7 @@ function ConsumerManagementPage() {
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
+  const [residentStatus, setResidentStatus] = useState("all");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   // A pending verification code is kept in session storage so it survives the
@@ -307,9 +308,12 @@ function ConsumerManagementPage() {
     return consumers.filter((consumer) =>
       (!term || [consumer.accountName, consumer.fullName, consumer.firstName, consumer.middleName, consumer.lastName]
         .some((value) => String(value).toLowerCase().includes(term))) &&
-      (purok === "all" || consumer.purok === purok),
+      (purok === "all" || consumer.purok === purok) &&
+      (residentStatus === "all" || (residentStatus === "active"
+        ? String(consumer.status ?? "").toLowerCase() === "active"
+        : String(consumer.status ?? "").toLowerCase() !== "active")),
     );
-  }, [consumers, purok, query]);
+  }, [consumers, purok, query, residentStatus]);
 
   const purokOptions = useMemo(() => {
     const values = [...new Set(consumers.map((consumer) => String(consumer?.purok ?? "").trim()).filter(Boolean))]
@@ -320,9 +324,11 @@ function ConsumerManagementPage() {
     ];
   }, [consumers]);
 
-  const activeCount = consumers.filter((item) => item.status?.toLowerCase() === "active").length;
-  const inactiveCount = consumers.length - activeCount;
-  const unassignedCount = consumers.filter((item) => item.purok === "Unassigned").length;
+  const kpiConsumers = purok === "all"
+    ? consumers
+    : consumers.filter((item) => item.purok === purok);
+  const activeCount = kpiConsumers.filter((item) => item.status?.toLowerCase() === "active").length;
+  const inactiveCount = kpiConsumers.length - activeCount;
 
   const selectConsumer = (consumer) => {
     setSelectedConsumer(consumer);
@@ -372,11 +378,10 @@ function ConsumerManagementPage() {
     <main className="min-w-0 space-y-5 sm:space-y-6">
       <PageHeader description="Manage resident accounts, service locations, and account status." title="Residents" />
 
-      <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-        <KPI compact description="Community accounts" icon={FiUsers} title="Total Residents" value={consumers.length} />
+      <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-3">
+        <KPI compact description={purok === "all" ? "Community accounts" : purok} icon={FiUsers} title="Total Residents" value={kpiConsumers.length} />
         <KPI compact descriptionHighlight="Service-ready" descriptionTone="positive" icon={FiCheckCircle} title="Active Accounts" value={activeCount} />
-        <KPI compact description={inactiveCount ? "Needs review" : "All active"} descriptionHighlight={`${inactiveCount} inactive`} descriptionIcon={inactiveCount ? FiAlertCircle : FiCheckCircle} descriptionTone={inactiveCount ? "warning" : "positive"} icon={FiAlertCircle} title="Inactive Accounts" value={inactiveCount} />
-        <KPI compact description="Service location" descriptionHighlight={`${unassignedCount} unassigned`} descriptionIcon={FiMapPin} descriptionTone={unassignedCount ? "warning" : "positive"} icon={FiMapPin} title="Unassigned Purok" value={unassignedCount} />
+        <KPI compact description={inactiveCount ? "Account access disabled" : "All active"} descriptionHighlight={`${inactiveCount} disconnected`} descriptionIcon={inactiveCount ? FiAlertCircle : FiCheckCircle} descriptionTone={inactiveCount ? "warning" : "positive"} icon={FiAlertCircle} title="Disconnected Accounts" value={inactiveCount} />
       </section>
 
       <Modal
@@ -486,6 +491,7 @@ function ConsumerManagementPage() {
       >
         <Search ariaLabel="Search residents by username or name" className="flex-1" onValueChange={setQuery} placeholder="Search username or name" value={query} />
         <Filter ariaLabel="Filter residents by purok" className="w-full md:w-44" onValueChange={setPurok} options={purokOptions} value={purok} />
+        <Filter ariaLabel="Filter residents by status" className="w-full md:w-44" onValueChange={setResidentStatus} options={[{ label: "All statuses", value: "all" }, { label: "Active", value: "active" }, { label: "Disconnected", value: "disconnected" }]} value={residentStatus} />
         <button
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 md:shrink-0"
           onClick={openAddResident}

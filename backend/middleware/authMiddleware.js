@@ -70,7 +70,9 @@ export async function authenticate(req, res, next) {
       error.statusCode = 500;
       throw error;
     }
-    if (!data || (data.status && data.status !== "active")) {
+    const canAccessDisconnectedConsumer =
+      payload.role === "consumer" && ["inactive", "disconnected"].includes(data?.status);
+    if (!data || (data.status && data.status !== "active" && !canAccessDisconnectedConsumer)) {
       return res.status(401).json({
         success: false,
         message: "This account is no longer active. Please sign in again.",

@@ -126,7 +126,7 @@ function PurokGraph({ color, data, purok }) {
           </ResponsiveContainer>
         </div>
       ) : (
-        <div className="mt-4 flex h-52 items-center justify-center rounded-xl bg-slate-50 px-5 text-center text-xs text-slate-500">No historical consumption recorded for this purok.</div>
+        <div className="mt-4 flex h-52 items-center justify-center rounded-xl bg-slate-50 px-5 text-center text-xs text-slate-500">No consumption records yet.</div>
       )}
     </article>
   );
@@ -190,20 +190,7 @@ export default function PurokHistoricalConsumptionGraphs() {
         return want !== null && have !== null && have === want;
       }) ?? null;
     };
-    // Prefer puroks actually present in the response (whatever name format
-    // the backend sends); fall back to the known list when there is no data.
-    const responseNames = [...new Set(
-      source.map((record) => record.purok).filter((name) => name != null && String(name).trim() !== ""),
-    )];
-    const names = responseNames.length > 0
-      ? [...responseNames].sort((a, b) => {
-        const numberA = purokNumber(a);
-        const numberB = purokNumber(b);
-        if (numberA !== null && numberB !== null) return numberA - numberB;
-        return String(a).localeCompare(String(b));
-      })
-      : PUROKS;
-    return names.map((purok) => ({ historical: findRecord(purok)?.historical ?? [], purok }));
+    return PUROKS.map((purok) => ({ historical: findRecord(purok)?.historical ?? [], purok }));
   }, [monthly, period, yearly]);
 
   return (

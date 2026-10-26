@@ -135,19 +135,19 @@ export default function ResidentPicker({ consumers = [], onChange, value = "" })
             ) : (
               visibleMatches.map((consumer, index) => {
                 const isSelected = String(consumer.id) === String(value);
-                const isInactive = consumer.status !== "active";
+                const isDisconnected = consumer.status !== "active";
                 return (
                   <li key={consumer.id}>
                     <button
                       aria-selected={isSelected}
                       className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
-                        isInactive
+                        isDisconnected
                           ? "cursor-not-allowed text-slate-400"
                           : index === highlight
                             ? "bg-water-50 text-water-800"
                             : "text-slate-700 hover:bg-slate-50"
                       }`}
-                      disabled={isInactive}
+                      disabled={isDisconnected}
                       onClick={() => choose(consumer)}
                       onMouseEnter={() => setHighlight(index)}
                       role="option"
@@ -159,7 +159,7 @@ export default function ResidentPicker({ consumers = [], onChange, value = "" })
                           <span className="block truncate">{consumer.consumerName}</span>
                           <span className="mt-0.5 block text-xs font-semibold text-slate-400">
                             {consumer.consumerNo} · {consumer.purok}
-                            {isInactive ? " · Inactive" : ""}
+                            {isDisconnected ? " · Disconnected" : ""}
                           </span>
                         </span>
                       </span>

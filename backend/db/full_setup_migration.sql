@@ -2071,9 +2071,8 @@ BEGIN
         RETURNING * INTO v_incident;
     END IF;
 
-    -- The average is resolved by the API (never by the browser) and only bills a
-    -- meter change that measured nothing at all. forceZero lets the reader refuse
-    -- the estimate when the household really used no water.
+    -- The average is resolved by the API (never by the browser). forceZero
+    -- records the reader's choice not to carry it into this meter-change reading.
     IF p_incident IS NOT NULL THEN
         v_average := NULLIF(p_incident->>'averageFallback', '')::NUMERIC;
         v_force_zero := COALESCE((p_incident->>'forceZero')::BOOLEAN, false);
@@ -2114,25 +2113,24 @@ BEGIN
             RAISE EXCEPTION 'This incident only records a defective meter. Update it with the replacement details before applying it to a reading.';
         END IF;
         v_carried := v_incident.prior_usage;
-        -- A carry that came from the system average is only an estimate, so the
-        -- reader can refuse it when the household really used nothing.
+        -- A carry from the system average is optional and follows the reader's
+        -- explicit selection in the portal.
         IF v_force_zero AND v_incident.prior_usage_basis = 'average' THEN
             v_carried := 0;
+        ELSIF NOT v_force_zero AND v_incident.prior_usage_basis = 'average' THEN
+            -- The reader explicitly selected the average carry in the portal.
+            v_estimated := true;
+        ELSIF NOT v_force_zero
+           AND v_incident.prior_usage = 0
+           AND v_average IS NOT NULL
+           AND v_average > 0 THEN
+            -- For a measured zero on the old meter, the selected average is
+            -- carried in addition to whatever the new meter measured.
+            v_carried := ROUND(v_average, 2);
+            v_estimated := true;
         END IF;
         v_consumption := ROUND(
             v_carried + (p_present_reading - v_incident.new_baseline), 2);
-        -- The whole gap measured nothing: the old meter never moved and the new
-        -- one still shows its baseline. Billing 0 m3 would silently forgive a
-        -- dead meter, so the resident's own average is used instead. The reading
-        -- itself is never rewritten: only the billed consumption is estimated.
-        IF NOT v_force_zero
-           AND v_consumption = 0
-           AND v_average IS NOT NULL
-           AND v_average > 0 THEN
-            v_consumption := ROUND(v_average, 2);
-            v_carried := v_consumption;
-            v_estimated := true;
-        END IF;
     ELSIF p_reading_source = 'estimated' THEN
         IF v_latest.id IS NULL THEN
             RAISE EXCEPTION 'An estimated reading requires at least one prior actual reading.';
@@ -2183,10 +2181,10 @@ BEGIN
                          WHEN v_estimated THEN CONCAT_WS(
                              E'\n', NULLIF(notes, ''),
                              'Billed ' || ROUND(v_consumption, 2)
-                             || ' m3 estimated from the system average: the meter change measured no usage.')
+                             || ' m3 with the system average carried from the old meter.')
                          WHEN v_force_zero THEN CONCAT_WS(
                              E'\n', NULLIF(notes, ''),
-                             'The reader confirmed no usage; the system average was not applied.')
+                             'The reader chose not to apply the system average.')
                          ELSE notes
                        END,
                updated_at = now()
