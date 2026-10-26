@@ -3,11 +3,9 @@
 import { supabase } from "../config/supabase.js";
 import { composeFullName } from "./consumerModels.js";
 import {
-  getAuthorizationDays,
   getAveragePriorUsage,
   getAverageWindowMonths,
   listOpenIncidents,
-  listPendingReviewConsumerIds,
   normalizeIncident,
   resolveIncidentPriorUsage,
 } from "./meterIncidentModels.js";
@@ -330,7 +328,7 @@ const calculateArrears = (billings, currentBillingId, readingDate) => {
 };
 
 const buildReadingContext = (consumer, records, billings, readingDate, options = {}) => {
-  const { openIncident = null, paymentHold = false, averageWindow = 3 } = options;
+  const { openIncident = null, averageWindow = 3 } = options;
   const billingByConsumption = new Map(
     billings.map((billing) => [billing.consumption_id, billing]),
   );
@@ -392,7 +390,6 @@ const buildReadingContext = (consumer, records, billings, readingDate, options =
       : Number(averageConsumption.toFixed(2)),
     average_window: averageWindow,
     average_sample_count: recentConsumptions.length,
-    payment_hold: Boolean(paymentHold),
     open_incident: openIncident
       ? {
           id: openIncident.id,
@@ -403,7 +400,6 @@ const buildReadingContext = (consumer, records, billings, readingDate, options =
           new_baseline: openIncident.newBaseline,
           new_meter_serial: openIncident.newMeterSerial,
           expires_at: openIncident.expiresAt,
-          review_status: openIncident.reviewStatus,
           status: openIncident.status,
         }
       : null,
@@ -436,7 +432,6 @@ export const getConsumptionRecordingContexts = async () => {
     { data: readings, error: readingQueryError },
     { data: billings, error: billingQueryError },
     openIncidents,
-    pendingConsumerIds,
     averageWindow,
   ] =
     await Promise.all([
@@ -454,7 +449,6 @@ export const getConsumptionRecordingContexts = async () => {
         .from("billing")
         .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at"),
       listOpenIncidents(),
-      listPendingReviewConsumerIds(),
       getAverageWindowMonths(),
     ]);
 
@@ -483,7 +477,6 @@ export const getConsumptionRecordingContexts = async () => {
   const openIncidentByConsumer = new Map(
     (openIncidents ?? []).map((incident) => [incident.consumerId, incident]),
   );
-  const pendingHoldSet = new Set(pendingConsumerIds ?? []);
 
   return (consumers ?? []).map((consumer) =>
     buildReadingContext(
@@ -493,7 +486,6 @@ export const getConsumptionRecordingContexts = async () => {
       normalizedDate,
       {
         openIncident: openIncidentByConsumer.get(consumer.id) ?? null,
-        paymentHold: pendingHoldSet.has(consumer.id),
         averageWindow,
       },
     ));
@@ -511,7 +503,6 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     { data: readings, error: readingQueryError },
     { data: billings, error: billingQueryError },
     openIncidents,
-    pendingConsumerIds,
     averageWindow,
   ] =
     await Promise.all([
@@ -531,7 +522,6 @@ export const getConsumptionRecordingContext = async (consumerId) => {
         .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at")
         .eq("user_id", parsedConsumerId),
       listOpenIncidents(),
-      listPendingReviewConsumerIds(),
       getAverageWindowMonths(),
     ]);
 
@@ -550,7 +540,6 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     normalizedDate,
     {
       openIncident: (openIncidents ?? []).find((incident) => incident.consumerId === parsedConsumerId) ?? null,
-      paymentHold: (pendingConsumerIds ?? []).includes(parsedConsumerId),
       averageWindow,
     },
   );
@@ -733,14 +722,12 @@ export const createConsumptionReading = async ({
         priorUsageBasis: resolved.basis,
         averageWindow: resolved.window,
         averageValue: resolved.averageValue,
-        autoAuthorize: incident.autoAuthorize === true,
         newMeterSerial: incident.newMeterSerial ?? null,
         newBaseline: incident.newBaseline ?? 0,
         notes: incident.notes ?? null,
         idempotencyKey: incident.idempotencyKey ?? `${idempotencyKey.trim()}-incident`,
         recordedById: Number(recorderId),
         recordedByRole: recordedByRole ?? incident.recordedByRole ?? "meter-reader",
-        authorizationDays: await getAuthorizationDays(),
       };
     }
   }

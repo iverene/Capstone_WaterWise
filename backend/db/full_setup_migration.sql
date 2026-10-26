@@ -1,4 +1,4 @@
-﻿-- ===============================================================================
+-- ===============================================================================
 -- WaterWise FULL SETUP MIGRATION (consolidated - schema only)
 -- ===============================================================================
 -- Pinagsama-samang schema migrations sa tamang order.
@@ -1767,7 +1767,7 @@ CREATE TABLE IF NOT EXISTS meter_incidents (
 
     status            TEXT NOT NULL DEFAULT 'pending'
                       CHECK (status IN ('pending', 'authorized', 'consumed', 'rejected', 'expired')),
-    review_status     TEXT NOT NULL DEFAULT 'pending'
+    review_status     TEXT NOT NULL DEFAULT 'approved'
                       CHECK (review_status IN ('pending', 'approved', 'rejected')),
     source            TEXT NOT NULL CHECK (source IN ('admin', 'meter_reader')),
 
@@ -1797,6 +1797,18 @@ ON meter_incidents (consumer_id, effective_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_meter_incidents_review
 ON meter_incidents (review_status, status);
+
+-- Keep legacy review columns for compatibility, but the inventory workflow no
+-- longer blocks readings or payments on a pending review.
+UPDATE meter_incidents
+   SET status = CASE WHEN status = 'pending' THEN 'authorized' ELSE status END,
+       review_status = 'approved',
+       expires_at = NULL,
+       updated_at = now()
+ WHERE review_status = 'pending';
+
+ALTER TABLE meter_incidents
+  ALTER COLUMN review_status SET DEFAULT 'approved';
 
 -- ---------------------------------------------------------------------------
 -- 3. Consumption provenance
@@ -1903,6 +1915,7 @@ DECLARE
     v_force_zero BOOLEAN := false;
     v_estimated BOOLEAN := false;
     v_reading_date DATE := (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::DATE;
+    v_previous_auto_billing_setting TEXT;
 BEGIN
     IF p_consumer_id IS NULL
        OR NULLIF(TRIM(p_idempotency_key), '') IS NULL THEN
@@ -2141,6 +2154,9 @@ BEGIN
         RAISE EXCEPTION 'The computed consumption would be negative. Review the incident details.';
     END IF;
 
+    -- The RPC creates billing itself. Keep the auto-billing trigger from inserting a duplicate.
+    v_previous_auto_billing_setting := current_setting('waterwise.skip_auto_billing', true);
+    PERFORM set_config('waterwise.skip_auto_billing', 'on', true);
     INSERT INTO consumption (
         consumer_id, reading_date, previous_reading, present_reading,
         consumption, reading_source, carried_consumption, prior_usage_basis,
@@ -2155,16 +2171,14 @@ BEGIN
         v_incident.id, p_idempotency_key
     )
     RETURNING * INTO v_reading;
+    PERFORM set_config('waterwise.skip_auto_billing', COALESCE(v_previous_auto_billing_setting, ''), true);
 
     IF v_incident.id IS NOT NULL THEN
         UPDATE meter_incidents
            SET status = 'consumed',
-               -- An estimated volume is not a measurement, so it goes back to the
-               -- admin even when the incident was already approved. That review is
-               -- what releases the payment hold.
-               review_status = CASE WHEN v_estimated THEN 'pending' ELSE review_status END,
-               approved_by_id = CASE WHEN v_estimated THEN NULL ELSE approved_by_id END,
-               approved_at = CASE WHEN v_estimated THEN NULL ELSE approved_at END,
+               -- Review metadata stays approved for compatibility; estimates do
+               -- not create a payment hold in the inventory workflow.
+               review_status = 'approved',
                notes = CASE
                          WHEN v_estimated THEN CONCAT_WS(
                              E'\n', NULLIF(notes, ''),
@@ -2214,44 +2228,9 @@ REVOKE ALL ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC,
 REVOKE ALL ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, JSONB) FROM authenticated;
 GRANT EXECUTE ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, JSONB) TO service_role;
 
--- ---------------------------------------------------------------------------
--- 6. Payment hold for unreviewed field incidents
---
--- This is the database backstop for the API-level hold: a resident with a
--- field-declared incident that still needs review cannot pay ANY bill.
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION prevent_payment_on_held_meter_incident()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-    v_consumer_id INTEGER;
-BEGIN
-    SELECT user_id INTO v_consumer_id FROM billing WHERE id = NEW.billing_id;
-    IF v_consumer_id IS NULL THEN
-        RETURN NEW;
-    END IF;
-
-    IF EXISTS (
-        SELECT 1
-        FROM meter_incidents
-        WHERE consumer_id = v_consumer_id
-          AND review_status = 'pending'
-          AND status IN ('pending', 'authorized', 'consumed')
-    ) THEN
-        RAISE EXCEPTION 'This bill is on hold until the meter incident is reviewed.'
-            USING ERRCODE = '23514', HINT = 'METER_INCIDENT_HOLD';
-    END IF;
-
-    RETURN NEW;
-END;
-$$;
-
+-- The inventory flow has no review-based payment hold. Drop it in case this
+-- consolidated script is used to update an older database.
 DROP TRIGGER IF EXISTS trg_prevent_payment_on_held_incident ON payments;
-CREATE TRIGGER trg_prevent_payment_on_held_incident
-BEFORE INSERT ON payments
-FOR EACH ROW EXECUTE FUNCTION prevent_payment_on_held_meter_incident();
+DROP FUNCTION IF EXISTS prevent_payment_on_held_meter_incident();
 
 COMMIT;

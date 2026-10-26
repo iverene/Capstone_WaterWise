@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock3, ReceiptText } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock3, Eye } from "lucide-react";
 import Table from "./Table";
 
 function getStatusConfig(status) {
@@ -42,25 +42,71 @@ function MobileBillCard({ canViewReceipt, onViewReceipt, row, showConsumerDetail
   return (
     <Wrapper
       aria-label={receiptAvailable ? `View receipt for ${title}` : undefined}
-      className={`flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card ${receiptAvailable ? "cursor-pointer transition-colors active:bg-slate-50" : ""}`}
+      className={`flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card ${receiptAvailable ? "cursor-pointer transition-colors active:bg-slate-50" : ""}`}
       onClick={receiptAvailable ? () => onViewReceipt(row) : undefined}
       type={receiptAvailable ? "button" : undefined}
     >
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-extrabold text-navy-900">{title}</span>
-        <span className="mt-0.5 block truncate text-xs text-slate-500">{subtitle}</span>
-      </span>
-      <span className="flex shrink-0 flex-col items-end gap-1.5">
-        <span className="font-mono text-sm font-extrabold tabular-nums text-navy-900">
-          ₱{Number(row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+      <span className="grid min-w-0 flex-1 grid-cols-2 gap-x-3 gap-y-3">
+        {showConsumerDetails ? (
+          <>
+            <span className="col-span-2 min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Resident</span>
+              <span className="block truncate text-sm font-extrabold text-navy-900">{title}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Purok</span>
+              <span className="block truncate text-xs font-semibold text-slate-700">{row.purok ?? "Unassigned"}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Billing period</span>
+              <span className="block truncate text-xs font-semibold text-slate-700">{subtitle}</span>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="col-span-2 min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Billing period</span>
+              <span className="block truncate text-sm font-extrabold text-navy-900">{title}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Invoice</span>
+              <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.invoiceNumber}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Reading date</span>
+              <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.readingDate}</span>
+            </span>
+            <span className="min-w-0">
+              <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Consumption</span>
+              <span className="block font-mono text-xs font-semibold text-slate-700">{row.cubicMetersConsumed} m³</span>
+            </span>
+          </>
+        )}
+        <span className="min-w-0">
+          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Total bill</span>
+          <span className="block truncate font-mono text-xs font-extrabold tabular-nums text-navy-900">{"\u20B1"}{Number(row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
         </span>
-        <span
-          className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClassName}`}
-          data-status={row.status}
-        >
-          <StatusIcon aria-hidden="true" className="h-3 w-3" />
-          {statusLabel}
+        <span className="min-w-0">
+          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Due date</span>
+          <span className="block truncate font-mono text-xs font-semibold text-slate-700">{row.dueDate || "Not available"}</span>
         </span>
+        <span className="min-w-0">
+          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Status</span>
+          <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusClassName}`} data-status={row.status}>
+            <StatusIcon aria-hidden="true" className="h-3 w-3" />
+            {statusLabel}
+          </span>
+        </span>
+        <span className="min-w-0">
+          <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Balance</span>
+          <span className="block truncate font-mono text-xs font-semibold tabular-nums text-slate-700">{"\u20B1"}{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+        </span>
+        {receiptAvailable && (
+          <span className="col-start-2 min-w-0">
+            <span className="mb-1 block text-[0.65rem] font-bold uppercase tracking-[0.08em] text-slate-400">Receipt</span>
+            <Eye aria-hidden="true" className="h-4 w-4 text-slate-500" />
+          </span>
+        )}
       </span>
     </Wrapper>
   );
@@ -113,6 +159,7 @@ export default function BillingHistoryTable({
         { key: "amount", label: "Total Bill", className: "text-right" },
         { key: "status", label: "Status", className: "text-center" },
         { key: "balance", label: "Balance", className: "text-right" },
+        ...(onViewReceipt ? [{ key: "receipt", label: "Receipt", className: "text-center" }] : []),
       ]}
       data={historyData}
       emptyDescription={emptyDescription}
@@ -178,7 +225,7 @@ export default function BillingHistoryTable({
               className="flex flex-col gap-1 font-mono font-bold tabular-nums md:table-cell md:px-4 md:py-4 md:text-right"
               data-testid="row-amount-due"
             >
-              ₱{Number(row.amountDue ?? 0).toLocaleString("en-US", {
+              {"\u20B1"}{Number(row.amountDue ?? 0).toLocaleString("en-US", {
                 minimumFractionDigits: 2,
               })}
             </td>
@@ -193,19 +240,19 @@ export default function BillingHistoryTable({
               </span>
             </td>
             <td className="hidden font-mono font-bold tabular-nums text-slate-700 md:table-cell md:px-4 md:py-4 md:text-right">
-              ₱{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", {
+              {"\u20B1"}{Number(row.outstandingBalance ?? row.amountDue ?? 0).toLocaleString("en-US", {
                 minimumFractionDigits: 2,
               })}
             </td>
             {receiptAvailable && (
               <td className="col-span-2 flex items-center justify-center md:col-span-1 md:table-cell md:px-4 md:py-4 md:text-center">
                 <button
-                  className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 md:w-auto"
+                  aria-label={`View receipt for ${row.billingPeriod}`}
+                  className="inline-flex min-h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
                   onClick={() => onViewReceipt(row)}
                   type="button"
                 >
-                  <ReceiptText aria-hidden="true" className="h-4 w-4" />
-                  View receipt
+                  <Eye aria-hidden="true" className="h-4 w-4" />
                 </button>
               </td>
             )}

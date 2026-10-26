@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   ChevronRight,
+  Search as SearchIcon,
   UserRound,
+  X,
 } from "lucide-react";
+import { useSearchParams } from "react-router";
+import DiscardChangesDialog from "../components/DiscardChangesDialog";
 import Dropdown from "../components/Dropdown";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
@@ -14,31 +18,57 @@ import { fetchConsumerDirectory } from "../services/consumerDirectoryAPI";
 import { fetchRecordingContext } from "../services/meterReadingAPI";
 import {
   fetchConsumerMeterIncidents,
+  fetchMeterIncidents,
   logMeterIncident,
-  updateMeterIncident,
 } from "../services/meterIncidentAPI";
-
-const todayInManila = () =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Manila",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
 
 const requestMessage = (error, fallback) =>
   error?.response?.data?.message ?? error.message ?? fallback;
 
+// Same filter as Record Meter Reading: digits with up to two decimal places.
+const acceptsDecimal = (value) => /^\d*(\.\d{0,2})?$/.test(value);
+
+const INCIDENT_STATUS_LABELS = {
+  pending: "Not applied",
+  authorized: "Recorded",
+  consumed: "Applied to a reading",
+};
+
+const PRIOR_USAGE_BASIS_LABELS = {
+  final_reading: "Old meter closing reading",
+  reported: "Resident reported",
+  average: "System average",
+};
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00+08:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeZone: "Asia/Manila",
+  }).format(date);
+};
+
 const MAX_VISIBLE_RESIDENTS = 200;
 
+const METER_FILTER_OPTIONS = [
+  { label: "All residents", value: "all" },
+  { label: "Meter changed", value: "changed" },
+];
+
+// A replacement/reset stays open until the next reading consumes it. Once that
+// happens the resident drops out of "Meter changed" but remains under "All
+// residents" with a normal consumption history.
+const isOpenMeterChangeIncident = (incident) =>
+  Boolean(incident) &&
+  ["pending", "authorized"].includes(incident.status) &&
+  ["replacement", "reset"].includes(incident.incidentType);
+
 const emptyForm = () => ({
-  incidentType: "replacement",
-  effectiveDate: todayInManila(),
-  oldMeterSerial: "",
   oldFinalReading: "",
   newMeterSerial: "",
   newBaseline: "0",
-  notes: "",
 });
 
 const openIncidentOf = (incidents = []) =>
@@ -49,13 +79,13 @@ const openIncidentOf = (incidents = []) =>
  * the route instead of guessing a name. Search and the purok filter only narrow
  * the same list.
  */
-function ResidentIncidentList({ consumers, onSelect }) {
+function ResidentIncidentList({ consumers, meterChangedConsumerIds, onSelect }) {
   if (consumers.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
         <p className="font-bold text-slate-700">No matching residents</p>
         <p className="mt-1 text-sm text-slate-500">
-          Try a different name, account number, or purok.
+          Try a different name, account number, purok, or filter.
         </p>
       </div>
     );
@@ -65,24 +95,42 @@ function ResidentIncidentList({ consumers, onSelect }) {
     <div className="space-y-2 sm:space-y-3">
       {consumers.map((consumer) => {
         const isInactive = consumer.status !== "active";
+        const hasMeterChange = meterChangedConsumerIds.has(String(consumer.id));
         return (
           <button
             className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition sm:gap-4 sm:rounded-2xl sm:p-4 ${
               isInactive
                 ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-70"
-                : "border-slate-200 bg-white hover:border-water-300 hover:bg-water-50"
+                : hasMeterChange
+                  ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/40 hover:border-amber-300 hover:bg-amber-50"
+                  : "border-slate-200 bg-white hover:border-water-300 hover:bg-water-50"
             }`}
             disabled={isInactive}
             key={consumer.id}
             onClick={() => onSelect(consumer)}
             type="button"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-water-100 text-water-700 sm:h-11 sm:w-11 sm:rounded-xl">
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11 sm:rounded-xl ${
+                hasMeterChange ? "bg-amber-100 text-amber-700" : "bg-water-100 text-water-700"
+              }`}
+            >
               <UserRound aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-extrabold text-slate-900 sm:text-base">
-                {consumer.consumerName}
+              <span className="flex flex-wrap items-center gap-2">
+                {hasMeterChange && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800 ring-1 ring-inset ring-amber-300"
+                    title="Open meter change waiting for the next reading"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    Meter changed
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-[15px] font-extrabold text-slate-900 sm:text-base">
+                  {consumer.consumerName}
+                </span>
               </span>
               <span className="mt-0.5 block text-xs font-semibold text-slate-500">
                 {consumer.consumerNo} · {consumer.purok}
@@ -99,22 +147,36 @@ function ResidentIncidentList({ consumers, onSelect }) {
 
 export default function ReportMeterIncidentPage() {
   const toast = useToast();
+  const [searchParams] = useSearchParams();
+  const requestedConsumerId = searchParams.get("consumerId")?.trim() ?? "";
+  const prefillHandledRef = useRef(false);
   const [consumers, setConsumers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [meterFilterError, setMeterFilterError] = useState("");
   const [query, setQuery] = useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [purok, setPurok] = useState("all");
+  const [meterFilter, setMeterFilter] = useState("all");
+  const [meterChangedConsumerIds, setMeterChangedConsumerIds] = useState(() => new Set());
   const [consumerId, setConsumerId] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [context, setContext] = useState(null);
   const [openIncident, setOpenIncident] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
 
   const selectedConsumer = useMemo(
     () => consumers.find((consumer) => String(consumer.id) === String(consumerId)) ?? null,
     [consumers, consumerId],
   );
+
+  const hasUnsavedEntry =
+    !openIncident &&
+    (form.oldFinalReading !== "" ||
+      form.newMeterSerial !== "" ||
+      form.newBaseline !== "0");
 
   const purokOptions = useMemo(() => [
     { label: "All puroks", value: "all" },
@@ -130,9 +192,11 @@ export default function ReportMeterIncidentPage() {
         [consumer.consumerName, consumer.consumerNo, consumer.accountName, consumer.purok]
           .some((value) => String(value ?? "").toLowerCase().includes(term));
       const matchesPurok = purok === "all" || consumer.purok === purok;
-      return matchesSearch && matchesPurok;
+      const hasMeterChange = meterChangedConsumerIds.has(String(consumer.id));
+      const matchesMeter = meterFilter === "all" || hasMeterChange;
+      return matchesSearch && matchesPurok && matchesMeter;
     });
-  }, [consumers, purok, query]);
+  }, [consumers, meterChangedConsumerIds, meterFilter, purok, query]);
 
   const visibleConsumers = useMemo(
     () => matchingConsumers.slice(0, MAX_VISIBLE_RESIDENTS),
@@ -143,13 +207,47 @@ export default function ReportMeterIncidentPage() {
     try {
       setLoading(true);
       setLoadError("");
-      setConsumers(await fetchConsumerDirectory());
+      setMeterFilterError("");
+      const loadIncidents = (status) =>
+        fetchMeterIncidents({ status, limit: 500 }).catch((error) => {
+          setMeterFilterError(
+            requestMessage(error, "Unable to load the meter-change list."),
+          );
+          return [];
+        });
+      const [directory, pendingIncidents, authorizedIncidents] = await Promise.all([
+        fetchConsumerDirectory(),
+        loadIncidents("pending"),
+        loadIncidents("authorized"),
+      ]);
+      setConsumers(directory);
+      if (!prefillHandledRef.current && requestedConsumerId) {
+        prefillHandledRef.current = true;
+        const requestedConsumer = directory.find(
+          (consumer) => String(consumer.id) === requestedConsumerId && consumer.status === "active",
+        );
+        if (requestedConsumer) {
+          setConsumerId(String(requestedConsumer.id));
+          setForm(emptyForm());
+          setOpenIncident(null);
+          setContext(null);
+          setLookupLoading(true);
+        }
+      }
+      setMeterChangedConsumerIds(
+        new Set(
+          [...pendingIncidents, ...authorizedIncidents]
+            .filter(isOpenMeterChangeIncident)
+            .map((incident) => String(incident.consumerId)),
+        ),
+      );
+
     } catch (requestError) {
       setLoadError(requestMessage(requestError, "Unable to load the resident directory."));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [requestedConsumerId]);
 
   useEffect(() => {
     loadDirectory();
@@ -173,20 +271,7 @@ export default function ReportMeterIncidentPage() {
     fetchConsumerMeterIncidents(consumerId)
       .then((incidents) => {
         if (!active) return;
-        const existing = openIncidentOf(incidents);
-        setOpenIncident(existing);
-        if (existing) {
-          setForm((current) => ({
-            ...current,
-            incidentType: existing.incidentType,
-            effectiveDate: existing.effectiveDate ?? todayInManila(),
-            oldMeterSerial: existing.oldMeterSerial ?? "",
-            oldFinalReading: existing.oldFinalReading == null ? "" : String(existing.oldFinalReading),
-            newMeterSerial: existing.newMeterSerial ?? "",
-            newBaseline: String(existing.newBaseline ?? 0),
-            notes: existing.notes ?? "",
-          }));
-        }
+        setOpenIncident(openIncidentOf(incidents));
       })
       .catch(() => {
         if (active) setOpenIncident(null);
@@ -200,13 +285,13 @@ export default function ReportMeterIncidentPage() {
     };
   }, [consumerId]);
 
-  const selectResident = (consumer) => {
+  const selectResident = useCallback((consumer) => {
     setConsumerId(String(consumer.id));
     setForm(emptyForm());
     setOpenIncident(null);
     setContext(null);
     setLookupLoading(true);
-  };
+  }, []);
 
   const closeEntry = () => {
     if (saving) return;
@@ -214,18 +299,34 @@ export default function ReportMeterIncidentPage() {
     setForm(emptyForm());
     setOpenIncident(null);
     setContext(null);
+    setIsDiscardConfirmOpen(false);
+  };
+
+  // Closing the replacement form asks first when there is already typed input,
+  // matching the resident registration form.
+  const requestCloseEntry = () => {
+    if (saving) return;
+    if (hasUnsavedEntry) {
+      setIsDiscardConfirmOpen(true);
+      return;
+    }
+    closeEntry();
+  };
+
+  const discardEntry = () => {
+    setIsDiscardConfirmOpen(false);
+    closeEntry();
   };
 
   const updateForm = (field) => (event) => {
     const { value } = event.target;
-    setForm((current) => {
-      const next = { ...current, [field]: value };
-      if (field === "effectiveDate" && value > todayInManila()) {
-        // A field event cannot be dated in the future.
-        next.effectiveDate = todayInManila();
-      }
-      return next;
-    });
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateDecimalForm = (field) => (event) => {
+    const { value } = event.target;
+    if (!acceptsDecimal(value)) return;
+    setForm((current) => ({ ...current, [field]: value }));
   };
 
   const lastRecorded = context?.latestPresentReading ?? null;
@@ -237,11 +338,9 @@ export default function ReportMeterIncidentPage() {
     if (lastRecorded == null) return entered;
     return Math.round((entered - Number(lastRecorded)) * 100) / 100;
   }, [form.oldFinalReading, lastRecorded]);
+  const isClosingTooLow = closingDerived != null && closingDerived < 0;
 
   const baselineValue = form.newBaseline === "" ? 0 : Number(form.newBaseline);
-  // An admin pre-authorization is authoritative. The reader applies it at the
-  // next reading instead of editing it here.
-  const canEdit = !openIncident || openIncident.source === "meter_reader";
 
   const hasClosingReading = form.oldFinalReading !== "";
   // The carry is either measured here (closing reading − last recorded reading)
@@ -256,14 +355,14 @@ export default function ReportMeterIncidentPage() {
       toast.error("Resident required", "Select the resident whose meter changed.");
       return;
     }
-    if (form.incidentType !== "defective" && !hasClosingReading && context && context.averageRecentConsumption == null) {
+    if (!hasClosingReading && context && context.averageRecentConsumption == null) {
       toast.error(
         "Closing reading required",
         "Enter the old meter's closing reading. This resident has no actual readings to average yet.",
       );
       return;
     }
-    if (form.incidentType !== "defective" && carried != null && (!Number.isFinite(carried) || carried < 0)) {
+    if (carried != null && (!Number.isFinite(carried) || isClosingTooLow)) {
       toast.error(
         "Closing reading too low",
         "The old meter's closing reading cannot be lower than the last recorded reading.",
@@ -273,9 +372,7 @@ export default function ReportMeterIncidentPage() {
 
     const payload = {
       consumerId: Number(consumerId),
-      incidentType: form.incidentType,
-      effectiveDate: form.effectiveDate,
-      oldMeterSerial: form.oldMeterSerial,
+      incidentType: "replacement",
       oldFinalReading: hasClosingReading ? form.oldFinalReading : "",
       newMeterSerial: form.newMeterSerial,
       newBaseline: baselineValue,
@@ -283,50 +380,48 @@ export default function ReportMeterIncidentPage() {
       // resident's average when the reading is recorded, not decided here.
       priorUsageBasis: hasClosingReading ? "final_reading" : "average",
       priorUsage: "",
-      autoAuthorize: false,
-      notes: form.notes,
     };
 
     try {
       setSaving(true);
-      const saved = openIncident
-        ? await updateMeterIncident(openIncident.id, payload)
-        : await logMeterIncident(payload);
+      const saved = await logMeterIncident(payload);
       if (saved?.warning) {
-        toast.warning(
-          openIncident ? "Meter incident updated" : "Meter incident saved",
-          saved.warning,
-        );
-      } else if (saved?.reviewStatus === "approved") {
-        toast.success(
-          openIncident ? "Meter incident updated" : "Meter incident recorded",
-          "No payment hold applies. The next reading will carry this usage automatically.",
-        );
+        toast.warning("Meter replacement saved", saved.warning);
       } else {
-        toast.warning(
-          openIncident ? "Meter incident updated" : "Meter incident submitted",
-          "The resident's payments stay on hold until an admin approves it.",
+        toast.success(
+          "Meter replacement recorded",
+          "The next reading will carry this usage automatically.",
         );
       }
       setOpenIncident(saved);
-      setForm((current) => ({ ...current, notes: "" }));
+      setMeterChangedConsumerIds((current) => {
+        const next = new Set(current);
+        const savedConsumerId = String(saved?.consumerId ?? consumerId);
+        if (isOpenMeterChangeIncident(saved)) {
+          next.add(savedConsumerId);
+        } else {
+          next.delete(savedConsumerId);
+        }
+        return next;
+      });
     } catch (requestError) {
       toast.error(
-        "Incident not saved",
-        requestMessage(requestError, "Unable to save the meter incident."),
+        "Replacement not saved",
+        requestMessage(requestError, "Unable to save the meter replacement."),
       );
     } finally {
       setSaving(false);
     }
   };
 
-  const isFiltered = Boolean(query.trim()) || purok !== "all";
+  const hasSearchFilters = Boolean(query.trim()) || purok !== "all";
+  const isFiltered = hasSearchFilters || meterFilter !== "all";
 
   return (
     <main className="space-y-4 sm:space-y-6">
       <PageHeader
-        description="Declare a meter swap or a broken meter at any time. The monthly reading picks it up automatically."
-        title="Report Meter Incident"
+        description="Record a meter replacement at any time. The monthly reading picks it up automatically."
+        title="Record Meter Replacement"
       />
 
       {loadError && (
@@ -336,11 +431,62 @@ export default function ReportMeterIncidentPage() {
         </div>
       )}
 
-      <div
-        aria-label="Resident directory controls"
-        className="flex flex-col gap-2 sm:flex-row sm:items-center"
-        role="search"
-      >
+      <div aria-label="Resident directory controls" className="flex items-center gap-2 sm:hidden" role="search">
+        {mobileSearchOpen ? (
+          <>
+            <Search
+              ariaLabel="Search residents by name, account number, or purok"
+              className="min-w-0 flex-1 [&_input]:min-h-11 [&_input]:py-2"
+              disabled={loading}
+              onValueChange={setQuery}
+              placeholder="Search name, account number, or purok"
+              value={query}
+            />
+            <button
+              aria-label="Close search"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+              onClick={() => setMobileSearchOpen(false)}
+              type="button"
+            >
+              <X aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <Dropdown
+              ariaLabel="Filter residents by purok"
+              className="min-w-0 flex-1"
+              compact
+              disabled={loading}
+              name="incidentPurokMobile"
+              onValueChange={setPurok}
+              options={purokOptions}
+              value={purok}
+            />
+            <Dropdown
+              ariaLabel="Filter residents by meter status"
+              className="min-w-0 flex-1"
+              compact
+              disabled={loading}
+              name="incidentMeterFilterMobile"
+              onValueChange={setMeterFilter}
+              options={METER_FILTER_OPTIONS}
+              value={meterFilter}
+            />
+            <button
+              aria-label={query ? `Search residents, current search: ${query}` : "Search residents"}
+              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+              onClick={() => setMobileSearchOpen(true)}
+              type="button"
+            >
+              <SearchIcon aria-hidden="true" className="h-5 w-5" />
+              {query && <span aria-hidden="true" className="absolute right-2 top-2 h-2 w-2 rounded-full bg-water-600" />}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div aria-label="Resident directory controls" className="hidden items-center gap-2 sm:flex" role="search">
         <Search
           ariaLabel="Search residents by name, account number, or purok"
           className="min-w-0 flex-1"
@@ -351,7 +497,7 @@ export default function ReportMeterIncidentPage() {
         />
         <Dropdown
           ariaLabel="Filter residents by purok"
-          className="w-full shrink-0 sm:w-52"
+          className="w-full shrink-0 sm:w-40"
           disabled={loading}
           name="incidentPurok"
           onValueChange={setPurok}
@@ -359,18 +505,47 @@ export default function ReportMeterIncidentPage() {
           triggerClassName="border-slate-200 bg-white text-navy-900 shadow-sm"
           value={purok}
         />
+        <Dropdown
+          ariaLabel="Filter residents by meter status"
+          className="w-full shrink-0 sm:w-52"
+          disabled={loading}
+          name="incidentMeterFilter"
+          onValueChange={setMeterFilter}
+          options={METER_FILTER_OPTIONS}
+          triggerClassName="border-slate-200 bg-white text-navy-900 shadow-sm"
+          value={meterFilter}
+        />
       </div>
+
+      <p className="px-1 text-xs font-semibold text-water-700">
+        {meterFilter === "changed"
+          ? "Showing residents with a meter change waiting for their next reading."
+          : "Showing all residents, including those with a meter change."}
+      </p>
+
+      {meterFilterError && (
+        <div
+          className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+          role="alert"
+        >
+          {meterFilterError}
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-3 px-1">
         <p className="text-xs font-semibold text-slate-500">
           {loading
             ? "Loading residents…"
-            : `${matchingConsumers.length} of ${consumers.length} resident${consumers.length === 1 ? "" : "s"}${isFiltered ? " matching" : ""}`}
+            : `${matchingConsumers.length} of ${consumers.length} resident${consumers.length === 1 ? "" : "s"}${meterFilter === "changed" ? " with a meter change" : ""}${hasSearchFilters ? " matching" : ""}`}
         </p>
         {isFiltered && (
           <button
             className="text-xs font-bold text-water-700 hover:underline"
-            onClick={() => { setQuery(""); setPurok("all"); }}
+            onClick={() => {
+              setQuery("");
+              setPurok("all");
+              setMeterFilter("all");
+            }}
             type="button"
           >
             Clear filters
@@ -381,7 +556,11 @@ export default function ReportMeterIncidentPage() {
       {loading ? (
         <LoadingSkeleton label="Loading residents" variant="list" />
       ) : (
-        <ResidentIncidentList consumers={visibleConsumers} onSelect={selectResident} />
+        <ResidentIncidentList
+          consumers={visibleConsumers}
+          meterChangedConsumerIds={meterChangedConsumerIds}
+          onSelect={selectResident}
+        />
       )}
 
       {!loading && matchingConsumers.length > MAX_VISIBLE_RESIDENTS && (
@@ -391,20 +570,37 @@ export default function ReportMeterIncidentPage() {
       )}
 
       <Modal
-        closeLabel="Close meter incident form"
-        description="Report a replacement so the next reading carries the old meter's usage."
+        closeLabel={openIncident ? "Close meter replacement details" : "Close meter replacement form"}
+        closeOnOverlay={false}
+        description={
+          openIncident
+            ? "This replacement is already recorded and will be applied at the next reading."
+            : "Record a replacement so the next reading carries the old meter's usage."
+        }
         dismissible={!saving}
         eyebrow="Field operations"
         isOpen={Boolean(selectedConsumer)}
-        onClose={closeEntry}
+        onClose={requestCloseEntry}
+        showCloseButton={false}
         size="md"
-        title={openIncident ? "Update meter incident" : "Log meter incident"}
+        title={openIncident ? "Meter replacement details" : "Record meter replacement"}
       >
         {!selectedConsumer ? null : lookupLoading ? (
-          <p className="p-5 text-sm font-semibold text-slate-500 sm:p-6">
-            Checking the resident's meter history…
-          </p>
-        ) : !canEdit ? (
+          <div className="space-y-4 p-5 sm:p-6">
+            <p className="text-sm font-semibold text-slate-500">
+              Checking the resident's meter history…
+            </p>
+            <div className="flex justify-end border-t border-slate-200 pt-4">
+              <button
+                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 hover:bg-slate-50"
+                onClick={requestCloseEntry}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : openIncident ? (
           <div className="space-y-4 p-5 sm:p-6">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
               <p className="font-bold text-navy-900">Resident</p>
@@ -412,16 +608,53 @@ export default function ReportMeterIncidentPage() {
                 {selectedConsumer.consumerName} · Account {selectedConsumer.consumerNo} · {selectedConsumer.purok}
               </p>
             </div>
-            <div className="rounded-xl border border-water-200 bg-water-50 p-3 text-sm">
+            <div className="rounded-xl border border-water-200 bg-water-50 p-4 text-sm">
               <p className="flex items-center gap-2 font-bold text-navy-900">
                 <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
-                Admin already authorized this replacement
+                Meter replacement recorded
               </p>
               <p className="mt-1 text-xs leading-5 text-slate-600">
-                Carried over {Number(openIncident.priorUsage).toLocaleString()} m³ · new baseline{" "}
-                {Number(openIncident.newBaseline).toLocaleString()} m³. Record the next monthly reading and
-                it will be applied automatically.
+                This replacement is already logged. It will be applied automatically at the next reading.
               </p>
+              <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+                <div>
+                  <dt className="font-semibold text-slate-500">Status</dt>
+                  <dd className="mt-0.5 font-bold text-navy-900">
+                    {INCIDENT_STATUS_LABELS[openIncident.status] ?? openIncident.status}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">Effective date</dt>
+                  <dd className="mt-0.5 font-bold text-navy-900">{formatDate(openIncident.effectiveDate)}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">Old meter closing reading</dt>
+                  <dd className="mt-0.5 font-mono font-bold tabular-nums text-navy-900">
+                    {openIncident.oldFinalReading == null
+                      ? "Not recorded"
+                      : `${Number(openIncident.oldFinalReading).toLocaleString()} m³`}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">Carried over</dt>
+                  <dd className="mt-0.5 font-mono font-bold tabular-nums text-navy-900">
+                    {Number(openIncident.priorUsage).toLocaleString()} m³
+                    <span className="ml-1 font-sans font-semibold text-slate-500">
+                      · {PRIOR_USAGE_BASIS_LABELS[openIncident.priorUsageBasis] ?? openIncident.priorUsageBasis}
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">New meter serial</dt>
+                  <dd className="mt-0.5 font-bold text-navy-900">{openIncident.newMeterSerial || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-slate-500">New baseline</dt>
+                  <dd className="mt-0.5 font-mono font-bold tabular-nums text-navy-900">
+                    {Number(openIncident.newBaseline).toLocaleString()} m³
+                  </dd>
+                </div>
+              </dl>
             </div>
             <div className="flex justify-end border-t border-slate-200 pt-4">
               <button
@@ -437,68 +670,41 @@ export default function ReportMeterIncidentPage() {
           <form className="space-y-4 p-5 sm:p-6" onSubmit={submit}>
             <div className="block text-sm font-bold text-slate-700">
               <span>Resident</span>
-              <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-water-100 text-water-700">
-                  <UserRound aria-hidden="true" className="h-4 w-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-extrabold text-navy-900">
-                    {selectedConsumer.consumerName}
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-water-100 text-water-700">
+                    <UserRound aria-hidden="true" className="h-4 w-4" />
                   </span>
-                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">
-                    Account {selectedConsumer.consumerNo} · {selectedConsumer.purok}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-extrabold text-navy-900">
+                      {selectedConsumer.consumerName}
+                    </span>
+                    <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                      Account {selectedConsumer.consumerNo} · {selectedConsumer.purok}
+                    </span>
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                    Latest recorded reading
+                  </span>
+                  <span className="mt-0.5 block font-mono text-sm font-extrabold tabular-nums text-navy-900">
+                    {context?.latestPresentReading == null
+                      ? "none"
+                      : `${Number(context.latestPresentReading).toLocaleString()} m³`}
                   </span>
                 </span>
               </div>
             </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold text-navy-900">Latest recorded reading</span>
-                <span className="font-mono font-bold text-navy-900">
-                  {context?.latestPresentReading == null
-                    ? "none"
-                    : `${Number(context.latestPresentReading).toLocaleString()} m³`}
-                </span>
-              </p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">
-                The closing reading is measured against this value. The actual usage is settled at the next reading.
-              </p>
-            </div>
-
-            {openIncident && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
-                <span className="block font-bold">This resident already has an open incident</span>
-                <span className="capitalize">{openIncident.incidentType}</span> · {openIncident.reviewStatus === "approved"
-                  ? "approved by an admin"
-                  : "waiting for admin approval"}.
-                Saving updates that record instead of creating a second one.
-              </div>
-            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-sm font-bold text-slate-700">
-                Incident type
-                <select className="ww-field mt-2 p-3" onChange={updateForm("incidentType")} value={form.incidentType}>
-                  <option value="replacement">Meter replacement</option>
-                  <option value="reset">Meter reset</option>
-                  <option value="defective">Defective meter</option>
-                </select>
-              </label>
-              <label className="block text-sm font-bold text-slate-700">
-                Effective date
-                <input className="ww-field mt-2 p-3" max={todayInManila()} onChange={updateForm("effectiveDate")} type="date" value={form.effectiveDate} />
-              </label>
-              <label className="block text-sm font-bold text-slate-700">
-                Old meter serial
-                <input className="ww-field mt-2 p-3" onChange={updateForm("oldMeterSerial")} placeholder="Optional" type="text" value={form.oldMeterSerial} />
-              </label>
-              <label className="block text-sm font-bold text-slate-700">
+              <label className="block text-sm font-bold text-slate-700 sm:col-span-2">
                 Old meter closing reading
                 <input
+                  aria-invalid={isClosingTooLow}
                   className="ww-field mt-2 p-3 font-mono tabular-nums"
                   inputMode="decimal"
-                  onChange={updateForm("oldFinalReading")}
+                  onChange={updateDecimalForm("oldFinalReading")}
                   placeholder="e.g. 470"
                   type="text"
                   value={form.oldFinalReading}
@@ -506,11 +712,11 @@ export default function ReportMeterIncidentPage() {
                 <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
                   {lastRecorded == null
                     ? "Leave blank when the old meter was not read. The carried usage is then taken from the resident's average."
-                    : `When present, prior usage = closing reading − ${Number(lastRecorded).toLocaleString()} m³ (latest recorded).`}
+                    : `Must be at least ${Number(lastRecorded).toLocaleString()} m³ (latest recorded). Prior usage = closing reading − latest recorded reading.`}
                 </span>
                 {closingDerived != null && (
-                  <span className={`mt-1.5 block text-xs font-semibold ${closingDerived < 0 ? "text-red-600" : "text-water-800"}`}>
-                    {closingDerived < 0
+                  <span className={`mt-1.5 block text-xs font-semibold ${isClosingTooLow ? "text-red-600" : "text-water-800"}`}>
+                    {isClosingTooLow
                       ? "The closing reading is below the last recorded reading."
                       : `Carried usage: ${closingDerived.toLocaleString()} m³`}
                   </span>
@@ -522,49 +728,50 @@ export default function ReportMeterIncidentPage() {
               </label>
               <label className="block text-sm font-bold text-slate-700">
                 New meter baseline
-                <input className="ww-field mt-2 p-3 font-mono tabular-nums" inputMode="decimal" onChange={updateForm("newBaseline")} placeholder="0" type="text" value={form.newBaseline} />
+                <input className="ww-field mt-2 p-3 font-mono tabular-nums" inputMode="decimal" onChange={updateDecimalForm("newBaseline")} placeholder="0" type="text" value={form.newBaseline} />
                 <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
                   The first value printed on the new meter. Use 0 when it starts at zero.
                 </span>
               </label>
             </div>
 
-            <label className="block text-sm font-bold text-slate-700">
-              Notes
-              <textarea className="ww-field mt-2 min-h-20 p-3" onChange={updateForm("notes")} placeholder="Reason, witness, or field observations" value={form.notes} />
-            </label>
-
-            <div className={`rounded-xl border p-3 text-xs leading-5 ${form.incidentType === "defective" || (carried != null && Number(carried) === 0) ? "border-water-200 bg-water-50 text-slate-600" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-              {form.incidentType === "defective" ? (
-                <>A defective meter carries nothing yet, so no payment is held. Once the new meter is installed, edit this record with the closing reading and the baseline.</>
-              ) : carried == null ? (
-                <>The old meter was not read. The carried usage is taken from the resident&apos;s average of recent actual readings, and the next reading applies it. The bill stays on hold until an admin approves the incident.</>
+            <div className="rounded-xl border border-water-200 bg-water-50 p-3 text-xs leading-5 text-slate-700">
+              {carried == null ? (
+                <>The old meter was not read. The carried usage is taken from the resident&apos;s average of recent actual readings, and the next reading applies it.</>
               ) : Number(carried) === 0 ? (
-                <>The old meter did not move since the last reading, so 0 m³ is carried and this record is approved on the spot. If the new meter also shows no usage at the next reading, that reading is estimated from the resident&apos;s average and held for admin review.</>
+                <>The old meter did not move since the last reading, so 0 m³ is carried. If the new meter also shows no usage at the next reading, that reading is estimated from the resident&apos;s average.</>
               ) : (
                 <>
                   This carries
                   <span className="mx-1 font-mono font-bold text-navy-900">{Number(carried).toLocaleString()} m³</span>
-                  into the next reading, so the resident&apos;s payments are held until an admin reviews the incident.
+                  into the next reading automatically.
                 </>
               )}
             </div>
 
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
               <button
-                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 hover:bg-slate-50"
-                onClick={closeEntry}
+                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60"
+                disabled={saving}
+                onClick={requestCloseEntry}
                 type="button"
               >
                 Cancel
               </button>
-              <button className="ww-primary-button min-h-11 px-5 text-sm" disabled={saving || lookupLoading} type="submit">
-                {saving ? "Saving…" : openIncident ? "Update incident" : "Log incident"}
+              <button className="ww-primary-button min-h-11 px-5 text-sm" disabled={saving || lookupLoading || isClosingTooLow} type="submit">
+                {saving ? "Saving…" : "Save replacement"}
               </button>
             </div>
           </form>
         )}
       </Modal>
+
+      <DiscardChangesDialog
+        description="Are you sure you want to discard the changes to this meter replacement?"
+        isOpen={isDiscardConfirmOpen}
+        onDiscard={discardEntry}
+        onKeepEditing={() => setIsDiscardConfirmOpen(false)}
+      />
     </main>
   );
 }

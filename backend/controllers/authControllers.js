@@ -433,6 +433,83 @@ export async function verifyConsumerPasswordChangeOtp(req, res) {
   }
 }
 
+export async function verifyConsumerPasswordChangePassword(req, res) {
+  try {
+    if (!["admin", "super-admin"].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Only administrators can change resident passwords." });
+    }
+    const consumerId = Number(req.body?.consumerId);
+    const password = req.body?.password;
+    if (!Number.isInteger(consumerId) || consumerId < 1) {
+      return res.status(400).json({ success: false, message: "A valid resident account is required." });
+    }
+    if (typeof password !== "string" || !password) {
+      return res.status(400).json({ success: false, message: "Enter your administrator password.", field: "password" });
+    }
+
+    const { data: account, error: accountError } = await supabase
+      .from("admins")
+      .select("id, username, email, password, status, role, failed_login_attempts, locked_until")
+      .eq("id", req.user.id)
+      .maybeSingle();
+    if (accountError) return res.status(500).json({ success: false, message: "Unable to verify the administrator password." });
+    if (!account || account.status !== "active" || (account.role === "super-admin" ? "super-admin" : "admin") !== req.user.role) {
+      return res.status(403).json({ success: false, message: "Your administrator account is not active." });
+    }
+
+    const maxAttempts = getLoginMaxAttempts();
+    const lockoutMinutes = getLoginLockoutMinutes();
+    if (account.locked_until && new Date(account.locked_until).getTime() > Date.now()) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((new Date(account.locked_until).getTime() - Date.now()) / 1000));
+      res.set("Retry-After", String(retryAfterSeconds));
+      return res.status(429).json({ success: false, message: `Too many incorrect attempts. Try again in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`, retryAfterSeconds });
+    }
+
+    if (!(await bcrypt.compare(password, String(account.password ?? "")))) {
+      const previousLockExpired = account.locked_until && new Date(account.locked_until).getTime() <= Date.now();
+      const attempts = previousLockExpired ? 1 : Number(account.failed_login_attempts ?? 0) + 1;
+      const lockedUntil = attempts >= maxAttempts ? new Date(Date.now() + lockoutMinutes * 60 * 1000).toISOString() : null;
+      await supabase
+        .from("admins")
+        .update({ failed_login_attempts: attempts, locked_until: lockedUntil, updated_at: new Date().toISOString() })
+        .eq("id", account.id);
+      if (lockedUntil) {
+        const retryAfterSeconds = lockoutMinutes * 60;
+        res.set("Retry-After", String(retryAfterSeconds));
+        return res.status(429).json({ success: false, message: `Too many incorrect attempts. Try again in ${lockoutMinutes} minute(s).`, retryAfterSeconds });
+      }
+      return res.status(401).json({ success: false, message: "Incorrect password.", field: "password", remainingAttempts: Math.max(0, maxAttempts - attempts) });
+    }
+
+    if (account.failed_login_attempts || account.locked_until) {
+      await supabase
+        .from("admins")
+        .update({ failed_login_attempts: 0, locked_until: null, updated_at: new Date().toISOString() })
+        .eq("id", account.id);
+    }
+
+    const authorizationToken = jwt.sign(
+      {
+        role: req.user.role,
+        consumerId,
+        passwordFingerprint: passwordFingerprint(account.password),
+        emailFingerprint: passwordFingerprint(String(account.email ?? "").toLowerCase()),
+      },
+      getJwtSecret(),
+      {
+        subject: String(account.id),
+        issuer: JWT_ISSUER,
+        audience: CONSUMER_PASSWORD_AUDIENCE,
+        expiresIn: "5m",
+        jwtid: createHash("sha256").update(`consumer-password-authorized-by-password:${account.id}:${consumerId}:${Date.now()}`).digest("hex"),
+      },
+    );
+    return res.status(200).json({ success: true, authorizationToken, authorizationExpiresAt: Date.now() + 5 * 60 * 1000 });
+  } catch (error) {
+    return res.status(error.statusCode ?? 500).json({ success: false, message: error.message || "Unable to verify the administrator password." });
+  }
+}
+
 export async function authorizeConsumerPasswordChange(req, res, next) {
   if (req.body?.password === undefined) return next();
   try {
@@ -445,12 +522,12 @@ export async function authorizeConsumerPasswordChange(req, res, next) {
     const state = consumerPasswordAuthorizations.get(payload.jti);
     if (state?.used) return res.status(403).json({ success: false, message: "This password-change authorization has already been used." });
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
-    const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), payload.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), payload.emailFingerprint ?? "");
-    if (!validAccount) return res.status(403).json({ success: false, message: "Your administrator credentials changed. Request a new verification code." });
+    const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), payload.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(String(account.email ?? "").toLowerCase()), payload.emailFingerprint ?? "");
+    if (!validAccount) return res.status(403).json({ success: false, message: "Your administrator credentials changed. Verify again before changing the resident password." });
     consumerPasswordAuthorizations.set(payload.jti, { used: true, expiresAt: payload.exp * 1000 });
     return next();
   } catch {
-    return res.status(403).json({ success: false, message: "Verify your administrator email OTP before changing the resident password." });
+    return res.status(403).json({ success: false, message: "Verify your administrator password or email OTP before changing the resident password." });
   }
 }
 

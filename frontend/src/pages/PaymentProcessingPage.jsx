@@ -251,11 +251,11 @@ export default function PaymentProcessingPage() {
         </div>
       )}
 
-      <div>
+      <div className="flex flex-wrap items-end gap-3">
         <h2 className="text-xl font-extrabold tracking-[-0.02em] text-navy-900" id="outstanding-payments-heading">
           Residents needing payment
         </h2>
-        <p className="mt-1 text-sm text-slate-600">
+        <p aria-live="polite" className="ml-auto rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm">
           {paymentRows.length} {paymentRows.length === 1 ? "resident" : "residents"} with {unpaidBillings.length} outstanding {unpaidBillings.length === 1 ? "bill" : "bills"}.
         </p>
       </div>

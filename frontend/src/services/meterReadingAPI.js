@@ -49,8 +49,6 @@ function normalizeRecordingContext(record) {
         priorUsageBasis: record.open_incident.prior_usage_basis,
         newBaseline: Number(record.open_incident.new_baseline ?? 0),
         newMeterSerial: record.open_incident.new_meter_serial ?? "",
-        expiresAt: record.open_incident.expires_at ?? null,
-        reviewStatus: record.open_incident.review_status,
         status: record.open_incident.status,
       }
     : null;
@@ -74,7 +72,6 @@ function normalizeRecordingContext(record) {
     averageRecentConsumption: record.average_recent_consumption == null ? null : Number(record.average_recent_consumption),
     averageWindow: Number(record.average_window ?? 3),
     averageSampleCount: Number(record.average_sample_count ?? 0),
-    paymentHold: Boolean(record.payment_hold),
     openIncident,
     hasReadingInSelectedMonth,
     canRecord,

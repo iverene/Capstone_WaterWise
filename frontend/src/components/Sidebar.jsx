@@ -16,9 +16,11 @@ function getItemLabel(item) {
   return typeof item === "string" ? item : item.label;
 }
 
-function NavigationLink({ collapsed = false, item, mobile = false, onNavigate }) {
+function NavigationLink({ badge = 0, collapsed = false, item, mobile = false, onNavigate }) {
   const label = getItemLabel(item);
   const Icon = typeof item === "string" ? null : item.Icon;
+  const badgeCount = Number(badge) || 0;
+  const badgeLabel = badgeCount > 99 ? "99+" : badgeCount;
   const baseClass = mobile
     ? "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full px-1 py-1 text-center text-[11px] font-bold transition-all duration-200"
     : `group relative flex min-h-11 items-center rounded-xl py-2 text-left text-sm font-bold transition-all duration-200 ${collapsed ? "justify-center px-2" : "gap-3 px-3"}`;
@@ -27,6 +29,19 @@ function NavigationLink({ collapsed = false, item, mobile = false, onNavigate })
     <>
       {Icon && <Icon aria-hidden="true" className={mobile ? "h-5 w-5 shrink-0" : "h-5 w-5 shrink-0"} />}
       <span className={collapsed && !mobile ? "sr-only" : `truncate ${mobile ? "" : "ww-popover-enter"}`}>{label}</span>
+      {badgeCount > 0 && (
+        mobile ? (
+          <span className="absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full bg-water-600 px-1 text-[9px] font-extrabold leading-4 text-white ring-2 ring-white/80">
+            {badgeLabel}
+          </span>
+        ) : collapsed ? (
+          <span aria-hidden="true" className="absolute right-2 top-2 h-2 w-2 rounded-full bg-water-600 ring-2 ring-white" />
+        ) : (
+          <span className="ml-auto flex min-w-5 shrink-0 items-center justify-center rounded-full bg-water-600 px-1.5 text-[10px] font-extrabold leading-5 text-white">
+            {badgeLabel}
+          </span>
+        )
+      )}
     </>
   );
 
@@ -56,6 +71,7 @@ function NavigationLink({ collapsed = false, item, mobile = false, onNavigate })
 export default function Sidebar({
   accountName = "WaterWise User",
   activeRoleLabel,
+  badges = {},
   items = [],
   onChangeEmail,
   onChangePassword,
@@ -248,7 +264,12 @@ export default function Sidebar({
             </button>
           </div>
           {additionalMobileItems.map((item) => (
-            <NavigationLink item={item} key={getItemLabel(item)} onNavigate={() => setIsMoreOpen(false)} />
+            <NavigationLink
+              badge={badges[item.path]}
+              item={item}
+              key={getItemLabel(item)}
+              onNavigate={() => setIsMoreOpen(false)}
+            />
           ))}
         </div>
       )}
@@ -295,7 +316,13 @@ export default function Sidebar({
           <nav ref={navRef} onMouseOver={handleNavIndicatorHover} onFocus={handleNavIndicatorHover} onMouseLeave={resetEdgeIndicator} className="mt-5 hidden min-h-0 flex-1 overflow-y-auto overflow-x-visible lg:block" aria-label={`${activeRoleLabel ?? "WaterWise"} navigation`}>
             <ul className="grid min-w-0 gap-1">
               {items.map((item) => (
-                <li key={getItemLabel(item)}><NavigationLink collapsed={isCollapsed} item={item} /></li>
+                <li key={getItemLabel(item)}>
+                  <NavigationLink
+                    badge={badges[item.path]}
+                    collapsed={isCollapsed}
+                    item={item}
+                  />
+                </li>
               ))}
             </ul>
           </nav>
@@ -373,6 +400,7 @@ export default function Sidebar({
           <nav className="flex min-w-0 flex-1 lg:hidden" aria-label={`${activeRoleLabel ?? "WaterWise"} mobile navigation`}>
             {primaryMobileItems.map((item) => (
               <NavigationLink
+                badge={badges[item.path]}
                 item={item}
                 key={getItemLabel(item)}
                 mobile

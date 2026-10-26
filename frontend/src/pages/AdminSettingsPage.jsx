@@ -21,17 +21,18 @@ const TIER_LABELS = {
   rate_26_50: "Excess 26-50 (₱ per m³)",
   rate_51_up: "Excess 51 & up (₱ per m³)",
   average_window_months: "Billing average window (months)",
-  incident_authorization_days: "Field incident validity (days)",
 };
 
 // Settings that only accept whole numbers.
-const WHOLE_NUMBER_SETTINGS = new Set(["average_window_months", "incident_authorization_days"]);
+const WHOLE_NUMBER_SETTINGS = new Set(["average_window_months"]);
 
 const SETTING_UNITS = {
   minimum_m3: " m³",
   average_window_months: " months",
-  incident_authorization_days: " days",
 };
+
+// Meter replacements no longer expire, so this legacy setting is hidden.
+const HIDDEN_SETTING_KEYS = new Set(["incident_authorization_days"]);
 
 function getStoredSettingsPermission() {
   try {
@@ -287,7 +288,7 @@ export default function AdminSettingsPage() {
         <LoadingSkeleton count={3} label="Loading system settings" variant="list" />
       ) : (
         <div className="space-y-3">
-          {settings.map((setting) => (
+          {settings.filter((setting) => !HIDDEN_SETTING_KEYS.has(setting.setting_key)).map((setting) => (
             <div key={setting.id} className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import BillingHistoryTable from "../components/BillingHistoryTable";
 import ConsumptionReceiptModal from "../components/ConsumptionReceiptModal";
 import CurrentBillingCard from "../components/CurrentBillingCard";
+import Dropdown from "../components/Dropdown";
 import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -112,7 +113,7 @@ export default function BillingLedger({
     ledgerAccount?.name,
     historyData,
   );
-  const pageHeader = <PageHeader title="Bills and Payments" />;
+  const pageHeader = <PageHeader title="Bills" />;
 
   useEffect(() => {
     if (!ledger || !requestedBillingId || requestedView) return;
@@ -209,15 +210,44 @@ export default function BillingLedger({
       />
 
       <section className="space-y-4" id="consumer-billing-history">
-        <div className="flex items-end justify-between gap-3 sm:gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div className="min-w-0">
-            <h3 className="text-xl font-extrabold text-navy-900">
+            <h3 className="pl-4 text-xl font-extrabold tracking-[-0.02em] text-navy-900">
               History
             </h3>
           </div>
+          <div aria-label="Bill filters" className="grid grid-cols-2 gap-2 sm:hidden">
+            <Dropdown
+              ariaLabel="Filter bills by billing period"
+              className="min-w-0"
+              compact
+              name="billing-period-filter-mobile"
+              onValueChange={setPeriodFilter}
+              options={[
+                { label: "All billing periods", value: "all" },
+                ...periodOptions.map((period) => ({ label: period, value: period })),
+              ]}
+              value={periodFilter}
+            />
+            <Dropdown
+              ariaLabel="Filter bills by status"
+              className="min-w-0"
+              compact
+              name="billing-status-filter-mobile"
+              onValueChange={setStatusFilter}
+              options={[
+                { label: "All statuses", value: "all" },
+                { label: "Paid", value: "Paid" },
+                { label: "Partially paid", value: "Partially Paid" },
+                { label: "Unpaid", value: "Unpaid" },
+                { label: "Overdue", value: "Overdue" },
+              ]}
+              value={statusFilter}
+            />
+          </div>
           <Filter
             ariaLabel="Filter billing history"
-            className="shrink-0"
+            className="hidden shrink-0 sm:block"
             description="Choose a billing period or payment status to narrow your bill history."
             filters={[
               {

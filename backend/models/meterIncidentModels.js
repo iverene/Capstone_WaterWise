@@ -100,16 +100,6 @@ export async function getAverageWindowMonths() {
   }
 }
 
-export async function getAuthorizationDays() {
-  try {
-    const setting = await getSystemSetting("incident_authorization_days");
-    const days = Number(setting?.setting_value);
-    return Number.isInteger(days) && days > 0 ? days : 30;
-  } catch {
-    return 30;
-  }
-}
-
 /**
  * Average prior usage from the consumer's most recent ACTUAL readings.
  * Estimated and incident rows are excluded so the average cannot feed on itself.
@@ -145,7 +135,7 @@ export async function getAveragePriorUsage(consumerId, window = 3) {
   return { average, sampleCount: sample.length, window };
 }
 
-export async function listMeterIncidents({ status, reviewStatus, consumerId, limit = 200 } = {}) {
+export async function listMeterIncidents({ status, consumerId, limit = 200 } = {}) {
   let query = supabase
     .from("meter_incidents")
     .select(INCIDENT_FIELDS)
@@ -153,7 +143,6 @@ export async function listMeterIncidents({ status, reviewStatus, consumerId, lim
     .limit(Math.min(Number(limit) || 200, 500));
 
   if (status) query = query.eq("status", status);
-  if (reviewStatus) query = query.eq("review_status", reviewStatus);
   if (consumerId) query = query.eq("consumer_id", Number(consumerId));
 
   const { data, error } = await query;
@@ -202,7 +191,6 @@ export async function getOpenIncidentForConsumer(consumerId) {
     .select(INCIDENT_FIELDS)
     .eq("consumer_id", Number(consumerId))
     .in("status", ["pending", "authorized"])
-    .neq("review_status", "rejected")
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -211,25 +199,6 @@ export async function getOpenIncidentForConsumer(consumerId) {
     throw createError(`Failed to retrieve the open meter incident: ${error.message}`, 500);
   }
   return normalizeIncident(data);
-}
-
-/**
- * Payment hold: true while a field-declared incident still needs review.
- * Admin-created incidents are approved on creation, so they never hold payment.
- */
-export async function hasPendingIncident(consumerId) {
-  const { data, error } = await supabase
-    .from("meter_incidents")
-    .select("id")
-    .eq("consumer_id", Number(consumerId))
-    .eq("review_status", "pending")
-    .in("status", ["pending", "authorized", "consumed"])
-    .limit(1);
-
-  if (error) {
-    throw createError(`Failed to verify meter incidents: ${error.message}`, 500);
-  }
-  return Boolean(data?.length);
 }
 
 const assertConsumer = async (consumerId) => {
@@ -416,12 +385,9 @@ export async function createMeterIncident(payload, actor) {
   }
 
   const isField = !isAdminActor(actor);
-  // Strict policy: anything a field declaration carries is money the resident
-  // will be billed for, so an admin reviews it and payments stay on hold. Only a
-  // declaration that carries nothing is approved on the spot.
-  const nothingCarried = round2(resolved.priorUsage) === 0 && round2(newBaseline) === 0;
-  const approved = !isField || nothingCarried;
-  const authorizationDays = await getAuthorizationDays();
+  // A meter replacement is an inventory fact recorded by the office or the
+  // field reader. There is no separate approval gate; the next reading applies it.
+  const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("meter_incidents")
@@ -437,19 +403,16 @@ export async function createMeterIncident(payload, actor) {
       average_value: resolved.averageValue,
       new_meter_serial: payload.newMeterSerial || null,
       new_baseline: round2(newBaseline),
-      status: approved ? "authorized" : "pending",
-      review_status: approved ? "approved" : "pending",
+      status: "authorized",
+      review_status: "approved",
       source: isField ? "meter_reader" : "admin",
       recorded_by_id: actor.id,
       recorded_by_role: actor.role,
-      approved_by_id: isField ? null : actor.id,
-      approved_at: approved ? new Date().toISOString() : null,
-      // An approved incident is a fact about the meter: it stays usable until a
-      // reading consumes it, no matter how late the next scheduled visit is.
-      // Only an unreviewed incident expires.
-      expires_at: approved
-        ? null
-        : new Date(Date.now() + authorizationDays * 86_400_000).toISOString(),
+      approved_by_id: isAdminActor(actor) ? actor.id : null,
+      approved_at: isAdminActor(actor) ? now : null,
+      // An authorized replacement stays usable until a reading consumes it,
+      // no matter how late the next scheduled visit is.
+      expires_at: null,
       notes: payload.notes || null,
       idempotency_key: payload.idempotencyKey || null,
     })
@@ -475,16 +438,33 @@ export async function createMeterIncident(payload, actor) {
 }
 
 /**
- * Update an open incident. This is how the same household moves from
- * "defective / stalled" (no meter swap yet) to "replacement" (swap done) without
- * logging a second incident and breaking the one-open-incident rule.
+ * Correct an open incident. Admins use this to fix a meter reader's log before
+ * the next reading consumes it. The conditional update below prevents a reading
+ * that applies the incident at the same time from being overwritten.
  */
 export async function updateMeterIncident(id, payload, actor) {
   const incident = await getMeterIncident(id);
 
   if (!["pending", "authorized"].includes(incident.status)) {
     throw createError(
-      "Only an open incident can be updated. A consumed incident is already part of a bill.",
+      "Only an open incident can be corrected. A consumed incident is already part of a bill.",
+      409,
+    );
+  }
+
+  // A reading may have consumed the incident between the status check above and
+  // the update below. The linked reading is the authoritative lock.
+  const { data: appliedReading, error: appliedError } = await supabase
+    .from("consumption")
+    .select("id")
+    .eq("meter_incident_id", incident.id)
+    .maybeSingle();
+  if (appliedError) {
+    throw createError(`Failed to check the linked reading: ${appliedError.message}`, 500);
+  }
+  if (appliedReading) {
+    throw createError(
+      "This replacement is already part of a reading and can no longer be corrected.",
       409,
     );
   }
@@ -520,46 +500,48 @@ export async function updateMeterIncident(id, payload, actor) {
     allowOverride: !isField,
   });
 
-  // A reader edit that changes what will be billed goes back to the admin.
-  const billChanging =
-    round2(resolved.priorUsage) !== round2(incident.priorUsage) ||
-    round2(newBaseline) !== round2(incident.newBaseline);
-  const nothingCarried = round2(resolved.priorUsage) === 0 && round2(newBaseline) === 0;
-  const approved = isField
-    ? nothingCarried || (incident.reviewStatus === "approved" && !billChanging)
-    : true;
-
-  const authorizationDays = await getAuthorizationDays();
+  // This is an inventory correction, not a new approval request. The next
+  // reading still applies the latest values automatically.
+  const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("meter_incidents")
     .update({
       incident_type: incidentType,
       effective_date: payload.effectiveDate || incident.effectiveDate,
-      old_meter_serial: payload.oldMeterSerial ?? incident.oldMeterSerial,
+      old_meter_serial: payload.oldMeterSerial === undefined
+        ? incident.oldMeterSerial
+        : (payload.oldMeterSerial || null),
       old_final_reading: oldFinalReading,
       prior_usage: round2(resolved.priorUsage),
       prior_usage_basis: resolved.basis,
       average_window: resolved.window,
       average_value: resolved.averageValue,
-      new_meter_serial: payload.newMeterSerial ?? incident.newMeterSerial,
+      new_meter_serial: payload.newMeterSerial === undefined
+        ? incident.newMeterSerial
+        : (payload.newMeterSerial || null),
       new_baseline: round2(newBaseline),
-      status: approved ? "authorized" : "pending",
-      review_status: approved ? "approved" : "pending",
-      approved_by_id: approved ? incident.approvedById : null,
-      approved_at: approved ? incident.approvedAt : null,
-      expires_at: approved
-        ? null
-        : new Date(Date.now() + authorizationDays * 86_400_000).toISOString(),
+      status: "authorized",
+      review_status: "approved",
+      approved_by_id: incident.approvedById ?? (isAdminActor(actor) ? actor.id : null),
+      approved_at: incident.approvedAt ?? (isAdminActor(actor) ? now : null),
+      expires_at: null,
       notes: payload.notes ?? incident.notes,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .eq("id", incident.id)
+    .in("status", ["pending", "authorized"])
     .select(INCIDENT_FIELDS)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    throw createError(`Failed to update the meter incident: ${error.message}`, 500);
+    throw createError(`Failed to correct the meter incident: ${error.message}`, 500);
+  }
+  if (!data) {
+    throw createError(
+      "This replacement is already part of a reading and can no longer be corrected.",
+      409,
+    );
   }
   const updated = normalizeIncident(data);
   if (round2(resolved.priorUsage) > 0 && await readingAlreadyRecordedThisMonth(consumerId)) {
@@ -568,113 +550,16 @@ export async function updateMeterIncident(id, payload, actor) {
   return updated;
 }
 
-export async function approveMeterIncident(id, actor) {
-  const incident = await getMeterIncident(id);
-  if (incident.reviewStatus === "approved") return incident;
-  if (incident.reviewStatus === "rejected") {
-    throw createError("A rejected incident cannot be approved.", 409);
-  }
-
-  const { data, error } = await supabase
-    .from("meter_incidents")
-    .update({
-      review_status: "approved",
-      status: incident.status === "pending" ? "authorized" : incident.status,
-      approved_by_id: actor.id,
-      approved_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", incident.id)
-    .select(INCIDENT_FIELDS)
-    .single();
-
-  if (error) {
-    throw createError(`Failed to approve the meter incident: ${error.message}`, 500);
-  }
-  return normalizeIncident(data);
-}
-
-export async function rejectMeterIncident(id, actor, reason) {
-  const incident = await getMeterIncident(id);
-  if (incident.status === "consumed") {
-    throw createError(
-      "This incident already produced a reading. Void the unpaid bill first, then re-record the reading.",
-      409,
-    );
-  }
-  if (incident.reviewStatus === "rejected") return incident;
-
-  const { data, error } = await supabase
-    .from("meter_incidents")
-    .update({
-      review_status: "rejected",
-      status: "rejected",
-      rejected_reason: reason || null,
-      approved_by_id: actor.id,
-      approved_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", incident.id)
-    .select(INCIDENT_FIELDS)
-    .single();
-
-  if (error) {
-    throw createError(`Failed to reject the meter incident: ${error.message}`, 500);
-  }
-  return normalizeIncident(data);
-}
-
-export async function expireMeterIncidents() {
-  const { data, error } = await supabase
-    .from("meter_incidents")
-    .update({ status: "expired", updated_at: new Date().toISOString() })
-    .in("status", ["pending", "authorized"])
-    // Only incidents nobody reviewed expire. An approved incident is a fact
-    // about the meter and must survive until a reading consumes it, otherwise
-    // a pre-authorized replacement silently dies before the next scheduled visit.
-    .eq("review_status", "pending")
-    .lt("expires_at", new Date().toISOString())
-    .select("id");
-
-  if (error) return { expired: 0, error: error.message };
-  return { expired: data?.length ?? 0 };
-}
-
-export async function countPendingIncidents() {
-  const { count, error } = await supabase
-    .from("meter_incidents")
-    .select("id", { count: "exact", head: true })
-    .eq("review_status", "pending");
-
-  if (error) return 0;
-  return count ?? 0;
-}
-
 /** Open (not yet applied) incidents for every consumer, for the bulk recording context. */
 export async function listOpenIncidents() {
   const { data, error } = await supabase
     .from("meter_incidents")
     .select(INCIDENT_FIELDS)
     .in("status", ["pending", "authorized"])
-    .neq("review_status", "rejected")
     .order("created_at", { ascending: false });
 
   if (error) {
     throw createError(`Failed to retrieve open meter incidents: ${error.message}`, 500);
   }
   return (data ?? []).map(normalizeIncident);
-}
-
-/** Consumer IDs whose field-declared incident still needs review (payment hold). */
-export async function listPendingReviewConsumerIds() {
-  const { data, error } = await supabase
-    .from("meter_incidents")
-    .select("consumer_id")
-    .eq("review_status", "pending")
-    .in("status", ["pending", "authorized", "consumed"]);
-
-  if (error) {
-    throw createError(`Failed to retrieve pending meter incidents: ${error.message}`, 500);
-  }
-  return [...new Set((data ?? []).map((row) => row.consumer_id))];
 }

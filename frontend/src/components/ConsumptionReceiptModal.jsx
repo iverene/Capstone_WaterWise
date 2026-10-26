@@ -10,10 +10,10 @@ const currency = (value) =>
 
 function ReceiptLine({ label, testId, value }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 py-3 last:border-0">
-      <dt className="text-sm font-semibold text-slate-500">{label}</dt>
+    <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-2 sm:gap-4 sm:py-3 last:border-0">
+      <dt className="text-xs font-semibold text-slate-500 sm:text-sm">{label}</dt>
       <dd
-        className="max-w-[60%] text-right font-mono text-sm font-bold tabular-nums text-navy-900"
+        className="max-w-[60%] text-right font-mono text-xs font-bold tabular-nums text-navy-900 sm:text-sm"
         data-testid={testId}
       >
         {value}
@@ -24,10 +24,10 @@ function ReceiptLine({ label, testId, value }) {
 
 function ArrearsStat({ label, testId, value }) {
   return (
-    <div className="rounded-xl bg-white p-3 ring-1 ring-inset ring-slate-200">
-      <p className="text-xs font-semibold text-slate-500">{label}</p>
+    <div className="rounded-xl bg-white p-2.5 ring-1 ring-inset ring-slate-200 sm:p-3">
+      <p className="text-[11px] font-semibold text-slate-500 sm:text-xs">{label}</p>
       <p
-        className="mt-1 font-mono text-sm font-extrabold tabular-nums text-navy-900"
+        className="mt-1 font-mono text-xs font-extrabold tabular-nums text-navy-900 sm:text-sm"
         data-testid={testId}
       >
         {currency(value)}
@@ -42,16 +42,20 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
   if (loading || !receiptData) {
     return (
       <Modal
+        bodyClassName="min-h-0 flex-1 overflow-y-auto p-3 sm:p-6"
+        closeButtonProps={{ className: "!h-9 !w-9 rounded-lg sm:!h-11 sm:!w-11 sm:rounded-xl [&_svg]:!h-4 [&_svg]:!w-4 sm:[&_svg]:!h-5 sm:[&_svg]:!w-5" }}
         closeLabel="Close consumption receipt"
         description={residentName}
         dismissible={false}
         eyebrow="Sucol Water System"
+        headerClassName="px-3 py-3 sm:px-6 sm:py-4 [&_h2]:text-lg sm:[&_h2]:text-2xl"
         isOpen={isOpen}
         onClose={onClose}
+        panelProps={{ className: "!max-h-[90dvh] !max-w-[22rem] sm:!max-h-[94dvh] sm:!max-w-2xl" }}
         size="md"
         title="Consumption Receipt"
       >
-        <LoadingSkeleton className="p-5 sm:p-6" label="Loading consumption receipt" variant="card" />
+        <LoadingSkeleton className="p-3 sm:p-6" label="Loading consumption receipt" variant="card" />
       </Modal>
     );
   }
@@ -115,49 +119,51 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
 
   return (
     <Modal
-      bodyClassName="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6"
+      bodyClassName="min-h-0 flex-1 overflow-y-auto p-3 sm:p-6"
       closeButtonProps={{ "data-testid": "close-modal" }}
       closeLabel="Close consumption receipt"
+      closeButtonProps={{ className: "!h-9 !w-9 rounded-lg sm:!h-11 sm:!w-11 sm:rounded-xl [&_svg]:!h-4 [&_svg]:!w-4 sm:[&_svg]:!h-5 sm:[&_svg]:!w-5" }}
       eyebrow="Sucol Water System"
       headerActions={
         <>
           <button
             aria-label="Download consumption receipt"
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:h-11 sm:w-11 sm:rounded-xl"
             data-testid="download-official-receipt-image"
             onClick={handleDownload}
             type="button"
           >
-            <FiDownload aria-hidden="true" className="h-4 w-4" />
+            <FiDownload aria-hidden="true" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           </button>
-          <button aria-label="Print official receipt" className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={handlePrint} type="button"><FiPrinter aria-hidden="true" className="h-4 w-4" /></button>
+          <button aria-label="Print official receipt" className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:h-11 sm:w-11 sm:rounded-xl" onClick={handlePrint} type="button"><FiPrinter aria-hidden="true" className="h-3.5 w-3.5 sm:h-4 sm:w-4" /></button>
         </>
       }
       headerActionsProps={{ "data-document-actions": true }}
+      headerClassName="px-3 py-3 sm:px-6 sm:py-4 [&_h2]:text-lg sm:[&_h2]:text-2xl"
       headerProps={{ "data-document-header": true }}
       isOpen={isOpen}
       onClose={onClose}
       overlayProps={{ "data-print-document-overlay": true, "data-testid": "receipt-modal" }}
-      panelProps={{ "data-printable-document": true }}
+      panelProps={{ className: "!max-h-[90dvh] !max-w-[22rem] sm:!max-h-[94dvh] sm:!max-w-2xl", "data-printable-document": true }}
       size="md"
       title="Consumption Receipt"
     >
-      <section className="rounded-2xl bg-navy-950 p-5 text-white">
+      <section className="rounded-2xl bg-navy-950 p-4 text-white sm:p-5">
         <p className="text-xs font-bold uppercase tracking-[0.14em] text-water-200">
           Total bill
         </p>
         <p
-          className="mt-2 font-mono text-3xl font-extrabold tabular-nums text-white"
+          className="mt-1.5 font-mono text-2xl font-extrabold tabular-nums text-white sm:mt-2 sm:text-3xl"
           data-testid="receipt-final-total"
         >
           {currency(finalTotalBill)}
         </p>
-        <p className="mt-2 text-sm text-slate-300">
+        <p className="mt-1.5 text-xs text-slate-300 sm:mt-2 sm:text-sm">
           {cubicMetersUsed.toLocaleString("en-US")} m³ used · Baseline {currency(baselineBill)}
         </p>
       </section>
 
-      <div className="mt-5 grid gap-5 sm:grid-cols-2">
+      <div className="mt-4 grid gap-4 sm:mt-5 sm:grid-cols-2 sm:gap-5">
         <section aria-labelledby="receipt-meter-heading">
           <h3
             className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
@@ -165,7 +171,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           >
             Meter
           </h3>
-          <dl className="mt-2">
+          <dl className="mt-1.5 sm:mt-2">
             <ReceiptLine label="Name" testId="receipt-meter-name" value={meterName} />
             <ReceiptLine label="Run date" testId="receipt-run-date" value={runDate} />
           </dl>
@@ -178,7 +184,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           >
             Readings
           </h3>
-          <dl className="mt-2">
+          <dl className="mt-1.5 sm:mt-2">
             <ReceiptLine
               label={readingSource === "incident" ? "Previous (old meter)" : "Previous"}
               testId="telemetry-prev"
@@ -202,7 +208,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
             <ReceiptLine label="Used" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
             <ReceiptLine label="Baseline bill" testId="telemetry-baseline" value={currency(baselineBill)} />
             {Array.isArray(billBreakdown) && billBreakdown.length > 0 && (
-              <div className="mt-2 rounded-xl bg-slate-50 p-3">
+              <div className="mt-2 rounded-xl bg-slate-50 p-2.5 sm:p-3">
                 {billBreakdown.map((line) => (
                   <div key={line.label} className="flex items-start justify-between gap-4 py-1">
                     <dt className="text-xs font-semibold text-slate-500">{line.label}</dt>
@@ -217,14 +223,14 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         </section>
       </div>
 
-      <section className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="receipt-arrears-heading">
+      <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:mt-5 sm:p-4" aria-labelledby="receipt-arrears-heading">
         <h3
           className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500"
           id="receipt-arrears-heading"
         >
           Arrears breakdown
         </h3>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3" data-testid="arrears-matrix">
+        <div className="mt-2 grid gap-2 sm:mt-3 sm:grid-cols-3 sm:gap-3" data-testid="arrears-matrix">
           <ArrearsStat label="Over 30 days" testId="arrears-30" value={arrears30Days} />
           <ArrearsStat label="Over 60 days" testId="arrears-60" value={arrears60Days} />
           <ArrearsStat label="Over 90 days" testId="arrears-90" value={arrears90Days} />
@@ -233,16 +239,16 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
 
       {onViewPaymentReceipt && (
         <button
-          className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600"
+          className="mt-4 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-xs font-bold text-water-700 hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:mt-5 sm:min-h-11 sm:px-4 sm:text-sm"
           onClick={onViewPaymentReceipt}
           type="button"
         >
-          <ReceiptText aria-hidden="true" className="h-4 w-4" />
+          <ReceiptText aria-hidden="true" className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
           View payment receipt
         </button>
       )}
 
-      <p className="mt-5 text-center text-xs font-medium text-slate-400" data-document-footer>
+      <p className="mt-4 text-center text-[11px] font-medium text-slate-400 sm:mt-5 sm:text-xs" data-document-footer>
         System-generated receipt · Keep this copy for your records
       </p>
     </Modal>

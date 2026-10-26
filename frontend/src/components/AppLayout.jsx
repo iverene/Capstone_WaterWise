@@ -97,6 +97,7 @@ const ROLE_CONFIG = {
     links: [
       { label: "Home", path: "/consumer/home", Icon: FiHome },
       { label: "Bills", path: "/consumer/billing-ledger", Icon: FiFileText },
+      { label: "Payments", path: "/consumer/payments", Icon: FiCreditCard },
       { label: "Analytics", path: "/consumer/analytics", Icon: FiBarChart2 },
     ],
   },

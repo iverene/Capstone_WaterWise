@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Eye, EyeOff, KeyRound, LoaderCirc
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import AdminProfileBanner from "../components/AdminProfileBanner";
+import DiscardChangesDialog from "../components/DiscardChangesDialog";
 import Modal from "../components/Modal";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import OtpInput from "../components/OtpInput";
@@ -714,31 +715,11 @@ export default function AdminProfile() {
           </div>
         </form>
       </Modal>}
-      <Modal
-        description="Your unsent changes will be lost if you discard them."
-        eyebrow="Unsaved changes"
+      <DiscardChangesDialog
         isOpen={staffDiscardTarget !== null}
-        onClose={() => setStaffDiscardTarget(null)}
-        size="sm"
-        title="Discard changes?"
-      >
-        <div className="flex flex-col gap-2 p-5 sm:flex-row sm:justify-end sm:p-6">
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 sm:order-2"
-            onClick={confirmStaffDiscard}
-            type="button"
-          >
-            Discard changes
-          </button>
-          <button
-            className="ww-primary-button inline-flex min-h-11 items-center justify-center px-5 text-sm sm:order-1"
-            onClick={() => setStaffDiscardTarget(null)}
-            type="button"
-          >
-            Keep editing
-          </button>
-        </div>
-      </Modal>
+        onDiscard={confirmStaffDiscard}
+        onKeepEditing={() => setStaffDiscardTarget(null)}
+      />
       {staffAuthorization && <Modal closeOnOverlay={false} description="This code can be used only for this staff action." dismissible={false} eyebrow="Super Admin verification" isOpen={isStaffOtpOpen} onClose={() => setIsStaffOtpOpen(false)} showCloseButton={false} size="sm" title="Confirm Staff Action">
         <form className="space-y-3 p-5 sm:space-y-4 sm:p-6" onSubmit={verifyStaffAuthorization}>
           <p className="text-xs leading-5 text-slate-600 sm:text-sm">Enter the code sent to <strong>{staffAuthorization.maskedEmail}</strong>. It expires in 5 minutes.</p>

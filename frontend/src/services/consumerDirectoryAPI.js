@@ -108,3 +108,8 @@ export async function verifyConsumerPasswordOtp(challengeToken, otp) {
   const response = await apiClient.post("/auth/admin/consumer-password/verify", { challengeToken, otp });
   return response.data;
 }
+
+export async function verifyConsumerPasswordWithAdminPassword(consumerId, password) {
+  const response = await apiClient.post("/auth/admin/consumer-password/verify-password", { consumerId, password });
+  return response.data;
+}
