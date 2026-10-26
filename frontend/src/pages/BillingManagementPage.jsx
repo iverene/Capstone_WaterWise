@@ -8,6 +8,7 @@ import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import Table from "../components/Table";
 import { fetchBillingHistory } from "../services/billingAPI";
+import { fetchConsumerDirectory } from "../services/consumerDirectoryAPI";
 
 const monthKeyOf = (billing) =>
   String(billing.raw?.billing_date ?? billing.readingDate ?? "").slice(0, 7);
@@ -15,7 +16,18 @@ const monthKeyOf = (billing) =>
 const formatMonthLabel = (monthKey) => {
   const date = new Date(`${monthKey}-01T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return monthKey;
-  return new Intl.DateTimeFormat("en-PH", { month: "long", timeZone: "UTC" }).format(date);
+  return new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric", timeZone: "UTC" }).format(date);
+};
+
+const currentMonthKey = () => {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      month: "2-digit",
+      timeZone: "Asia/Manila",
+      year: "numeric",
+    }).formatToParts(new Date()).map(({ type, value }) => [type, value]),
+  );
+  return `${values.year}-${values.month}`;
 };
 
 const purokRank = (value) => {
@@ -29,6 +41,7 @@ const currency = (value) =>
 export default function BillingManagementPage() {
   const navigate = useNavigate();
   const [billingHistory, setBillingHistory] = useState([]);
+  const [consumers, setConsumers] = useState([]);
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
   const [month, setMonth] = useState("");
@@ -39,7 +52,12 @@ export default function BillingManagementPage() {
     try {
       setLoading(true);
       setError("");
-      setBillingHistory(await fetchBillingHistory());
+      const [directory, history] = await Promise.all([
+        fetchConsumerDirectory(),
+        fetchBillingHistory(),
+      ]);
+      setConsumers(directory);
+      setBillingHistory(history);
     } catch (requestError) {
       setError(
         requestError?.response?.data?.message ??
@@ -54,9 +72,10 @@ export default function BillingManagementPage() {
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      fetchBillingHistory()
-        .then((records) => {
+      Promise.all([fetchConsumerDirectory(), fetchBillingHistory()])
+        .then(([directory, records]) => {
           if (active) {
+            setConsumers(directory);
             setBillingHistory(records);
             setError("");
           }
@@ -91,42 +110,39 @@ export default function BillingManagementPage() {
       groups.set(residentId, current);
     });
 
-    return Array.from(groups.entries()).map(([id, billings]) => ({
-      id,
-      billings: [...billings].sort((first, second) =>
-        String(second.raw?.billing_date ?? "").localeCompare(
-          String(first.raw?.billing_date ?? ""),
-        ) || Number(second.id) - Number(first.id),
+    return consumers.map((consumer) => ({
+      id: String(consumer.id),
+      consumerName: consumer.consumerName,
+      purok: consumer.purok,
+      allBillings: [...(groups.get(String(consumer.id)) ?? [])].sort((first, second) =>
+        String(second.raw?.billing_date ?? "").localeCompare(String(first.raw?.billing_date ?? "")) ||
+        Number(second.id) - Number(first.id),
       ),
-      consumerName: billings[0].consumerName,
-      purok: billings[0].purok,
     }));
-  }, [billingHistory]);
+  }, [billingHistory, consumers]);
 
   const purokOptions = useMemo(() => [...new Set(
-    residentRows.map((resident) => resident.purok).filter(Boolean),
+    consumers.map((resident) => resident.purok).filter(Boolean),
   )].sort((left, right) =>
     purokRank(left) - purokRank(right) || String(left).localeCompare(String(right)),
-  ), [residentRows]);
+  ), [consumers]);
 
   const monthOptions = useMemo(() => [...new Set(
-    billingHistory
+    [currentMonthKey(), ...billingHistory
       .map((billing) => monthKeyOf(billing))
-      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+      .filter((value) => /^\d{4}-\d{2}$/.test(value))],
   )].sort((left, right) => right.localeCompare(left)), [billingHistory]);
-  const activeMonth = monthOptions.includes(month) ? month : monthOptions[0] ?? "";
+  const activeMonth = monthOptions.includes(month) ? month : currentMonthKey();
 
   const visibleResidents = useMemo(() => {
     const term = query.trim().toLowerCase();
 
     return residentRows
       .map((resident) => {
-        const billings = activeMonth
-          ? resident.billings.filter((billing) => monthKeyOf(billing) === activeMonth)
-          : resident.billings;
-        const currentBill = Number(billings[0]?.amountDue ?? 0);
+        const billings = resident.allBillings.filter((billing) => monthKeyOf(billing) === activeMonth);
+        const currentBill = billings.reduce((total, billing) => total + Number(billing.amountDue ?? 0), 0);
         const displayedIds = new Set(billings.map((billing) => billing.id));
-        const over30Days = resident.billings
+        const over30Days = resident.allBillings
           .filter((billing) => !displayedIds.has(billing.id))
           .reduce((total, billing) => {
             const balance = Number(billing.outstandingBalance ?? 0);
@@ -141,6 +157,7 @@ export default function BillingManagementPage() {
         return {
           ...resident,
           billings,
+          billingMonth: activeMonth,
           currentBill,
           over30Days,
           totalOutstanding: currentBill + over30Days,
@@ -150,7 +167,7 @@ export default function BillingManagementPage() {
         const matchesQuery =
           !term ||
           String(resident.consumerName ?? "").toLowerCase().includes(term);
-        return resident.billings.length > 0 && matchesQuery &&
+        return matchesQuery &&
           (purok === "all" || resident.purok === purok);
       });
   }, [activeMonth, purok, query, residentRows]);
@@ -158,7 +175,7 @@ export default function BillingManagementPage() {
   return (
     <main className="min-w-0 space-y-5 sm:space-y-6">
       <PageHeader
-        description="Review billing periods, water usage, account balances, and collection status."
+        description={`Review all residents' bills for ${formatMonthLabel(activeMonth)}, including residents without a bill for that month.`}
         title="Billing Management"
       />
 
@@ -211,6 +228,7 @@ export default function BillingManagementPage() {
           ariaLabel="Resident billing accounts"
           columns={[
             { key: "name", label: "Name" },
+            { key: "billingMonth", label: "Billing Month" },
             { key: "current", label: "Current Bill", className: "text-right" },
             { key: "over30", label: "Over 30 Days", className: "text-right" },
             { key: "total", label: "Total", className: "text-right" },
@@ -220,9 +238,9 @@ export default function BillingManagementPage() {
           emptyDescription={
             residentRows.length
               ? "No resident matches the current search."
-              : "Residents will appear here when billing records are generated."
+              : "Residents will appear here when an account is created."
           }
-          emptyTitle={residentRows.length ? "No matching residents" : "No billing records"}
+          emptyTitle={residentRows.length ? "No matching residents" : "No residents found"}
           getRowKey={(resident) => resident.id}
           rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
           tableClassName="block w-full text-left text-sm md:table"
@@ -235,6 +253,10 @@ export default function BillingManagementPage() {
                 <span className="mt-0.5 block text-xs font-semibold text-slate-500">
                   {resident.purok}
                 </span>
+              </td>
+              <td className="md:px-4 md:py-4 md:text-center">
+                <span className="block font-semibold text-slate-700">{formatMonthLabel(resident.billingMonth)}</span>
+                {resident.billings.length === 0 && <span className="mt-0.5 block text-xs text-slate-500">No bill yet</span>}
               </td>
               <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-right">
                 {currency(resident.currentBill)}

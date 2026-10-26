@@ -7,12 +7,24 @@ import KPI from "../components/KPI";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import Table from "../components/Table";
+import { fetchConsumerDirectory } from "../services/consumerDirectoryAPI";
 import { fetchAdminMeterReadings } from "../services/meterReadingAPI";
 
 const formatMonthLabel = (monthKey) => {
   const date = new Date(`${monthKey}-01T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return monthKey;
-  return new Intl.DateTimeFormat("en-PH", { month: "long", timeZone: "UTC" }).format(date);
+  return new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric", timeZone: "UTC" }).format(date);
+};
+
+const currentMonthKey = () => {
+  const values = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      month: "2-digit",
+      timeZone: "Asia/Manila",
+      year: "numeric",
+    }).formatToParts(new Date()).map(({ type, value }) => [type, value]),
+  );
+  return `${values.year}-${values.month}`;
 };
 
 export default function AdminReadingsPage() {
@@ -20,6 +32,7 @@ export default function AdminReadingsPage() {
   const [query, setQuery] = useState("");
   const [purok, setPurok] = useState("all");
   const [month, setMonth] = useState("");
+  const [consumers, setConsumers] = useState([]);
   const [allReadings, setAllReadings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -28,7 +41,12 @@ export default function AdminReadingsPage() {
     try {
       setLoading(true);
       setError("");
-      setAllReadings(await fetchAdminMeterReadings());
+      const [directory, readings] = await Promise.all([
+        fetchConsumerDirectory(),
+        fetchAdminMeterReadings(),
+      ]);
+      setConsumers(directory);
+      setAllReadings(readings);
     } catch (requestError) {
       setError(requestError?.response?.data?.message ?? requestError.message ?? "Unable to load consumption records.");
     } finally {
@@ -38,9 +56,16 @@ export default function AdminReadingsPage() {
 
   useEffect(() => {
     let active = true;
-    const refresh = () => fetchAdminMeterReadings()
-      .then((records) => {
-        if (active) setAllReadings(records);
+    const refresh = () => Promise.all([
+      fetchConsumerDirectory(),
+      fetchAdminMeterReadings(),
+    ])
+      .then(([directory, records]) => {
+        if (active) {
+          setConsumers(directory);
+          setAllReadings(records);
+          setError("");
+        }
       })
       .catch((requestError) => {
         if (active) setError(requestError?.response?.data?.message ?? requestError.message ?? "Unable to load consumption records.");
@@ -57,25 +82,25 @@ export default function AdminReadingsPage() {
   }, []);
 
   const residentRows = useMemo(() => {
-    const groups = new Map();
+    const readingsByConsumer = new Map();
     allReadings.forEach((reading) => {
-      const residentId = String(reading.consumerNo ?? reading.consumerName);
-      const current = groups.get(residentId) ?? [];
+      const residentId = String(reading.consumerNo ?? "");
+      const current = readingsByConsumer.get(residentId) ?? [];
       current.push(reading);
-      groups.set(residentId, current);
+      readingsByConsumer.set(residentId, current);
     });
 
-    return Array.from(groups.entries()).map(([id, residentReadings]) => ({
-      id,
-      consumerName: residentReadings[0].consumerName,
-      consumerNo: residentReadings[0].consumerNo,
-      purok: residentReadings[0].purok,
-      readings: [...residentReadings].sort((first, second) =>
+    return consumers.map((consumer) => ({
+      id: String(consumer.id),
+      consumerName: consumer.consumerName,
+      consumerNo: consumer.consumerNo,
+      purok: consumer.purok,
+      readings: [...(readingsByConsumer.get(String(consumer.id)) ?? [])].sort((first, second) =>
         String(second.readingDate ?? "").localeCompare(String(first.readingDate ?? "")) ||
         Number(second.id) - Number(first.id),
       ),
     }));
-  }, [allReadings]);
+  }, [allReadings, consumers]);
 
   const visibleResidents = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -87,39 +112,40 @@ export default function AdminReadingsPage() {
   }, [purok, query, residentRows]);
 
   const monthOptions = useMemo(() => [...new Set(
-    allReadings
+    [currentMonthKey(), ...allReadings
       .map((reading) => String(reading.readingDate ?? "").slice(0, 7))
-      .filter((value) => /^\d{4}-\d{2}$/.test(value)),
+      .filter((value) => /^\d{4}-\d{2}$/.test(value))],
   )].sort((left, right) => right.localeCompare(left)), [allReadings]);
   const activeMonth = monthOptions.includes(month)
     ? month
-    : monthOptions[0] ?? "";
+    : currentMonthKey();
 
   const displayedRows = visibleResidents
     .map((resident) => ({
       ...resident,
+      readingMonth: activeMonth,
       reading: !activeMonth
         ? null
         : resident.readings.find((item) => String(item.readingDate ?? "").startsWith(activeMonth)) ?? null,
     }))
-    .filter((row) => row.reading)
     .sort((first, second) =>
       String(first.purok ?? "").localeCompare(String(second.purok ?? "")) ||
       String(first.consumerName ?? "").localeCompare(String(second.consumerName ?? "")),
     );
 
-  const total = displayedRows.reduce((sum, row) => sum + Number(row.reading.consumption || 0), 0);
-  const average = displayedRows.length ? total / displayedRows.length : 0;
-  const highest = displayedRows.reduce((maximum, row) => Math.max(maximum, Number(row.reading.consumption || 0)), 0);
+  const recordedRows = displayedRows.filter((row) => row.reading);
+  const total = recordedRows.reduce((sum, row) => sum + Number(row.reading.consumption || 0), 0);
+  const average = recordedRows.length ? total / recordedRows.length : 0;
+  const highest = recordedRows.reduce((maximum, row) => Math.max(maximum, Number(row.reading.consumption || 0)), 0);
 
   return (
     <main className="min-w-0 space-y-6">
-      <PageHeader description="Review meter movements and recorded water use across every purok." title="Consumption Readings" />
+      <PageHeader description={`Review all residents' meter readings for ${formatMonthLabel(activeMonth)}.`} title="Consumption Readings" />
 
       <section aria-label="Reading summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <KPI compact description="Current Filters" icon={Users} title="Visible Accounts" value={displayedRows.length} />
-        <KPI compact description="Visible Records" icon={Droplets} title="Total Consumption" unit="m³" value={total.toLocaleString()} />
-        <KPI compact description="This Reading" icon={Gauge} title="Average Usage" unit="m³" value={average.toFixed(1)} />
+        <KPI compact description={formatMonthLabel(activeMonth)} icon={Droplets} title="Total Consumption" unit="m³" value={total.toLocaleString()} />
+        <KPI compact description={`${recordedRows.length} recorded`} icon={Gauge} title="Average Usage" unit="m³" value={average.toFixed(1)} />
         <KPI compact description="Top Record" icon={Gauge} title="Highest Usage" unit="m³" value={highest.toLocaleString()} />
       </section>
 
@@ -141,15 +167,16 @@ export default function AdminReadingsPage() {
           ariaLabel="Meter readings"
           columns={[
             { key: "resident", label: "Name" },
+            { key: "readingMonth", label: "Reading Month" },
             { key: "previous", label: "Previous Reading", className: "text-center" },
             { key: "current", label: "Present Reading", className: "text-center" },
             { key: "usage", label: "Cubic Used", className: "text-center" },
             { key: "action", label: "Action", className: "text-right" },
           ]}
           data={displayedRows}
-          emptyDescription="Adjust the search, purok, or month filters to see other records."
-          emptyTitle="No meter readings found"
-          getRowKey={(row) => row.reading.id}
+          emptyDescription="No residents match the current search or purok filter."
+          emptyTitle="No residents found"
+          getRowKey={(row) => row.id}
           renderRow={(row) => (
             <>
               <td className="md:px-4 md:py-4">
@@ -160,20 +187,24 @@ export default function AdminReadingsPage() {
                   {row.purok}
                 </span>
               </td>
-              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-center">
-                {row.reading.previousReading} m³
+              <td className="md:px-4 md:py-4 md:text-center">
+                <span className="block font-semibold text-slate-700">{formatMonthLabel(row.readingMonth)}</span>
+                {!row.reading && <span className="mt-0.5 block text-xs text-slate-500">No reading yet</span>}
               </td>
               <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-center">
-                {row.reading.currentReading} m³
+                {row.reading ? `${row.reading.previousReading} m³` : "—"}
+              </td>
+              <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-center">
+                {row.reading ? `${row.reading.currentReading} m³` : "—"}
               </td>
               <td className="font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-center">
-                <span className="block">{row.reading.consumption} m³</span>
-                {row.reading.readingSource === "incident" && (
+                <span className="block">{row.reading ? `${row.reading.consumption} m³` : "—"}</span>
+                {row.reading?.readingSource === "incident" && (
                   <span className="mt-1 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-200">
                     includes {row.reading.carriedConsumption} m³ carried
                   </span>
                 )}
-                {row.reading.readingSource === "estimated" && (
+                {row.reading?.readingSource === "estimated" && (
                   <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
                     estimated
                   </span>
