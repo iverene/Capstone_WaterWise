@@ -1882,6 +1882,9 @@ ALTER TABLE consumption
 -- 5. Incident-aware billing function
 -- ---------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC, TEXT);
+DROP FUNCTION IF EXISTS record_consumption_and_billing(
+  INTEGER, NUMERIC, NUMERIC, TEXT, DATE, TEXT, NUMERIC, JSONB
+);
 
 CREATE OR REPLACE FUNCTION record_consumption_and_billing(
     p_consumer_id INTEGER,

@@ -1,5 +1,11 @@
 ﻿-- Incremental update for opt-in average carry during a meter replacement.
 -- Replaces only record_consumption_and_billing; it does not rerun schema setup.
+-- Remove the obsolete overload that accepts p_reading_date; the API does not
+-- send that argument, so PostgREST cannot choose between both signatures.
+DROP FUNCTION IF EXISTS public.record_consumption_and_billing(
+    INTEGER, NUMERIC, NUMERIC, TEXT, DATE, TEXT, NUMERIC, JSONB
+);
+
 CREATE OR REPLACE FUNCTION record_consumption_and_billing(
     p_consumer_id INTEGER,
     p_present_reading NUMERIC,
@@ -342,3 +348,5 @@ REVOKE ALL ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC,
 REVOKE ALL ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, JSONB) FROM anon;
 REVOKE ALL ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, JSONB) FROM authenticated;
 GRANT EXECUTE ON FUNCTION record_consumption_and_billing(INTEGER, NUMERIC, NUMERIC, TEXT, TEXT, NUMERIC, JSONB) TO service_role;
+
+NOTIFY pgrst, 'reload schema';

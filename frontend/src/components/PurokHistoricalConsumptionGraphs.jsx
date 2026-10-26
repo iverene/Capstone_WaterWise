@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CalendarDays, TrendingDown, TrendingUp } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchAllPuroksMonthlyHistory, fetchAllPuroksYearlyHistory } from "../services/consumptionAPI";
-import { fillYearlyBuckets, manilaCalendar, parseYearMonth, rangeMonthBuckets } from "../utils/chartPeriod";
+import { fillYearlyBuckets, manilaCalendar, monthBuckets, parseYearMonth } from "../utils/chartPeriod";
 import ChartTooltip from "./ChartTooltip";
 import Filter from "./Filter";
 import LoadingSkeleton from "./LoadingSkeleton";
@@ -12,8 +12,8 @@ const COLORS = Array(6).fill("#0284C7");
 const unwrap = (response) => response?.data?.data ?? response?.data ?? response ?? [];
 
 // Bucket raw history into calendar periods so months/years with no readings
-// render at zero instead of vanishing and faking the trend. Monthly spans the
-// full recorded range; yearly spans first record through the current year.
+// render at zero instead of vanishing and faking the trend. Monthly shows Jan
+// through the current month for this year (up to 12), and all of a past year.
 function normalize(response, mode, selectedYear) {
   const records = unwrap(response);
   if (!Array.isArray(records)) return [];
@@ -22,10 +22,8 @@ function normalize(response, mode, selectedYear) {
     const items = Array.isArray(record?.historical) ? record.historical : [];
     let historical;
     if (mode === "monthly") {
-      // Monthly items carry no year of their own; anchor them to the
-      // backend-resolved target year for this purok. Without a year filter
-      // the range extends to the current month so trailing dead air reads
-      // honestly instead of ending mid-history.
+      // Monthly items carry no year of their own; anchor them to the selected
+      // or backend-resolved year. Stop the current year at the current month.
       const anchorYear = Number(record?.latestYear ?? (selectedYear ? Number(selectedYear) : NaN)) || manilaCalendar().year;
       const parsed = items
         .map((item) => {
@@ -35,23 +33,18 @@ function normalize(response, mode, selectedYear) {
           return { ...position, consumption: Number.isFinite(amount) ? amount : 0 };
         })
         .filter(Boolean);
-      if (!selectedYear) {
-        const current = manilaCalendar();
-        parsed.push({ consumption: 0, monthIndex: current.monthIndex, year: current.year });
-      }
-      // Elapsed months only: future months are cut off, never zero-filled.
-      const { year: currentYear, monthIndex: currentMonthIndex } = manilaCalendar();
-      const currentKey = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}`;
-      const buckets = rangeMonthBuckets(parsed).filter((bucket) => bucket.key <= currentKey);
+      const allYearBuckets = monthBuckets({ year: anchorYear });
+      const current = manilaCalendar();
+      const buckets = anchorYear === current.year
+        ? allYearBuckets.slice(0, current.monthIndex + 1)
+        : allYearBuckets;
       const totals = new Map(buckets.map((bucket) => [bucket.key, 0]));
       for (const entry of parsed) {
+        if (entry.year !== anchorYear) continue;
         const key = `${entry.year}-${String(entry.monthIndex + 1).padStart(2, "0")}`;
         if (totals.has(key)) totals.set(key, totals.get(key) + entry.consumption);
       }
-      // A purok with no records at all keeps the empty state, not a flat line.
-      historical = parsed.length > 0
-        ? buckets.map((bucket) => ({ consumption: totals.get(bucket.key), period: bucket.label }))
-        : [];
+      historical = buckets.map((bucket) => ({ consumption: totals.get(bucket.key), period: bucket.label }));
     } else {
       const entries = items
         .map((item) => {
@@ -178,6 +171,14 @@ export default function PurokHistoricalConsumptionGraphs() {
 
   const displayedPuroks = useMemo(() => {
     const source = period === "monthly" ? monthly : yearly;
+    const current = manilaCalendar();
+    const zeroMonths = monthly.length > 0
+      ? monthly[0].historical.map(({ period }) => ({ consumption: 0, period }))
+      : monthBuckets({ year: Number(selectedYear) || manilaCalendar().year })
+        .filter((bucket) => {
+          return bucket.year < current.year || (bucket.year === current.year && bucket.monthIndex <= current.monthIndex);
+        })
+        .map((bucket) => ({ consumption: 0, period: bucket.label }));
     const purokNumber = (value) => {
       const match = String(value ?? "").match(/\d+/);
       return match ? Number(match[0]) : null;
@@ -190,8 +191,11 @@ export default function PurokHistoricalConsumptionGraphs() {
         return want !== null && have !== null && have === want;
       }) ?? null;
     };
-    return PUROKS.map((purok) => ({ historical: findRecord(purok)?.historical ?? [], purok }));
-  }, [monthly, period, yearly]);
+    return PUROKS.map((purok) => ({
+      historical: findRecord(purok)?.historical ?? (period === "monthly" && monthly.length > 0 ? zeroMonths : []),
+      purok,
+    }));
+  }, [monthly, period, selectedYear, yearly]);
 
   return (
     <section aria-label="Consumption per purok" className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
