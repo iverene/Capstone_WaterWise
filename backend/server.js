@@ -23,7 +23,6 @@ import { publishDataChange } from "./services/changeEventService.js";
 import { startDeviceSessionPruneScheduler } from "./services/deviceSessionPruneService.js";
 import { startNotificationReminderScheduler } from "./services/notificationServices.js";
 import { startPushNotificationWorker } from "./services/pushNotificationService.js";
-import { startMeterIncidentExpiryScheduler } from "./services/meterIncidentExpiryService.js";
 
 const app = express();
 
@@ -199,7 +198,6 @@ app.listen(PORT, () => {
   startNotificationReminderScheduler();
   startDeviceSessionPruneScheduler();
   startPushNotificationWorker();
-  startMeterIncidentExpiryScheduler();
 });
 
 export default app;

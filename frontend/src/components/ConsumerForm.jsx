@@ -70,7 +70,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
   const defaultPassword = requirePassword && !initialData ? DEFAULT_RESIDENT_PASSWORD : "";
   const isNewResident = requirePassword && !initialData;
   const [password, setPassword] = useState(defaultPassword);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(true);
   const [errors, setErrors] = useState({});
 
   // Reports whether the form differs from its opening values so the parent
@@ -340,7 +340,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
 
         {(requirePassword || allowPasswordChange) && (
           <div>
-            <label className={labelClass} htmlFor="resident-password">{allowPasswordChange ? "New password" : "Password"}{registrationDesign && <span className="text-red-500"> *</span>}{allowPasswordChange && <span className="font-normal text-slate-500"> (optional)</span>}</label>
+            <label className={labelClass} htmlFor="resident-password">{allowPasswordChange ? "New password" : "Password (default)"}{registrationDesign && <span className="text-red-500"> *</span>}{allowPasswordChange && <span className="font-normal text-slate-500"> (optional)</span>}</label>
             <div className="relative mt-2">
               {registrationDesign && <LockKeyhole aria-hidden="true" className="resident-input-icon" />}
               <input
@@ -369,8 +369,8 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
             </div>
             <p className="mt-1.5 text-xs leading-5 text-slate-500" id="password-helper">
               {allowPasswordChange
-                ? "Changing the password requires verification through your administrator email OTP."
-                : "Pre-filled with the office default password. The resident can change it during first sign-in. Use 8 or more characters with uppercase, lowercase, a number, and a symbol."}
+                ? "Changing the password requires administrator verification."
+                : "Use 8 or more characters with uppercase, lowercase, a number, and a symbol."}
             </p>
             {isNewResident && password !== DEFAULT_RESIDENT_PASSWORD && (
               <button
@@ -418,7 +418,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
           </div>
         )}
 
-        {registrationDesign && <div className="resident-security"><span><ShieldCheck aria-hidden="true" size={24} /></span><div><p className="font-bold text-navy-900">Account Security</p><p>The resident will use this username and password to sign in, and will be asked to set their own password on first sign-in.</p></div></div>}
+        {registrationDesign && <div className="resident-security"><span><ShieldCheck aria-hidden="true" size={24} /></span><div><p className="font-bold text-navy-900">Account Security</p><p>The resident can change their password after signing in.</p></div></div>}
         <div className={`resident-form-actions flex flex-row items-start gap-2 ${registrationDesign ? "sm:col-span-3" : "sm:col-span-2"}`}>
           {onCancel && (
             <button className="min-h-12 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-navy-900 transition-colors hover:bg-slate-50" onClick={onCancel} type="button">

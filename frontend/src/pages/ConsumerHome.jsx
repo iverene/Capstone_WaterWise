@@ -129,29 +129,29 @@ export default function ConsumerHome() {
       {pageHeader}
 
       {showPaymentBanner && (
-        <section className="relative rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5" aria-labelledby="payment-required-heading">
-          <button aria-label="Dismiss payment reminder" className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 sm:right-4 sm:top-4" onClick={dismissPaymentBanner} type="button">
-            <X aria-hidden="true" className="h-4 w-4" />
+        <section className="relative rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4" aria-labelledby="payment-required-heading">
+          <button aria-label="Dismiss payment reminder" className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg text-amber-800 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 sm:right-3 sm:top-3" onClick={dismissPaymentBanner} type="button">
+            <X aria-hidden="true" className="h-3.5 w-3.5" />
           </button>
-          <div className="flex flex-col gap-4 pr-10 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
-                <ReceiptText aria-hidden="true" className="h-5 w-5" />
+          <div className="flex flex-col gap-3 pr-9 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 items-start gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+                <ReceiptText aria-hidden="true" className="h-4 w-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-amber-800">Important now</p>
-                <h2 className="mt-1 font-extrabold text-navy-900" id="payment-required-heading">Payment required</h2>
-                <p className="mt-1 text-sm leading-6 text-slate-600">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-800">Important now</p>
+                <h2 className="mt-1 text-sm font-extrabold text-navy-900" id="payment-required-heading">Payment required</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-600">
                   <strong className="font-extrabold text-amber-800">{currency(home.billing.outstandingBalance)}</strong> remains due
                   {home.billing.nextDueDate ? <> by <strong className="font-bold text-navy-900">{displayDate(home.billing.nextDueDate)}</strong></> : ""}.
                 </p>
               </div>
             </div>
             <Link
-              className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-navy-950 px-5 text-sm font-bold text-white hover:bg-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-900 focus-visible:ring-offset-2 sm:w-auto"
+              className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-navy-950 px-4 text-xs font-bold text-white hover:bg-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-900 focus-visible:ring-offset-2 sm:w-auto"
               to={home.billing.nextBillingId ? `/consumer/billing-ledger?billingId=${home.billing.nextBillingId}` : "/consumer/billing-ledger"}
             >
-              View bill <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              View bill <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
             </Link>
           </div>
         </section>

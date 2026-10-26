@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search as SearchIcon, X } from "lucide-react";
 import ConsumerSelectionList from "../components/ConsumerSelectionList";
 import ConsumptionEntryPanel from "../components/ConsumptionEntryPanel";
+import DiscardChangesDialog from "../components/DiscardChangesDialog";
 import Dropdown from "../components/Dropdown";
 import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
@@ -71,6 +72,8 @@ export default function RecordConsumptionPage() {
   const [loading, setLoading] = useState(true);
   const [selectingId, setSelectingId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [isEntryDirty, setIsEntryDirty] = useState(false);
+  const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [receiptData, setReceiptData] = useState(null);
@@ -211,6 +214,8 @@ export default function RecordConsumptionPage() {
   ], []);
 
   const selectConsumer = async (consumer) => {
+    setIsEntryDirty(false);
+    setIsDiscardConfirmOpen(false);
     if (!navigator.onLine) {
       if (consumer.canRecord) setSelectedConsumer(consumer);
       return;
@@ -262,6 +267,7 @@ export default function RecordConsumptionPage() {
         await queueMeterReading(payload);
         setPendingCount((count) => count + 1);
         setConsumers((current) => current.map((consumer) => consumer.id === payload.consumerId ? { ...consumer, canRecord: false, hasPendingReading: true, recordingBlockReason: "Reading saved on this device and waiting to sync." } : consumer));
+        setIsEntryDirty(false);
         setSelectedConsumer(null);
         toast.success("Reading saved offline", `${payload.consumerName}'s reading will upload automatically when the device reconnects.`);
         return { queued: true };
@@ -276,6 +282,7 @@ export default function RecordConsumptionPage() {
         latestConsumption: result.consumption,
         hasReadingInSelectedMonth: true,
       } : consumer));
+      setIsEntryDirty(false);
       setSelectedConsumer(null);
       setReceiptData(null);
       setReceiptResidentName(payload.consumerName);
@@ -311,8 +318,25 @@ export default function RecordConsumptionPage() {
 
   const closeEntry = () => {
     if (saving) return;
+    setIsEntryDirty(false);
+    setIsDiscardConfirmOpen(false);
     setSelectedConsumer(null);
     setSaveError("");
+  };
+
+  const requestCloseEntry = () => {
+    if (saving) return;
+    if (isEntryDirty) {
+      setIsDiscardConfirmOpen(true);
+      return;
+    }
+    closeEntry();
+  };
+
+  const discardEntry = () => {
+    setIsEntryDirty(false);
+    setIsDiscardConfirmOpen(false);
+    closeEntry();
   };
 
   return (
@@ -335,8 +359,8 @@ export default function RecordConsumptionPage() {
           </>
         ) : (
           <>
-            <Dropdown ariaLabel="Filter residents by purok" className="min-w-0 flex-1" disabled={loading} name="residentPurokMobile" onValueChange={setPurok} options={purokOptions} value={purok} />
-            <Dropdown ariaLabel="Filter residents by recording status" className="min-w-0 flex-1" disabled={loading} name="residentRecordingStatusMobile" onValueChange={setRecordStatus} options={recordStatusOptions} value={recordStatus} />
+            <Dropdown ariaLabel="Filter residents by purok" className="min-w-0 flex-1" compact disabled={loading} name="residentPurokMobile" onValueChange={setPurok} options={purokOptions} value={purok} />
+            <Dropdown ariaLabel="Filter residents by recording status" className="min-w-0 flex-1" compact disabled={loading} name="residentRecordingStatusMobile" onValueChange={setRecordStatus} options={recordStatusOptions} value={recordStatus} />
             <button aria-label={query ? `Search residents, current search: ${query}` : "Search residents"} className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600" onClick={() => setMobileSearchOpen(true)} type="button">
               <SearchIcon aria-hidden="true" className="h-5 w-5" />
               {query && <span aria-hidden="true" className="absolute right-2 top-2 h-2 w-2 rounded-full bg-water-600" />}
@@ -380,10 +404,16 @@ export default function RecordConsumptionPage() {
       </div>
       {loading ? <LoadingSkeleton label="Loading residents and reading status" variant="list" /> : <ConsumerSelectionList consumers={visibleConsumers} emptyDescription={consumers.length ? "Try a different search, purok, or recording status." : undefined} emptyTitle={consumers.length ? "No matching residents" : undefined} onSelect={selectConsumer} selectedId={selectedConsumer?.id} selectingId={selectingId} />}
 
-      <Modal closeLabel="Close meter reading form" description={selectedConsumer ? `${selectedConsumer.consumerName} · ${selectedConsumer.purok}` : undefined} dismissible={!saving} eyebrow="Field operations" isOpen={Boolean(selectedConsumer)} onClose={closeEntry} showCloseButton={false} size="md" title="Record Meter Reading">
+      <Modal ariaLabel="Record meter reading form" closeLabel="Close meter reading form" closeOnOverlay={false} dismissible={!saving} isOpen={Boolean(selectedConsumer)} onClose={requestCloseEntry} showCloseButton={false} showHeader={false} size="md">
         {saveError && <div className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mx-6" role="alert">{saveError}</div>}
-        <ConsumptionEntryPanel consumer={selectedConsumer} key={`${selectedConsumer?.id}-${selectedConsumer?.latestReadingId ?? "new"}`} onCancel={closeEntry} onSave={saveReading} rates={rates} saving={saving} />
+        <ConsumptionEntryPanel consumer={selectedConsumer} key={`${selectedConsumer?.id}-${selectedConsumer?.latestReadingId ?? "new"}`} onCancel={requestCloseEntry} onDirtyChange={setIsEntryDirty} onSave={saveReading} rates={rates} saving={saving} />
       </Modal>
+      <DiscardChangesDialog
+        description="Are you sure you want to discard this meter reading?"
+        isOpen={isDiscardConfirmOpen}
+        onDiscard={discardEntry}
+        onKeepEditing={() => setIsDiscardConfirmOpen(false)}
+      />
       <ConsumptionReceiptModal
         isOpen={receiptLoading || Boolean(receiptData)}
         loading={receiptLoading}

@@ -8,6 +8,9 @@ const formatCountdown = (totalSeconds) => `${Math.floor(totalSeconds / 60)}:${St
  * kept in memory only and cleared on close or success. */
 export default function StaffPasswordConfirmModal({
   actionLabel,
+  accountLabel = "Super Admin",
+  title = "Confirm Staff Action",
+  description: descriptionOverride,
   error,
   isOpen,
   isVerifying,
@@ -23,24 +26,24 @@ export default function StaffPasswordConfirmModal({
 }) {
   return (
     <Modal
-      closeLabel="Cancel staff action confirmation"
+      closeLabel={`Cancel ${title.toLowerCase()} confirmation`}
       closeOnOverlay={false}
-      description={`Enter your Super Admin password to authorize: ${actionLabel}. This approval is single-use and expires in 5 minutes.`}
+      description={descriptionOverride ?? `Enter your ${accountLabel} password to authorize: ${actionLabel}. This approval is single-use and expires in 5 minutes.`}
       dismissible={false}
-      eyebrow="Super Admin verification"
+      eyebrow={`${accountLabel} verification`}
       isOpen={isOpen}
       onClose={onClose}
       showCloseButton={false}
       size="sm"
-      title="Confirm Staff Action"
+      title={title}
     >
       <form className="grid gap-4 p-5 sm:p-6" onSubmit={onSubmit}>
         <div className="rounded-xl border border-water-200 bg-water-50 p-4 text-sm leading-6 text-water-900">
           <ShieldCheck aria-hidden="true" className="mr-2 inline h-5 w-5" />
-          For extra security, this action requires your Super Admin password. It will not be stored anywhere.
+          For extra security, this action requires your {accountLabel} password. It will not be stored anywhere.
         </div>
         <div>
-          <label className="text-sm font-semibold" htmlFor="staff-confirm-username">Super Admin username</label>
+          <label className="text-sm font-semibold" htmlFor="staff-confirm-username">{accountLabel} username</label>
           <input
             autoComplete="username"
             className="ww-field mt-2 bg-slate-50 px-4 py-3"
@@ -60,7 +63,7 @@ export default function StaffPasswordConfirmModal({
               disabled={isVerifying || lockSeconds > 0}
               id="staff-confirm-password"
               onChange={(event) => onPasswordChange(event.target.value)}
-              placeholder="Enter your Super Admin password"
+              placeholder={`Enter your ${accountLabel} password`}
               type={showPassword ? "text" : "password"}
               value={password}
             />

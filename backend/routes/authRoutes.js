@@ -1,5 +1,5 @@
 import express from "express";
-import { changeAuthenticatedPassword, completeConsumerEmailChange, currentAccount, forgotPassword, getAdminTrustedDevices, getSessionConfig, login, logout, postSessionActivity, refreshSession, removeAdminTrustedDevice, removeOtherAdminTrustedDevices, requestAuthenticatedPasswordOtp, requestConsumerEmailChangeOtp, requestConsumerPasswordChangeOtp, requestStaffActionOtp, resendAdminLoginOtp, resetPassword, verifyAdminLoginOtp, verifyConsumerEmailChangeOtp, verifyConsumerPasswordChangeOtp, verifyPasswordResetOtp, verifyStaffActionOtp, verifyStaffActionPassword } from "../controllers/authControllers.js";
+import { changeAuthenticatedPassword, completeConsumerEmailChange, currentAccount, forgotPassword, getAdminTrustedDevices, getSessionConfig, login, logout, postSessionActivity, refreshSession, removeAdminTrustedDevice, removeOtherAdminTrustedDevices, requestAuthenticatedPasswordOtp, requestConsumerEmailChangeOtp, requestConsumerPasswordChangeOtp, requestStaffActionOtp, resendAdminLoginOtp, resetPassword, verifyAdminLoginOtp, verifyConsumerEmailChangeOtp, verifyConsumerPasswordChangeOtp, verifyConsumerPasswordChangePassword, verifyPasswordResetOtp, verifyStaffActionOtp, verifyStaffActionPassword } from "../controllers/authControllers.js";
 import { authenticate } from "../middleware/authMiddleware.js";
 import { authStrictLimiter } from "../middleware/rateLimit.js";
 
@@ -14,6 +14,7 @@ router.delete("/admin/trusted-devices/others", authenticate, removeOtherAdminTru
 router.delete("/admin/trusted-devices/:deviceId", authenticate, removeAdminTrustedDevice);
 router.post("/admin/consumer-password/otp", authenticate, requestConsumerPasswordChangeOtp);
 router.post("/admin/consumer-password/verify", authenticate, verifyConsumerPasswordChangeOtp);
+router.post("/admin/consumer-password/verify-password", authStrictLimiter, authenticate, verifyConsumerPasswordChangePassword);
 router.post("/admin/staff-action/otp", authenticate, requestStaffActionOtp);
 router.post("/admin/staff-action/verify", authenticate, verifyStaffActionOtp);
 router.post("/admin/staff-action/verify-password", authenticate, verifyStaffActionPassword);

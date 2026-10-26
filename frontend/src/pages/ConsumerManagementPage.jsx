@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { FiCheckCircle, FiPlus, FiUsers } from "react-icons/fi";
+import { FiAlertCircle, FiCheckCircle, FiMapPin, FiPlus, FiUsers } from "react-icons/fi";
 import ResidentRegistrationIntro from "../components/ResidentRegistrationIntro";
 import { UserRound } from "lucide-react";
 import "../components/ResidentRegistration.css";
 import ConsumerForm from "../components/ConsumerForm";
 import ConsumerListTable from "../components/ConsumerListTable";
+import DiscardChangesDialog from "../components/DiscardChangesDialog";
+import StaffPasswordConfirmModal from "../components/StaffPasswordConfirmModal";
 import Filter from "../components/Filter";
 import KPI from "../components/KPI";
 import Modal from "../components/Modal";
@@ -12,7 +14,8 @@ import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
-import { createConsumer, fetchConsumerDirectory, requestConsumerPasswordOtp, updateConsumer, verifyConsumerPasswordOtp } from "../services/consumerDirectoryAPI";
+import { createConsumer, fetchConsumerDirectory, requestConsumerPasswordOtp, updateConsumer, verifyConsumerPasswordOtp, verifyConsumerPasswordWithAdminPassword } from "../services/consumerDirectoryAPI";
+import { getStoredAccount } from "../services/authToken";
 import { clearOtpChallenge, loadOtpChallenge, saveOtpChallenge } from "../utils/otpChallenge";
 
 function toManagementConsumer(consumer) {
@@ -77,6 +80,10 @@ function ConsumerManagementPage() {
   const [passwordOtpSuccess, setPasswordOtpSuccess] = useState(false);
   const [passwordOtpError, setPasswordOtpError] = useState("");
   const [isPasswordVerifying, setIsPasswordVerifying] = useState(false);
+  const [isAdminPasswordPromptOpen, setIsAdminPasswordPromptOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [adminPasswordError, setAdminPasswordError] = useState("");
   const [resendSeconds, setResendSeconds] = useState(() =>
     restoredChallenge
       ? Math.max(0, Math.ceil((Number(restoredChallenge.expiresAt ?? 0) - Date.now()) / 1000))
@@ -169,6 +176,19 @@ function ConsumerManagementPage() {
 
   const editConsumer = async (consumer) => {
     if (!consumer.password) return saveConsumerUpdate(consumer);
+    setPendingConsumerUpdate(consumer);
+    setAdminPassword("");
+    setAdminPasswordError("");
+    setIsAdminPasswordPromptOpen(true);
+    return false;
+  };
+
+  const beginEmailOtpAuthorization = async () => {
+    setIsAdminPasswordPromptOpen(false);
+    setAdminPassword("");
+    setAdminPasswordError("");
+    const consumer = pendingConsumerUpdate;
+    if (!consumer) return false;
     const scope = OTP_SCOPE;
 
     // Reuse the code that was already sent for this resident. The backend
@@ -178,7 +198,6 @@ function ConsumerManagementPage() {
     // and the app remounts its route tree whenever data changes.
     const saved = loadOtpChallenge(scope);
     if (saved && String(saved.consumerId) === String(selectedConsumer.id)) {
-      setPendingConsumerUpdate(consumer);
       setPasswordChallenge(saved);
       setIsPasswordOtpOpen(true);
       setPasswordOtp("");
@@ -197,7 +216,6 @@ function ConsumerManagementPage() {
         expiresAt: Date.now() + Number(result.cooldownSeconds ?? 300) * 1000,
       };
       saveOtpChallenge(scope, challenge);
-      setPendingConsumerUpdate(consumer);
       setPasswordChallenge(challenge);
       setIsPasswordOtpOpen(true);
       setPasswordOtp("");
@@ -208,6 +226,25 @@ function ConsumerManagementPage() {
       toast.error("Verification unavailable", message);
     } finally { setIsPasswordVerifying(false); }
     return false;
+  };
+
+  const confirmWithAdminPassword = async (event) => {
+    event.preventDefault();
+    if (!selectedConsumer?.id || !pendingConsumerUpdate || !adminPassword) return;
+    setIsPasswordVerifying(true);
+    setAdminPasswordError("");
+    try {
+      const result = await verifyConsumerPasswordWithAdminPassword(selectedConsumer.id, adminPassword);
+      setIsAdminPasswordPromptOpen(false);
+      setAdminPassword("");
+      setPendingConsumerUpdate(null);
+      await saveConsumerUpdate(pendingConsumerUpdate, result.authorizationToken);
+    } catch (requestError) {
+      setAdminPasswordError(getConsumerRequestError(requestError, "Unable to verify the administrator password."));
+      setAdminPassword("");
+    } finally {
+      setIsPasswordVerifying(false);
+    }
   };
 
   const resendPasswordOtp = async () => {
@@ -283,6 +320,10 @@ function ConsumerManagementPage() {
     ];
   }, [consumers]);
 
+  const activeCount = consumers.filter((item) => item.status?.toLowerCase() === "active").length;
+  const inactiveCount = consumers.length - activeCount;
+  const unassignedCount = consumers.filter((item) => item.purok === "Unassigned").length;
+
   const selectConsumer = (consumer) => {
     setSelectedConsumer(consumer);
     setFormMode("edit");
@@ -300,6 +341,9 @@ function ConsumerManagementPage() {
     setPendingConsumerUpdate(null);
     setPasswordOtp("");
     setPasswordOtpError("");
+    setIsAdminPasswordPromptOpen(false);
+    setAdminPassword("");
+    setAdminPasswordError("");
   };
 
   // Guards accidental closes of the resident form: Cancel, Escape, and
@@ -325,12 +369,14 @@ function ConsumerManagementPage() {
   };
 
   return (
-    <main className="space-y-6">
-      <PageHeader description="Register community accounts, review service locations, and monitor billing readiness from one workspace." title="Resident Management" />
+    <main className="min-w-0 space-y-5 sm:space-y-6">
+      <PageHeader description="Manage resident accounts, service locations, and account status." title="Residents" />
 
-      <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3">
-        <KPI compact description="Community" icon={FiUsers} title="Total Residents" value={consumers.length} />
-        <KPI compact description="Service-Ready" icon={FiCheckCircle} title="Active Accounts" value={consumers.filter((item) => item.status?.toLowerCase() === "active").length} />
+      <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+        <KPI compact description="Community accounts" icon={FiUsers} title="Total Residents" value={consumers.length} />
+        <KPI compact descriptionHighlight="Service-ready" descriptionTone="positive" icon={FiCheckCircle} title="Active Accounts" value={activeCount} />
+        <KPI compact description={inactiveCount ? "Needs review" : "All active"} descriptionHighlight={`${inactiveCount} inactive`} descriptionIcon={inactiveCount ? FiAlertCircle : FiCheckCircle} descriptionTone={inactiveCount ? "warning" : "positive"} icon={FiAlertCircle} title="Inactive Accounts" value={inactiveCount} />
+        <KPI compact description="Service location" descriptionHighlight={`${unassignedCount} unassigned`} descriptionIcon={FiMapPin} descriptionTone={unassignedCount ? "warning" : "positive"} icon={FiMapPin} title="Unassigned Purok" value={unassignedCount} />
       </section>
 
       <Modal
@@ -375,31 +421,28 @@ function ConsumerManagementPage() {
         </div>
       </Modal>
 
-      <Modal
-        description="Your unsaved changes will be lost if you discard them."
-        eyebrow="Unsaved changes"
+      <DiscardChangesDialog
         isOpen={isDiscardConfirmOpen}
-        onClose={() => setIsDiscardConfirmOpen(false)}
-        size="sm"
-        title="Discard changes?"
-      >
-        <div className="flex flex-col gap-2 p-5 sm:flex-row sm:justify-end sm:p-6">
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600 sm:order-2"
-            onClick={discardForm}
-            type="button"
-          >
-            Discard changes
-          </button>
-          <button
-            className="ww-primary-button inline-flex min-h-11 items-center justify-center px-5 text-sm sm:order-1"
-            onClick={() => setIsDiscardConfirmOpen(false)}
-            type="button"
-          >
-            Keep editing
-          </button>
-        </div>
-      </Modal>
+        onDiscard={discardForm}
+        onKeepEditing={() => setIsDiscardConfirmOpen(false)}
+      />
+
+      <StaffPasswordConfirmModal
+        accountLabel="Administrator"
+        actionLabel={`change ${selectedConsumer?.fullName ?? "this resident"}'s password`}
+        error={adminPasswordError}
+        isOpen={isAdminPasswordPromptOpen}
+        isVerifying={isPasswordVerifying}
+        onClose={() => { setIsAdminPasswordPromptOpen(false); setAdminPassword(""); setAdminPasswordError(""); }}
+        onPasswordChange={(value) => { setAdminPassword(value); setAdminPasswordError(""); }}
+        onSubmit={confirmWithAdminPassword}
+        onToggleShowPassword={() => setShowAdminPassword((visible) => !visible)}
+        onUseEmailOtp={beginEmailOtpAuthorization}
+        password={adminPassword}
+        showPassword={showAdminPassword}
+        title="Confirm Resident Password Change"
+        username={getStoredAccount()?.username ?? ""}
+      />
 
       <Modal
         closeOnOverlay={false}
@@ -438,13 +481,13 @@ function ConsumerManagementPage() {
 
       <div
         aria-label="Resident table controls"
-        className="flex flex-col gap-3 sm:flex-row sm:items-center"
+        className="flex flex-col gap-3 md:flex-row md:items-center"
         role="search"
       >
         <Search ariaLabel="Search residents by username or name" className="flex-1" onValueChange={setQuery} placeholder="Search username or name" value={query} />
-        <Filter ariaLabel="Filter residents by purok" className="w-full sm:w-48" onValueChange={setPurok} options={purokOptions} value={purok} />
+        <Filter ariaLabel="Filter residents by purok" className="w-full md:w-44" onValueChange={setPurok} options={purokOptions} value={purok} />
         <button
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 sm:shrink-0"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 text-sm font-bold text-white shadow-card transition-colors hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 md:shrink-0"
           onClick={openAddResident}
           type="button"
         >

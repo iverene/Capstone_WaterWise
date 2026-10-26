@@ -1,13 +1,10 @@
 import express from "express";
 import {
-  approveIncident,
   listConsumerIncidents,
   listIncidents,
   logIncident,
-  rejectIncident,
   showAveragePreview,
   showIncident,
-  showPaymentHold,
   updateIncident,
 } from "../controllers/meterIncidentControllers.js";
 import { authenticate, authorizeOwnerOrRoles, authorizeRoles } from "../middleware/authMiddleware.js";
@@ -16,20 +13,20 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get("/", authorizeRoles("admin"), listIncidents);
+// The reader's Record Meter Replacement page needs the open incident list to
+// build its "Meter changed" filter.
+router.get("/", authorizeRoles("admin", "meter-reader"), listIncidents);
 router.get(
   "/consumer/:consumerId",
   authorizeOwnerOrRoles("consumerId", "consumer", "admin", "meter-reader"),
   listConsumerIncidents,
 );
 router.get("/average/:consumerId", authorizeRoles("admin", "meter-reader"), showAveragePreview);
-router.get("/payment-hold/:consumerId", authorizeRoles("admin", "meter-reader"), showPaymentHold);
-// Reporting a meter replacement is a field operation. The reader never has to
-// wait for the monthly reading visit to declare it.
-router.post("/", authorizeRoles("admin", "meter-reader"), logIncident);
-router.patch("/:id", authorizeRoles("admin", "meter-reader"), updateIncident);
-router.patch("/:id/approve", authorizeRoles("admin"), approveIncident);
-router.patch("/:id/reject", authorizeRoles("admin"), rejectIncident);
+// Reporting a meter replacement is a field operation performed by the meter
+// reader. Admins cannot create a replacement, but they can correct a recorded
+// one before a reading consumes it.
+router.post("/", authorizeRoles("meter-reader"), logIncident);
+router.patch("/:id", authorizeRoles("admin"), updateIncident);
 router.get("/:id", authorizeRoles("admin", "meter-reader"), showIncident);
 
 export default router;

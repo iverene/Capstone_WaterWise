@@ -29,6 +29,7 @@ import Reports from "./pages/Reports";
 import ConsumerManagementPage from "./pages/ConsumerManagementPage";
 import AdminReadingsPage from "./pages/AdminReadingsPage";
 import ConsumerBillsPage from "./pages/ConsumerBillsPage";
+import ConsumerPaymentsPage from "./pages/ConsumerPaymentsPage";
 import ConsumerReadingsPage from "./pages/ConsumerReadingsPage";
 import BillingManagementPage from "./pages/BillingManagementPage";
 import EventManagementPage from "./pages/EventManagementPage";
@@ -96,6 +97,7 @@ const roleAccess = {
       "/consumer/profile-details",
       "/consumer/account-information",
       "/consumer/billing-ledger",
+      "/consumer/payments",
       "/consumer/analytics",
       "/consumer/usage-metrics",
     ],
@@ -511,6 +513,16 @@ export function AppRoutes() {
           </RoleRouteGuard>
         }
         path="/consumer/billing-ledger"
+      />
+      <Route
+        element={
+          <RoleRouteGuard requiredRole="consumer">
+            <AppLayout>
+              <ConsumerPaymentsPage />
+            </AppLayout>
+          </RoleRouteGuard>
+        }
+        path="/consumer/payments"
       />
       <Route
         element={

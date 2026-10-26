@@ -23,14 +23,9 @@ function normalizeIncident(incident) {
     newMeterSerial: incident.newMeterSerial ?? "",
     newBaseline: Number(incident.newBaseline ?? 0),
     status: incident.status,
-    reviewStatus: incident.reviewStatus,
     source: incident.source,
     recordedById: incident.recordedById,
     recordedByRole: incident.recordedByRole,
-    approvedById: incident.approvedById ?? null,
-    approvedAt: incident.approvedAt ?? null,
-    rejectedReason: incident.rejectedReason ?? null,
-    expiresAt: incident.expiresAt ?? null,
     notes: incident.notes ?? "",
     createdAt: incident.createdAt,
     updatedAt: incident.updatedAt,
@@ -39,12 +34,11 @@ function normalizeIncident(incident) {
   };
 }
 
-export async function fetchMeterIncidents({ status, reviewStatus, consumerId, limit } = {}, options = {}) {
+export async function fetchMeterIncidents({ status, consumerId, limit } = {}, options = {}) {
   const response = await client.get("", {
     ...options,
     params: {
       ...(status ? { status } : {}),
-      ...(reviewStatus ? { reviewStatus } : {}),
       ...(consumerId ? { consumerId } : {}),
       ...(limit ? { limit } : {}),
     },
@@ -78,7 +72,6 @@ const buildIncidentPayload = (payload) => ({
   oldFinalReading: toOptionalNumber(payload.oldFinalReading),
   priorUsage: toOptionalNumber(payload.priorUsage),
   priorUsageBasis: payload.priorUsageBasis ?? "average",
-  autoAuthorize: payload.autoAuthorize === true,
   newMeterSerial: payload.newMeterSerial || undefined,
   newBaseline: payload.newBaseline === "" || payload.newBaseline == null
     ? 0
@@ -92,22 +85,24 @@ export async function logMeterIncident(payload, options = {}) {
   return normalizeIncident(response.data?.data);
 }
 
-export async function updateMeterIncident(id, payload, options = {}) {
-  const response = await client.patch(`/${id}`, buildIncidentPayload(payload), options);
-  return normalizeIncident(response.data?.data);
-}
+export async function correctMeterIncident(id, payload, options = {}) {
+  const closingReading =
+    payload.oldFinalReading === "" || payload.oldFinalReading == null
+      ? null
+      : Number(payload.oldFinalReading);
 
-export async function approveMeterIncident(id, options = {}) {
-  const response = await client.patch(`/${id}/approve`, {}, options);
+  const response = await client.patch(
+    `/${id}`,
+    {
+      oldFinalReading: closingReading,
+      priorUsageBasis: closingReading == null ? "average" : "final_reading",
+      newMeterSerial: payload.newMeterSerial === "" ? null : payload.newMeterSerial,
+      newBaseline:
+        payload.newBaseline === "" || payload.newBaseline == null
+          ? 0
+          : Number(payload.newBaseline),
+    },
+    options,
+  );
   return normalizeIncident(response.data?.data);
-}
-
-export async function rejectMeterIncident(id, reason, options = {}) {
-  const response = await client.patch(`/${id}/reject`, { reason }, options);
-  return normalizeIncident(response.data?.data);
-}
-
-export async function fetchPaymentHold(consumerId, options = {}) {
-  const response = await client.get(`/payment-hold/${consumerId}`, options);
-  return Boolean(response.data?.data?.hold);
 }
