@@ -334,7 +334,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
             value={consumer.email}
           />
 </div>
-          <p className="mt-1.5 text-xs text-slate-500" id="email-helper">Enter the complete email address, including its domain.</p>
+          <p className="mt-1.5 text-xs text-slate-500" id="email-helper">Enter the complete email address. We’ll check that its domain is configured to receive email when you save.</p>
           {errors.email && <p className={errorClass} id="email-error" role="alert">{errors.email}</p>}
         </div>
 
@@ -400,15 +400,15 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
                 <div>
                   <p className="text-xs font-bold text-navy-900">Account status</p>
                   <p className={`mt-0.5 text-xs font-semibold ${consumer.status === "active" ? "text-emerald-700" : "text-red-700"}`}>
-                    {consumer.status === "active" ? "Active — resident can use the account" : "Inactive — account access is disabled"}
+                    {consumer.status === "active" ? "Active — resident can use the account" : "Disconnected — resident can still access the portal"}
                   </p>
                 </div>
               </div>
               <button
                 aria-checked={consumer.status === "active"}
-                aria-label={`Set resident account ${consumer.status === "active" ? "inactive" : "active"}`}
+                aria-label={`Set resident account ${consumer.status === "active" ? "disconnected" : "active"}`}
                 className={`relative h-8 w-14 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2 ${consumer.status === "active" ? "bg-emerald-600" : "bg-slate-300"}`}
-                onClick={() => updateField("status", consumer.status === "active" ? "inactive" : "active")}
+                onClick={() => updateField("status", consumer.status === "active" ? "disconnected" : "active")}
                 role="switch"
                 type="button"
               >

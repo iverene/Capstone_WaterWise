@@ -22,7 +22,7 @@ export const toReportFilename = (title) => {
 };
 
 const REPORT_TYPES = {
-  consumption: { label: "Consumption", sections: ["summary", "consumption", "analytics"] },
+  consumption: { label: "Consumption", sections: ["summary", "consumption", "analytics", "incidents"] },
   billing: { label: "Billing", sections: ["summary", "billing"] },
   residents: { label: "Residents", sections: ["summary", "residents"] },
   analytics: { label: "Analytics", sections: ["summary", "trend", "analytics"] },
@@ -102,6 +102,38 @@ async function consumptionRecords(startDate, endDate) {
     readingSource: record.reading_source ?? "actual",
     carriedConsumption: number(record.carried_consumption),
     meterIncidentId: record.meter_incident_id ?? null,
+  }));
+}
+
+async function meterChangeRecords(startDate, endDate) {
+  const { data, error } = await supabase
+    .from("meter_incidents")
+    .select(`
+      id, consumer_id, incident_type, effective_date, old_meter_serial,
+      old_final_reading, prior_usage, prior_usage_basis, new_meter_serial,
+      new_baseline, status, review_status, notes,
+      consumers!meter_incidents_consumer_id_fkey (id, username, first_name, middle_name, last_name, purok_no)
+    `)
+    .eq("incident_type", "replacement")
+    .gte("effective_date", startDate)
+    .lte("effective_date", endDate)
+    .order("effective_date", { ascending: true });
+  if (error) throw serviceError(`Failed to retrieve meter change incidents: ${error.message}`, 500);
+  return (data ?? []).map((record) => ({
+    id: record.id,
+    consumerName: consumerDisplayName(record.consumers),
+    username: record.consumers?.username ?? "Unavailable",
+    purok: purok(record.consumers?.purok_no),
+    effectiveDate: record.effective_date,
+    oldMeterSerial: record.old_meter_serial ?? "—",
+    oldFinalReading: record.old_final_reading == null ? "—" : number(record.old_final_reading),
+    priorUsage: number(record.prior_usage),
+    priorUsageBasis: record.prior_usage_basis,
+    newMeterSerial: record.new_meter_serial ?? "—",
+    newBaseline: number(record.new_baseline),
+    status: record.status,
+    reviewStatus: record.review_status,
+    notes: record.notes ?? "",
   }));
 }
 
@@ -247,6 +279,7 @@ async function buildSnapshot(request) {
   let records;
   let summary;
   let analytics = [];
+  let incidents = [];
 
   let trend = { changePercent: 0, direction: "stable", lowest: null, monthly: [], peak: null };
   let insights = [];
@@ -267,7 +300,11 @@ async function buildSnapshot(request) {
     insights = buildAnalyticsInsights({ analytics, summary, trend });
   } else if (validated.type === "consumption") {
     records = await consumptionRecords(validated.startDate, validated.endDate);
+    if (validated.sections.includes("incidents")) {
+      incidents = await meterChangeRecords(validated.startDate, validated.endDate);
+    }
     summary = consumptionSummary(records);
+    if (validated.sections.includes("incidents")) summary.meterChanges = incidents.length;
     analytics = consumptionByPurok(records);
   } else if (validated.type === "billing") {
     records = await billingRecords(validated.startDate, validated.endDate);
@@ -285,7 +322,7 @@ async function buildSnapshot(request) {
       puroksRepresented: new Set(records.map((record) => record.purok)).size,
     };
   }
-  return { ...validated, analytics, generatedAt: new Date().toISOString(), insights, recordCount: records.length, records, summary, trend };
+  return { ...validated, analytics, generatedAt: new Date().toISOString(), incidents, insights, recordCount: records.length, records, summary, trend };
 }
 
 export async function buildReportPreview(request) {
@@ -314,6 +351,7 @@ export async function createPersistentReport(request, adminId) {
     report_data: {
       analytics: snapshot.analytics,
       generatedAt: snapshot.generatedAt,
+      incidents: snapshot.incidents ?? [],
       insights: snapshot.insights ?? [],
       records: snapshot.records,
       summary: snapshot.summary,
@@ -611,6 +649,25 @@ export function renderReportPdf(report) {
       if (report.report_type === "analytics" && findings.length && (sections.includes("analytics") || sections.includes("trend"))) {
         heading("Key Findings");
         findings.forEach((finding, index) => row(`${index + 1}. ${finding}`));
+      }
+    }
+
+    if (sections.includes("incidents")) {
+      heading("Meter Change Incidents");
+      const incidentRows = [...(data.incidents ?? [])].map((incident, index) => ({ ...incident, index: index + 1 }));
+      if (!incidentRows.length) {
+        row("No meter change incidents were recorded during this period.");
+      } else {
+        drawTable([
+          { align: "center", key: "index", label: "#", width: 24 },
+          { align: "center", key: "effectiveDate", label: "DATE", width: 64 },
+          { align: "left", key: "consumerName", label: "RESIDENT", width: 112 },
+          { align: "center", key: "purok", label: "PUROK", width: 52 },
+          { align: "left", key: "oldMeterSerial", label: "OLD METER", width: 70 },
+          { align: "left", key: "newMeterSerial", label: "NEW METER", width: 70 },
+          { align: "center", key: "status", label: "STATUS", width: 58 },
+          { align: "center", key: "reviewStatus", label: "REVIEW", width: 57 },
+        ], incidentRows);
       }
     }
 

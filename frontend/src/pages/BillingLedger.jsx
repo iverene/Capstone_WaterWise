@@ -7,8 +7,6 @@ import Dropdown from "../components/Dropdown";
 import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
-import PaymentReceiptModal from "../components/PaymentReceiptModal";
-import { useToast } from "../components/Toast";
 import { fetchBillingLedger } from "../services/consumerPortal.service";
 import { isCanceledRequest } from "../services/apiClient";
 
@@ -54,7 +52,6 @@ export default function BillingLedger({
   historyData: historyDataProp,
   ledgerAccount: ledgerAccountProp,
 }) {
-  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const usesApi = historyDataProp === undefined;
   const [ledger, setLedger] = useState(null);
@@ -95,10 +92,8 @@ export default function BillingLedger({
   const historyData = usesApi ? ledger?.historyData ?? [] : historyDataProp;
   const ledgerAccount = usesApi ? ledger?.ledgerAccount : ledgerAccountProp;
   const requestedBillingId = Number(searchParams.get("billingId"));
-  const requestedPaymentId = Number(searchParams.get("paymentId"));
   const requestedView = searchParams.get("view");
   const selectedBill = historyData.find((record) => record.id === requestedBillingId);
-  const selectedPayment = ledger?.payments?.find((record) => record.id === requestedPaymentId);
   const periodOptions = [...new Set(historyData.map((record) => record.billingPeriod))];
   const hasActiveFilters = periodFilter !== "all" || statusFilter !== "all";
   const filteredHistoryData = historyData.filter((record) =>
@@ -130,34 +125,11 @@ export default function BillingLedger({
     setSearchParams(nextParams, { replace: true });
   };
 
-  const switchReceiptView = (view) => {
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set("view", view);
-    setSearchParams(nextParams, { replace: true });
-  };
-
   const openReceipt = (bill) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("billingId", String(bill.id));
-
-    if (bill.status === "Paid") {
-      const billPayments = ledger?.payments?.filter((record) => record.billingId === bill.id) ?? [];
-      const payment = billPayments.find((record) => Number(record.balanceAfterPayment ?? record.remainingBalance) === 0)
-        ?? billPayments[0];
-      if (!payment) {
-        toast.error(
-          "Payment receipt unavailable",
-          "This paid bill has no recorded payment transaction. It may be a legacy record.",
-        );
-        return;
-      }
-      nextParams.set("paymentId", String(payment.id));
-      nextParams.set("view", "payment-receipt");
-    } else {
-      nextParams.delete("paymentId");
-      nextParams.set("view", "consumption-receipt");
-    }
-
+    nextParams.delete("paymentId");
+    nextParams.set("view", "consumption-receipt");
     setSearchParams(nextParams);
   };
 
@@ -295,15 +267,8 @@ export default function BillingLedger({
       <ConsumptionReceiptModal
         isOpen={requestedView === "consumption-receipt" && Boolean(selectedConsumptionReceipt)}
         onClose={closeRelatedModal}
-        onViewPaymentReceipt={selectedBill?.status === "Paid" && selectedPayment ? () => switchReceiptView("payment-receipt") : undefined}
         receiptData={selectedConsumptionReceipt}
         residentName={ledgerAccount.name}
-      />
-      <PaymentReceiptModal
-        isOpen={requestedView === "payment-receipt" && Boolean(selectedPayment)}
-        onClose={closeRelatedModal}
-        onViewConsumptionReceipt={selectedConsumptionReceipt ? () => switchReceiptView("consumption-receipt") : undefined}
-        receiptData={selectedPayment}
       />
     </div>
   );

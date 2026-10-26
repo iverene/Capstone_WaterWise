@@ -4,6 +4,7 @@ import { fetchPaymentHistory } from "./paymentAPI";
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const PUROK_NAMES = Array.from({ length: 6 }, (_, index) => `Purok ${index + 1}`);
 
 function manilaNowParts() {
   const parts = Object.fromEntries(
@@ -18,14 +19,15 @@ function manilaNowParts() {
   return { year: Number(parts.year), month: Number(parts.month) };
 }
 
-// Last `count` calendar months (Manila) ending with the current one, oldest
-// first: [{ key: "2026-09", label: "Sep" }].
-function lastMonths(count) {
+// Calendar months from January through the current month in Manila time.
+function yearToDateMonths() {
   const { year, month } = manilaNowParts();
-  return Array.from({ length: count }, (_, offset) => {
-    const date = new Date(Date.UTC(year, month - 1 - (count - 1 - offset), 1));
-    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-    return { key, label: MONTH_LABELS[date.getUTCMonth()] };
+  return Array.from({ length: month }, (_, index) => {
+    const monthNumber = index + 1;
+    return {
+      key: `${year}-${String(monthNumber).padStart(2, "0")}`,
+      label: MONTH_LABELS[index],
+    };
   });
 }
 
@@ -55,10 +57,12 @@ export async function fetchAdminDashboardMetrics() {
     fetchConsumerDirectory(),
   ]);
 
-  const months = lastMonths(6);
+  const months = yearToDateMonths();
   const keys = new Set(months.map((entry) => entry.key));
   const currentKey = months[months.length - 1].key;
-  const previousKey = months[months.length - 2].key;
+  const { year: currentYear, month: currentMonth } = manilaNowParts();
+  const previousDate = new Date(Date.UTC(currentYear, currentMonth - 2, 1));
+  const previousKey = `${previousDate.getUTCFullYear()}-${String(previousDate.getUTCMonth() + 1).padStart(2, "0")}`;
 
   const activeResidents = residents.filter(
     (resident) => String(resident.status ?? "active").toLowerCase() === "active",
@@ -98,8 +102,10 @@ export async function fetchAdminDashboardMetrics() {
 
   // --- KPI + graph: collections --------------------------------------------
   const collectedByMonth = new Map(months.map((entry) => [entry.key, 0]));
+  let collectedPrevious = 0;
   for (const payment of payments) {
     const key = monthKeyOf(payment.paymentDate);
+    if (key === previousKey) collectedPrevious += Number(payment.amountPaid ?? 0);
     if (key && keys.has(key)) {
       const amount = Number(payment.amountPaid ?? 0);
       collectedByMonth.set(key, collectedByMonth.get(key) + amount);
@@ -111,7 +117,6 @@ export async function fetchAdminDashboardMetrics() {
     amount: Math.round(collectedByMonth.get(entry.key) * 100) / 100,
   }));
   const collectedMonth = collectedByMonth.get(currentKey) ?? 0;
-  const collectedPrevious = collectedByMonth.get(previousKey) ?? 0;
 
   // --- Graph: consumption ----------------------------------------------------
   const consumptionByMonth = new Map(months.map((entry) => [entry.key, 0]));
@@ -126,9 +131,11 @@ export async function fetchAdminDashboardMetrics() {
     cubicMeters: Math.round(consumptionByMonth.get(entry.key) * 10) / 10,
   }));
 
-  const purokTop = [...purokUsage.entries()]
-    .map(([purok, cubicMeters]) => ({ purok, cubicMeters: Math.round(cubicMeters * 10) / 10 }))
-    .sort((a, b) => b.cubicMeters - a.cubicMeters);
+  const purokTop = PUROK_NAMES.map((purok) => ({
+    purok,
+    cubicMeters: Math.round((purokUsage.get(purok) ?? 0) * 10) / 10,
+    hasRecords: purokUsage.has(purok),
+  }));
 
   const currentMonthLabel = new Intl.DateTimeFormat("en-PH", {
     month: "long",
@@ -138,7 +145,7 @@ export async function fetchAdminDashboardMetrics() {
 
   return {
     currentMonthLabel,
-    previousMonthLabel: MONTH_NAMES[Number(months[months.length - 2].key.slice(5, 7)) - 1],
+    previousMonthLabel: MONTH_NAMES[previousDate.getUTCMonth()],
     outstandingTotal,
     debtorCount: debtors.size,
     collectedMonth,

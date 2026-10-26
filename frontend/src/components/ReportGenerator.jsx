@@ -20,7 +20,7 @@ const REPORT_TYPES = {
   consumption: {
     label: "Consumption",
     description: "Meter readings and water-use totals.",
-    sections: ["summary", "consumption", "analytics"],
+    sections: ["summary", "consumption", "analytics", "incidents"],
   },
   billing: {
     label: "Billing",
@@ -43,6 +43,7 @@ const SECTION_LABELS = {
   analytics: "Purok comparison",
   billing: "Billing records",
   consumption: "Consumption records",
+  incidents: "Meter change incidents",
   residents: "Resident directory",
   summary: "Executive summary",
   trend: "Period trend",

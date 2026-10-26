@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, WalletCards } from "lucide-react";
 import KPI from "../components/KPI";
+import Filter from "../components/Filter";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
@@ -64,6 +65,7 @@ export default function FlaggedAccountsPage() {
   const [billingRecords, setBillingRecords] = useState([]);
   const [consumers, setConsumers] = useState([]);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -124,17 +126,18 @@ export default function FlaggedAccountsPage() {
       const statuses = new Map(consumers.map((consumer) => [String(consumer.id), consumer.status]));
       return groupFlaggedAccounts(billingRecords).map((account) => ({
         ...account,
-        accountStatus: statuses.get(account.id) ?? "active",
+        accountStatus: statuses.get(account.id) === "active" ? "active" : "disconnected",
       }));
     },
     [billingRecords, consumers],
   );
   const searchTerm = query.trim().toLowerCase();
   const visibleAccounts = flaggedAccounts.filter((account) =>
-    !searchTerm ||
-    [account.consumerName, account.purok].some((value) =>
-      String(value ?? "").toLowerCase().includes(searchTerm),
-    ),
+    (statusFilter === "all" || account.accountStatus === statusFilter) &&
+    (!searchTerm ||
+      [account.consumerName, account.purok].some((value) =>
+        String(value ?? "").toLowerCase().includes(searchTerm),
+      )),
   );
   const totalOutstanding = flaggedAccounts.reduce(
     (total, account) => total + account.totalOutstanding,
@@ -153,7 +156,7 @@ export default function FlaggedAccountsPage() {
       );
       toast.success(
         "Account disconnected",
-        `${selectedAccount.consumerName}'s account is now inactive. The resident has been notified.`,
+        `${selectedAccount.consumerName} can still sign in to review their account. A disconnected service notice will appear in the portal.`,
       );
       setSelectedAccount(null);
     } catch (requestError) {
@@ -191,12 +194,26 @@ export default function FlaggedAccountsPage() {
         />
       </section>
 
-      <Search
-        ariaLabel="Search flagged accounts by resident name or purok"
-        onValueChange={setQuery}
-        placeholder="Search resident name or purok"
-        value={query}
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <Search
+          ariaLabel="Search flagged accounts by resident name or purok"
+          className="flex-1"
+          onValueChange={setQuery}
+          placeholder="Search resident name or purok"
+          value={query}
+        />
+        <Filter
+          ariaLabel="Filter flagged accounts by disconnection status"
+          className="w-full sm:w-56"
+          onValueChange={setStatusFilter}
+          options={[
+            { label: "All statuses", value: "all" },
+            { label: "For disconnection", value: "active" },
+            { label: "Disconnected", value: "disconnected" },
+          ]}
+          value={statusFilter}
+        />
+      </div>
 
       {error && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
@@ -223,7 +240,7 @@ export default function FlaggedAccountsPage() {
           data={visibleAccounts}
           emptyDescription={
             flaggedAccounts.length
-              ? "No flagged account matches your search."
+              ? "No flagged accounts match the current search and status filter."
               : "Residents will appear here when they reach three outstanding monthly bills."
           }
           emptyTitle={flaggedAccounts.length ? "No matching accounts" : "No accounts flagged"}
@@ -250,23 +267,23 @@ export default function FlaggedAccountsPage() {
               </td>
               <td className="px-4 py-4">
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
-                  account.accountStatus === "inactive"
+                  account.accountStatus === "disconnected"
                     ? "border-slate-300 bg-slate-100 text-slate-700"
                     : "border-red-200 bg-red-50 text-red-700"
                 }`}>
                   <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
-                  {account.accountStatus === "inactive" ? "Disconnected" : "For disconnection"}
+                  {account.accountStatus === "disconnected" ? "Disconnected" : "For disconnection"}
                 </span>
               </td>
               <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
                 <div className="grid gap-2 md:flex md:justify-end">
                   <button
                     className="min-h-11 rounded-xl bg-red-600 px-3 font-bold text-white hover:bg-red-700 disabled:cursor-default disabled:bg-slate-200 disabled:text-slate-500"
-                    disabled={account.accountStatus === "inactive"}
+                    disabled={account.accountStatus === "disconnected"}
                     onClick={() => setSelectedAccount(account)}
                     type="button"
                   >
-                    {account.accountStatus === "inactive" ? "Disconnected" : "Confirm disconnection"}
+                    {account.accountStatus === "disconnected" ? "Disconnected" : "Confirm disconnection"}
                   </button>
                 </div>
               </td>
@@ -277,7 +294,7 @@ export default function FlaggedAccountsPage() {
 
       <Modal
         closeLabel="Cancel account disconnection"
-        description="This action prevents the resident from signing in until an admin reactivates the account."
+        description="The resident can still sign in and review their account. Their portal will show that the water service is disconnected."
         eyebrow="Account action"
         isOpen={Boolean(selectedAccount)}
         onClose={() => {

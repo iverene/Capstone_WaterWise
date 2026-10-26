@@ -1,5 +1,5 @@
 import { Info } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import AnalyticsDescriptivePanel from "../components/AnalyticsDescriptivePanel";
 import AdminOverallConsumptionCard from "../components/AdminOverallConsumptionCard";
@@ -12,6 +12,7 @@ import PerPurokConsumptionTrend from "../components/PerPurokConsumptionTrend";
 import AnomalyRecommendationSection from "../components/AnomalyRecommendationSection";
 import { fetchMonthlyHistory, fetchYearlyHistory } from "../services/consumptionAPI";
 import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
+import { hasShownAnalyticsBaselineWarning, markAnalyticsBaselineWarningShown } from "../utils/analyticsBaselineToastSession";
 import { useToast } from "../components/Toast";
 import PageHeader from "../components/PageHeader";
 
@@ -37,8 +38,6 @@ export default function AnalyticsDashboard() {
     ? requestedTab
     : "descriptive";
   const toast = useToast();
-  const predictiveToastKey = useRef(null);
-  const predictiveToastId = useRef(null);
 
   useEffect(() => {
     if (activeTab !== "prediction") return;
@@ -56,25 +55,18 @@ export default function AnalyticsDashboard() {
         if (!monthlyStatus.isComplete) parts.push(monthlyStatus.message);
         if (!yearlyStatus.isComplete) parts.push(yearlyStatus.message);
         if (parts.length === 0) return;
-        const signature = parts.join("|");
-        if (predictiveToastKey.current === signature) return;
-        predictiveToastKey.current = signature;
-        const toastId = toast.warning("Baseline incomplete", parts.join(" "), {
+        if (hasShownAnalyticsBaselineWarning("predictive")) return;
+        markAnalyticsBaselineWarningShown("predictive");
+        const toastId = toast.info("Predictive baseline information", parts.join(" "), {
           key: "predictive-baseline",
           duration: 0,
           wide: true,
           actions: [{ label: "Dismiss", onClick: () => toast.dismiss(toastId) }],
         });
-        predictiveToastId.current = toastId;
       })
       .catch(() => {});
     return () => {
       active = false;
-      if (predictiveToastId.current) {
-        toast.dismiss(predictiveToastId.current);
-        predictiveToastId.current = null;
-      }
-      predictiveToastKey.current = null;
     };
   }, [activeTab, toast]);
 

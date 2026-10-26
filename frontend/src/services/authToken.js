@@ -1,3 +1,5 @@
+import { clearAnalyticsBaselineWarningSession } from "../utils/analyticsBaselineToastSession";
+
 export const ACCOUNT_STORAGE_KEY = "user";
 let logoutInProgress = false;
 export const isLoggingOut = () => logoutInProgress;
@@ -232,6 +234,7 @@ export function clearSession() {
     window.localStorage.getItem(PERSISTENT_CONSUMER_KEY),
   );
   clearStoredApiCache();
+  clearAnalyticsBaselineWarningSession();
   // Pending OTP challenges and staff permissions are bound to the signed-in
   // account. They must not survive logout, otherwise the next login on the
   // same tab restores the previous account's OTP modal state.

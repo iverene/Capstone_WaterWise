@@ -135,7 +135,7 @@ export default function EventForm({
         </div>
 
         <div className="sm:col-span-2">
-          <label className={labelClass} htmlFor="event-description">Resident information</label>
+          <label className={labelClass} htmlFor="event-description">Event information</label>
           <textarea
             {...accessibility("description")}
             className={fieldClass("description", "min-h-28 py-3")}

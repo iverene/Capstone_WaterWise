@@ -10,10 +10,8 @@ import {
   FiHome,
   FiMessageSquare,
   FiRefreshCw,
-  FiTrash2,
   FiUsers,
   FiWifiOff,
-  FiX,
 } from "react-icons/fi";
 import { useLocation, useNavigate } from "react-router";
 import { ACCOUNT_STORAGE_KEY, getCurrentAccount, logout } from "../services/auth.service";
@@ -136,14 +134,14 @@ export default function AppLayout({ children }) {
   const pushToastIdRef = useRef(null);
   const isEnablingPushRef = useRef(false);
   const handleEnablePushFnRef = useRef(null);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const longPressTimerRef = useRef(null);
   const dismissedIdsRef = useRef(new Set());
   const activeRole = account?.role ?? pathRole ?? "consumer";
   const activeRoleConfig = ROLE_CONFIG[activeRole] ?? ROLE_CONFIG.consumer;
   const accountName = account?.name || account?.username || account?.email || activeRoleConfig.userName;
+  const isDisconnectedResident = activeRole === "consumer" &&
+    ["inactive", "disconnected"].includes(String(account?.status ?? "").toLowerCase());
 
   const unreadCount = notifications.filter((item) => !item.isRead).length;
 
@@ -352,7 +350,6 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     if (!isNotificationOpen) {
-      setIsSelectionMode(false);
       setSelectedIds(new Set());
     }
   }, [isNotificationOpen]);
@@ -437,44 +434,8 @@ export default function AppLayout({ children }) {
     }
   };
 
-  const handleNotificationLongPressStart = useCallback((notificationId) => {
-    const notification = notifications.find((n) => n.id === notificationId);
-    if (!notification?.isRead) return;
-    longPressTimerRef.current = setTimeout(() => {
-      setIsSelectionMode(true);
-      setSelectedIds(new Set([notificationId]));
-    }, 500);
-  }, [notifications]);
-
-  const handleNotificationLongPressEnd = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-
-  const handleToggleSelection = useCallback((notificationId) => {
-    const notification = notifications.find((n) => n.id === notificationId);
-    if (!notification?.isRead) return;
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(notificationId)) {
-        next.delete(notificationId);
-      } else {
-        next.add(notificationId);
-      }
-      if (next.size === 0) setIsSelectionMode(false);
-      return next;
-    });
-  }, [notifications]);
-
-  const handleCancelSelection = useCallback(() => {
-    setIsSelectionMode(false);
-    setSelectedIds(new Set());
-  }, []);
-
-  const handleDeleteSelected = () => {
-    if (selectedIds.size === 0) return;
+  const handleDeleteNotification = (notificationId) => {
+    setSelectedIds(new Set([notificationId]));
     setIsDeleteConfirmOpen(true);
   };
 
@@ -485,9 +446,8 @@ export default function AppLayout({ children }) {
       await deleteNotifications(ids);
       ids.forEach((id) => dismissedIdsRef.current.add(id));
       setNotifications((current) => current.filter((item) => !selectedIds.has(item.id)));
-      setIsSelectionMode(false);
       setSelectedIds(new Set());
-      toast.success("Deleted", `${ids.length} notification${ids.length === 1 ? "" : "s"} removed.`);
+      toast.success("Deleted", "Notification removed.");
     } catch {
       toast.error("Delete failed", "WaterWise could not delete the selected notifications.");
     }
@@ -543,59 +503,29 @@ export default function AppLayout({ children }) {
                   role="dialog"
                 >
                   <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-100 px-4 py-3">
-                    {isSelectionMode ? (
-                      <>
-                        <div className="flex items-center gap-3">
-                          <button
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100"
-                            onClick={handleCancelSelection}
-                            type="button"
-                          >
-                            <FiX aria-hidden="true" className="h-4 w-4" />
-                          </button>
-                          <span className="text-sm font-bold text-navy-900">{selectedIds.size} selected</span>
-                        </div>
+                    <div>
+                      <h2 className="text-base font-extrabold tracking-[-0.03em] text-navy-900">Notifications</h2>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500">{unreadCount ? `${unreadCount} unread` : "You're all caught up"}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
                         <button
-                          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                          disabled={selectedIds.size === 0}
-                          onClick={handleDeleteSelected}
+                          className="rounded-lg px-3 py-1.5 text-xs font-bold text-water-700 transition-colors hover:bg-water-50"
+                          onClick={handleMarkAllNotificationsAsRead}
                           type="button"
                         >
-                          <FiTrash2 aria-hidden="true" className="h-3.5 w-3.5" />
-                          Delete
+                          Mark all as read
                         </button>
-                      </>
-                    ) : (
-                      <>
-                        <div>
-                          <h2 className="text-base font-extrabold tracking-[-0.03em] text-navy-900">Notifications</h2>
-                          <p className="mt-0.5 text-xs font-medium text-slate-500">{unreadCount ? `${unreadCount} unread` : "You're all caught up"}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {unreadCount > 0 && (
-                            <button
-                              className="rounded-lg px-3 py-1.5 text-xs font-bold text-water-700 transition-colors hover:bg-water-50"
-                              onClick={handleMarkAllNotificationsAsRead}
-                              type="button"
-                            >
-                              Mark all as read
-                            </button>
-                          )}
-                          {unreadCount > 0 && <span className="rounded-full bg-water-50 px-3 py-1 text-xs font-bold text-water-700">New</span>}
-                        </div>
-                      </>
-                    )}
+                      )}
+                      {unreadCount > 0 && <span className="rounded-full bg-water-50 px-3 py-1 text-xs font-bold text-water-700">New</span>}
+                    </div>
                   </header>
                   <NotificationPage
                     isLoading={isNotificationLoading}
                     notifications={notifications}
+                    onDelete={handleDeleteNotification}
                     onNotificationClick={handleNotificationClick}
                     onMarkAsRead={handleMarkNotificationAsRead}
-                    isSelectionMode={isSelectionMode}
-                    selectedIds={selectedIds}
-                    onLongPressStart={handleNotificationLongPressStart}
-                    onLongPressEnd={handleNotificationLongPressEnd}
-                    onToggleSelection={handleToggleSelection}
                   />
                 </section>
               )}
@@ -622,6 +552,15 @@ export default function AppLayout({ children }) {
         >
           <FiWifiOff aria-hidden="true" className="h-4 w-4 shrink-0" />
           Offline mode · {activeRole === "meter-reader" ? `${pendingCount} reading${pendingCount === 1 ? "" : "s"} safely stored on this device. Changes will be submitted after you reconnect.` : "Changes will be submitted after you reconnect."}
+        </div>
+      )}
+
+      {isDisconnectedResident && (
+        <div
+          className="flex min-h-12 items-center justify-center border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm font-semibold text-amber-900"
+          role="status"
+        >
+          Your water service is disconnected. You can still access your account and review your bills and payments. Please contact the Sucol Water System office for assistance.
         </div>
       )}
 

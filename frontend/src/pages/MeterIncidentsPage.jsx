@@ -376,13 +376,13 @@ export default function MeterIncidentsPage() {
                 <td className="md:px-4 md:py-4 md:text-right">
                   {isOpenIncident(incident) ? (
                     <button
-                      aria-label={`Correct replacement for ${name}`}
+                      aria-label={`Edit replacement for ${name}`}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50"
                       onClick={() => openCorrection(incident)}
                       type="button"
                     >
                       <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                      Correct
+                      Edit
                     </button>
                   ) : (
                     <span className="text-xs font-semibold text-slate-400">Locked</span>

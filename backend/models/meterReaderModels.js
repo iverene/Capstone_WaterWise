@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
+import { verifyEmailDomain } from "../services/emailDomainService.js";
 import {
   duplicateAccountIdentityMessage,
   ensureAccountIdentityIsUnique,
@@ -143,6 +144,7 @@ export const updateMeterReader = async (id, updates = {}) => {
     updateData.email =
       validator.normalizeEmail(updates.email.trim()) ??
       updates.email.trim().toLowerCase();
+    await verifyEmailDomain(updateData.email);
   }
 
   if (updates.password !== undefined) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Banknote, CalendarDays, CheckCircle2, Clock3, Eye, ReceiptText } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import Dropdown from "../components/Dropdown";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -84,20 +85,16 @@ function MobilePaymentCard({ onViewReceipt, payment }) {
         <span className="mt-0.5 block truncate text-[11px] font-semibold text-slate-500">{payment.paymentStatus}</span>
       </div>
       <div className="min-w-0">
-        <span className={fieldLabel}>Method</span>
-        <span className={fieldValue}>{payment.paymentMethod}</span>
-      </div>
-      <div className="min-w-0">
         <span className={fieldLabel}>Payment date</span>
         <span className={`${fieldValue} font-mono`}>{payment.paymentDate}</span>
       </div>
       <div className="min-w-0">
-        <span className={fieldLabel}>Remaining balance</span>
-        <span className={`${fieldValue} block font-mono tabular-nums`}>{currency(payment.balanceAfterPayment)}</span>
-      </div>
-      <div className="min-w-0">
         <span className={fieldLabel}>Amount paid</span>
         <span className="block truncate font-mono text-xs font-bold tabular-nums text-navy-900">{currency(payment.amountPaid)}</span>
+      </div>
+      <div className="min-w-0">
+        <span className={fieldLabel}>Remaining balance</span>
+        <span className={`${fieldValue} block font-mono tabular-nums`}>{currency(payment.balanceAfterPayment)}</span>
       </div>
       <div className="min-w-0">
         <span className={fieldLabel}>Receipt</span>
@@ -110,15 +107,12 @@ function MobilePaymentCard({ onViewReceipt, payment }) {
           <Eye aria-hidden="true" className="h-4 w-4" />
         </button>
       </div>
-      <div className="min-w-0">
-        <span className={fieldLabel}>Bill</span>
-        <span className="block truncate font-mono text-xs font-semibold text-slate-700">{payment.invoiceNumber}</span>
-      </div>
     </li>
   );
 }
 
 export default function ConsumerPaymentsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [ledger, setLedger] = useState(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -145,6 +139,23 @@ export default function ConsumerPaymentsPage() {
   }, [requestVersion]);
 
   const payments = ledger?.payments ?? [];
+  const requestedPaymentId = Number(searchParams.get("paymentId"));
+
+  useEffect(() => {
+    if (!Number.isInteger(requestedPaymentId) || requestedPaymentId < 1) return;
+    const payment = payments.find((item) => Number(item.id) === requestedPaymentId);
+    if (payment) setSelectedPayment(payment);
+  }, [payments, requestedPaymentId]);
+
+  const closeReceipt = () => {
+    setSelectedPayment(null);
+    if (searchParams.has("paymentId")) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("paymentId");
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
+
   const paymentMonthOptions = useMemo(() => [...new Set(
     payments
       .map((payment) => String(payment.paymentDate ?? "").slice(0, 7))
@@ -256,7 +267,7 @@ export default function ConsumerPaymentsPage() {
         </>
       )}
 
-      <PaymentReceiptModal isOpen={Boolean(selectedPayment)} onClose={() => setSelectedPayment(null)} receiptData={selectedPayment} />
+      <PaymentReceiptModal isOpen={Boolean(selectedPayment)} onClose={closeReceipt} receiptData={selectedPayment} />
     </main>
   );
 }

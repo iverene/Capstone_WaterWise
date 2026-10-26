@@ -19,6 +19,7 @@ import { logout } from "../services/auth.service";
 import { clearSession, getStoredAccount } from "../services/authToken";
 import { isCanceledRequest } from "../services/apiClient";
 import { isValidEmail } from "../utils/email";
+import { DEFAULT_RESIDENT_PASSWORD } from "../utils/residentCredentials";
 import OnboardingDetailsConfirmModal from "../components/OnboardingDetailsConfirmModal";
 
 const DRAFT_KEY_PREFIX = "waterwise:consumer-onboarding-draft:";
@@ -227,6 +228,10 @@ export default function ConsumerOnboarding() {
       setError(
         "Use at least 8 characters with uppercase, lowercase, a number, and a symbol.",
       );
+      return false;
+    }
+    if (newPassword === DEFAULT_RESIDENT_PASSWORD) {
+      setError("Choose a new password that is different from the default password.");
       return false;
     }
     if (!confirmation) {
@@ -509,10 +514,10 @@ export default function ConsumerOnboarding() {
 
                 <div className="mt-3">
                   <FieldLabel htmlFor="onboarding-new-password">Change password</FieldLabel>
-                  <div className="relative">
+                  <div className="relative mt-2">
                     <input
                       autoComplete="new-password"
-                      className="ww-field mt-2 pl-4 pr-11 text-sm"
+                      className="ww-field pl-4 pr-11 text-sm"
                       disabled={isSaving}
                       id="onboarding-new-password"
                       onChange={(event) => {

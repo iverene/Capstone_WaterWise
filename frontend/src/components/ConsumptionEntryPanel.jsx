@@ -35,7 +35,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
   const [error, setError] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [anomalyAcknowledged, setAnomalyAcknowledged] = useState(false);
-  const [noEstimate, setNoEstimate] = useState(false);
+  const [useAverage, setUseAverage] = useState(false);
 
   if (!consumer) return null;
 
@@ -58,22 +58,29 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
   const meterAverage = consumer.averageRecentConsumption == null
     ? null
     : Number(consumer.averageRecentConsumption);
-  const averageAvailable = Number.isFinite(meterAverage) && meterAverage > 0;
+  const averageAvailable = carryIsEstimate
+    ? Number.isFinite(priorUsage) && priorUsage > 0
+    : Number.isFinite(meterAverage) && meterAverage > 0;
+  const canChooseAverage = appliesIncident && averageAvailable &&
+    (carryIsEstimate || Number(priorUsage ?? 0) === 0);
 
   // Mirrors the billing function so the reader sees the number that will actually
-  // be billed: a meter change that measured nothing at all is estimated from the
-  // resident's own average, unless the reader refuses the estimate.
+  // be billed. When selected, the average is carried from the old meter and added
+  // to the usage measured on the new meter.
   const newMeterUsage = hasValues ? Number((currentValue - baselineValue).toFixed(2)) : 0;
-  const effectiveCarry = noEstimate && carryIsEstimate ? 0 : Number(priorUsage ?? 0);
+  const effectiveCarry = canChooseAverage
+    ? useAverage
+      ? (carryIsEstimate ? Number(priorUsage ?? 0) : meterAverage)
+      : 0
+    : Number(priorUsage ?? 0);
   const measuredConsumption = hasValues ? effectiveCarry + newMeterUsage : 0;
-  const averageInPlay = appliesIncident && hasValues && averageAvailable && (
-    carryIsEstimate || (Number(priorUsage ?? 0) === 0 && newMeterUsage === 0)
-  );
-  const estimateApplies = averageInPlay && !noEstimate && measuredConsumption === 0;
+  const averageInPlay = appliesIncident && hasValues && averageAvailable &&
+    canChooseAverage;
+  const estimateApplies = canChooseAverage && useAverage;
   const consumption = !hasValues
     ? 0
     : appliesIncident
-      ? (estimateApplies ? meterAverage : measuredConsumption)
+      ? measuredConsumption
       : currentValue - previousValue;
   const safeConsumption = hasValues && Number.isFinite(consumption) ? Math.max(consumption, 0) : 0;
   const estimatedBill = computeTieredBill(safeConsumption, rates);
@@ -94,7 +101,6 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
     const nextCurrentReading = setter === setCurrentReading ? value : currentReading;
     onDirtyChange?.(Boolean(nextPreviousReading || nextCurrentReading));
     setAnomalyAcknowledged(false);
-    setNoEstimate(false);
     setError("");
   };
 
@@ -134,7 +140,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
     const incident = appliesIncident
       ? {
           id: openIncident.id,
-          ...(noEstimate && averageInPlay ? { forceZero: true } : {}),
+          ...(canChooseAverage && !useAverage ? { forceZero: true } : {}),
         }
       : undefined;
 
@@ -154,7 +160,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
         ["New meter baseline", `${baselineValue.toLocaleString()} m³`],
         ["New meter usage", `${Number(newMeterUsage).toLocaleString()} m³`],
         ...(estimateApplies
-          ? [["System average used", `${Number(meterAverage).toLocaleString()} m³`]]
+          ? [["System average carried", `${Number(effectiveCarry).toLocaleString()} m³`]]
           : []),
         ["Water consumed", `${Number(consumption).toLocaleString()} m³`],
         ["Estimated bill", currency(estimatedBill)],
@@ -198,11 +204,30 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
                 {!consumer.hasPreviousRecord && <span className="mt-1.5 block text-xs font-medium leading-5 text-amber-700">First digital entry: copy the last cumulative value from the manual logbook.</span>}
               </label>
             )}
-            <label className="text-sm font-bold text-slate-700">
-              {appliesIncident ? "New meter reading" : "Current reading"}
-              <input autoComplete="off" autoFocus className="ww-field mt-2 p-3 font-mono text-lg tabular-nums" inputMode="decimal" onChange={changeDecimal(setCurrentReading)} placeholder="Type meter value" required type="text" value={currentReading} />
+            <div className="text-sm font-bold text-slate-700">
+              <label htmlFor="meter-current-reading">{appliesIncident ? "New meter reading" : "Current reading"}</label>
+              <input autoComplete="off" autoFocus className="ww-field mt-2 p-3 font-mono text-lg tabular-nums" id="meter-current-reading" inputMode="decimal" onChange={changeDecimal(setCurrentReading)} placeholder="Type meter value" required type="text" value={currentReading} />
               {appliesIncident && <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Type the value on the new meter. The old meter&apos;s usage is carried automatically.</span>}
-            </label>
+            </div>
+            {canChooseAverage && currentReading === "" && (
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3 transition hover:border-amber-400 sm:col-span-2">
+                <input checked={useAverage} className="mt-0.5 h-4 w-4 shrink-0 accent-water-600" onChange={(event) => setUseAverage(event.target.checked)} type="checkbox" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-slate-700">Use resident&apos;s average</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-slate-600">
+                    {carryIsEstimate
+                      ? "Optional. Check to carry the resident's average for the old meter."
+                      : "Optional. Applies when the new meter reading shows no usage above its baseline."}
+                  </span>
+                  <span className="mt-2 block text-sm font-semibold text-slate-700">
+                    Average: <span className="font-mono font-extrabold text-navy-900">{Number(carryIsEstimate ? priorUsage : meterAverage).toLocaleString()} m³</span>
+                    <span className="ml-1 text-xs font-medium text-slate-500">
+                      from {consumer.averageSampleCount} actual reading{consumer.averageSampleCount === 1 ? "" : "s"} · window {consumer.averageWindow} months
+                    </span>
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
 
           {consumer.hasPreviousRecord && openIncident && (
@@ -227,7 +252,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
               ) : (
                 <p className="mt-3 rounded-xl border border-water-200 bg-water-50 p-3 text-xs font-semibold leading-5 text-water-800">
                   {estimateApplies
-                    ? "This replacement is applied to the reading, but the system had to estimate the usage."
+                    ? "The selected resident average is added to the new meter's measured usage."
                     : "This replacement is applied automatically. The old meter's usage is carried into this reading."}
                 </p>
               )}
@@ -242,27 +267,17 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
                   <p className="text-sm font-bold text-amber-900">
                     {carryIsEstimate
                       ? "The old meter's closing reading was not recorded"
-                      : "Nothing was measured on the new meter"}
+                      : newMeterUsage === 0
+                        ? "Nothing was measured on the new meter"
+                        : "Average carry selected"}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-amber-800">
-                    {carryIsEstimate
-                      ? "The usage carried over is an estimate from the resident's recent average."
-                      : "The new meter still shows its baseline, and the old meter did not measure this period either. The usage is estimated from the resident's recent average."}
+                    {useAverage
+                      ? "The resident's average is carried from the old meter and added to usage measured by the new meter."
+                      : carryIsEstimate
+                        ? "The old meter's closing reading was not recorded. The average was not selected, so only new meter usage is billed."
+                        : "The average was not selected, so only usage measured by the new meter is billed."}
                   </p>
-                  <p className="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-600">
-                    System average{" "}
-                    <span className="font-mono text-base font-extrabold text-navy-900">{Number(meterAverage).toLocaleString()} m³</span>
-                    <span className="ml-1 font-medium text-slate-500">
-                      from {consumer.averageSampleCount} actual reading{consumer.averageSampleCount === 1 ? "" : "s"} · window {consumer.averageWindow} months
-                    </span>
-                  </p>
-                  <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-amber-300 bg-white p-3 transition hover:border-amber-400">
-                    <input checked={noEstimate} className="mt-0.5 h-4 w-4 shrink-0 accent-water-600" onChange={(event) => setNoEstimate(event.target.checked)} type="checkbox" />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold text-slate-700">Do not estimate — bill only what the meter shows</span>
-                      <span className="mt-0.5 block text-xs leading-5 text-slate-600">Tick this only when the household really used no water, for example a vacant house or a disconnected service.</span>
-                    </span>
-                  </label>
                 </div>
               </div>
             </div>
@@ -303,7 +318,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
                   {appliesIncident && hasValues && (
                     <p className="mt-1 text-[11px] font-semibold leading-4 text-slate-500">
                       {estimateApplies
-                        ? `Nothing measured — ${Number(meterAverage).toLocaleString()} m³ estimated from the system average`
+                        ? `${Number(effectiveCarry).toLocaleString()} m³ average carry + ${Number(newMeterUsage).toLocaleString()} m³ new meter usage`
                         : `${Number(effectiveCarry).toLocaleString()} m³ carried + ${Number(newMeterUsage).toLocaleString()} m³ on the new meter`}
                     </p>
                   )}
@@ -350,14 +365,14 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
               </p>
               <p className="mt-1 text-xs leading-5">
                 {estimateApplies
-                  ? "This reading carries the old meter's usage, but the estimate below was used because the meter measured nothing."
+                  ? "The selected resident average was added to the usage measured by the new meter."
                   : "This reading carries the old meter's usage automatically."}
               </p>
             </div>
           )}
           {appliesIncident && estimateApplies && (
             <p className="mt-4 rounded-xl border border-water-200 bg-water-50 p-3 text-xs font-semibold leading-5 text-water-800">
-              This bill includes {Number(meterAverage).toLocaleString()} m³ estimated from the system average.
+              This bill includes {Number(effectiveCarry).toLocaleString()} m³ carried from the resident&apos;s average, plus the new meter&apos;s measured usage.
             </p>
           )}
           {showsAnomaly && <label className="mt-4 flex cursor-pointer gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4"><input checked={anomalyAcknowledged} className="mt-1 h-5 w-5 accent-water-600" onChange={(event) => setAnomalyAcknowledged(event.target.checked)} type="checkbox" /><span><span className="flex items-center gap-2 text-sm font-bold text-amber-700"><AlertTriangle aria-hidden="true" className="h-4 w-4" /> Unusual consumption</span><span className="mt-1 block text-sm leading-6 text-slate-600">This usage is much higher than the resident’s recent consumption. I checked the meter and confirm it is correct.</span></span></label>}

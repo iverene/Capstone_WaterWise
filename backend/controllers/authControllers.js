@@ -87,6 +87,13 @@ const consumerPasswordOtpAttempts = new Map();
 const consumerPasswordAuthorizations = new Map();
 const passwordResetOtpAttempts = new Map();
 
+const canAccessAccount = (account, role) => Boolean(
+  account && (
+    account.status === "active" ||
+    (role === "consumer" && ["inactive", "disconnected"].includes(account.status))
+  ),
+);
+
 const STAFF_ACTIONS = {
   "manage-staff": "open Super Admin staff management",
   "create-admin": "create an Admin account",
@@ -643,7 +650,7 @@ export async function refreshSession(req, res) {
     const userId = Number(payload.sub);
     if (!Number.isInteger(userId) || userId < 1) throw new jwt.JsonWebTokenError("Invalid refresh identity.");
     const account = await getPasswordResetAccountById(userId, role);
-    if (!account || account.status !== "active") {
+    if (!canAccessAccount(account, role)) {
       clearSessionCookie(res, req);
       clearRefreshCookie(res, req);
       return res.status(401).json({ success: false, message: "This account is no longer active. Please sign in again." });
@@ -700,7 +707,7 @@ async function readConsumerOnboardingCompleted(consumerId) {
 export async function currentAccount(req, res) {
   try {
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
-    if (!account || account.status !== "active") {
+    if (!canAccessAccount(account, req.user.role)) {
       return res.status(401).json({
         success: false,
         message: "This account is no longer active. Please sign in again.",
@@ -970,7 +977,7 @@ export async function resendAdminLoginOtp(req, res) {
 export async function requestConsumerEmailChangeOtp(req, res) {
   try {
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
-    if (!["admin", "super-admin", "consumer", "meter-reader"].includes(req.user.role) || !account || account.status !== "active") {
+    if (!["admin", "super-admin", "consumer", "meter-reader"].includes(req.user.role) || !canAccessAccount(account, req.user.role)) {
       return res.status(403).json({ success: false, message: "Only active accounts can change their email." });
     }
     const requestLimit = await reservePasswordResetOtpRequest(passwordResetRequestKey(account.email, "email-change"));
@@ -1026,7 +1033,7 @@ export async function verifyConsumerEmailChangeOtp(req, res) {
       const error = new Error("This code can no longer be used. Request a new code."); error.statusCode = 429; throw error;
     }
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
-    const validAccount = account?.status === "active" && valuesMatch(passwordFingerprint(account.password), challenge.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), challenge.emailFingerprint ?? "");
+    const validAccount = canAccessAccount(account, req.user.role) && valuesMatch(passwordFingerprint(account.password), challenge.passwordFingerprint ?? "") && valuesMatch(passwordFingerprint(account.email.toLowerCase()), challenge.emailFingerprint ?? "");
     if (!validAccount || !valuesMatch(otpFingerprint(otp), challenge.otpHash ?? "")) {
       state.attempts += 1; emailChangeOtpAttempts.set(challenge.jti, state);
       const remaining = getOtpMaxAttempts() - state.attempts;
@@ -1155,8 +1162,8 @@ function createOtpChallenge(account, otp) {
 export async function requestAuthenticatedPasswordOtp(req, res) {
   try {
     const account = await getPasswordResetAccountById(req.user.id, req.user.role);
-    if (!account || account.status !== "active") {
-      return res.status(404).json({ success: false, message: "Active account not found." });
+    if (!canAccessAccount(account, req.user.role)) {
+      return res.status(404).json({ success: false, message: "Account not found." });
     }
     const requestLimit = await reservePasswordResetOtpRequest(passwordResetRequestKey(account.email, "authenticated-password-change"));
     if (!requestLimit.allowed) {

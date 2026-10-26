@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Banknote, CheckCircle2, Clock3, ReceiptText, WalletCards } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import PaymentReceiptModal from "../components/PaymentReceiptModal";
@@ -29,6 +29,7 @@ function enrichPayments(paymentHistory, billings) {
       invoiceNumber: billing?.invoiceNumber ?? `INV-${payment.billingId}`,
       name: billing?.consumerName ?? payment.consumerName,
       previousReading: billing?.previousReading ?? 0,
+      purok: billing?.purok ?? "",
     };
   });
 }
@@ -46,7 +47,9 @@ export default function PaymentProcessingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [paymentQuery, setPaymentQuery] = useState("");
+  const [purokFilter, setPurokFilter] = useState("all");
   const [paymentCountFilter, setPaymentCountFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
 
   const preselectedBilling = billingRecords.find(
     (record) => record.id === requestedBillingId && record.outstandingBalance > 0,
@@ -149,7 +152,7 @@ export default function PaymentProcessingPage() {
       });
       const savedPayments = apiPayments.map((p) => {
         const target = billingRecords.find((r) => r.id === p.billingId) ?? billing;
-        return { ...p, address: target.address, amountDue: p.amountPaid, billingId: p.billingId, consumerName: target.consumerName, currentReading: target.currentReading, invoiceNumber: target.invoiceNumber, name: target.consumerName, paymentStatus: p.paymentStatus, previousReading: target.previousReading, remainingBalance: p.remainingBalance };
+        return { ...p, address: target.address, amountDue: p.amountPaid, billingId: p.billingId, consumerName: target.consumerName, currentReading: target.currentReading, invoiceNumber: target.invoiceNumber, name: target.consumerName, paymentStatus: p.paymentStatus, previousReading: target.previousReading, purok: target.purok ?? "", remainingBalance: p.remainingBalance };
       });
 
       setPayments((current) => [
@@ -181,12 +184,21 @@ export default function PaymentProcessingPage() {
     }
   };
 
-  const totalCollected = payments.reduce(
+  const purokOptions = useMemo(() => [...new Set(
+    billingRecords.map((billing) => String(billing.purok ?? "").trim()).filter(Boolean),
+  )].sort((left, right) => left.localeCompare(right, undefined, { numeric: true })), [billingRecords]);
+  const purokPayments = purokFilter === "all"
+    ? payments
+    : payments.filter((payment) => payment.purok === purokFilter);
+  const totalCollected = purokPayments.reduce(
     (sum, payment) => sum + Number(payment.amountPaid || 0),
     0,
   );
-  const fullyPaid = payments.filter((payment) => payment.paymentStatus === "Paid").length;
-  const unpaidBillings = billingRecords
+  const fullyPaid = purokPayments.filter((payment) => payment.paymentStatus === "Paid").length;
+  const purokBillings = purokFilter === "all"
+    ? billingRecords
+    : billingRecords.filter((billing) => billing.purok === purokFilter);
+  const unpaidBillings = purokBillings
     .filter((billing) => Number(billing.outstandingBalance) > 0)
     .sort((first, second) => {
       const dateComparison = String(first.raw?.billing_date ?? "").localeCompare(
@@ -209,6 +221,7 @@ export default function PaymentProcessingPage() {
         consumerName: oldestBilling.consumerName,
         oldestBilling,
         outstandingBillCount: residentBills.length,
+        paymentStatus: "unpaid",
         purok: oldestBilling.purok,
         totalOutstanding: residentBills.reduce(
           (total, billing) => total + Number(billing.outstandingBalance || 0),
@@ -217,16 +230,47 @@ export default function PaymentProcessingPage() {
       };
     },
   );
+  const paidResidentRows = Array.from(
+    purokBillings.reduce((groups, billing) => {
+      const residentId = String(billing.raw?.user_id ?? billing.consumerName);
+      const residentBills = groups.get(residentId) ?? [];
+      residentBills.push(billing);
+      groups.set(residentId, residentBills);
+      return groups;
+    }, new Map()).entries(),
+  )
+    .filter(([, residentBills]) => residentBills.length > 0 && residentBills.every(
+      (billing) => Number(billing.outstandingBalance ?? 0) <= 0,
+    ))
+    .map(([residentId, residentBills]) => {
+      const latestBilling = [...residentBills].sort((first, second) =>
+        String(second.raw?.billing_date ?? "").localeCompare(String(first.raw?.billing_date ?? "")) ||
+        Number(second.id) - Number(first.id),
+      )[0];
+      return {
+        id: residentId,
+        consumerName: latestBilling.consumerName,
+        oldestBilling: null,
+        outstandingBillCount: 0,
+        paymentStatus: "paid",
+        purok: latestBilling.purok,
+        totalOutstanding: 0,
+      };
+    });
+  const allPaymentRows = [...paymentRows, ...paidResidentRows];
   const paymentSearchTerm = paymentQuery.trim().toLowerCase();
-  const visibleUnpaidBillings = paymentRows.filter((resident) => {
+  const visiblePaymentRows = allPaymentRows.filter((resident) => {
     const matchesName =
       !paymentSearchTerm ||
       String(resident.consumerName ?? "").toLowerCase().includes(paymentSearchTerm);
+    const matchesStatus = paymentStatusFilter === "all" || resident.paymentStatus === paymentStatusFilter;
+    const matchesPurok = purokFilter === "all" || resident.purok === purokFilter;
     const matchesCount =
+      resident.paymentStatus === "paid" ||
       paymentCountFilter === "all" ||
       (paymentCountFilter === "1" ? resident.outstandingBillCount === 1 : resident.outstandingBillCount >= 2);
 
-    return matchesName && matchesCount;
+    return matchesName && matchesStatus && matchesCount && matchesPurok;
   });
 
   return (
@@ -253,10 +297,16 @@ export default function PaymentProcessingPage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <h2 className="text-xl font-extrabold tracking-[-0.02em] text-navy-900" id="outstanding-payments-heading">
-          Residents needing payment
+          {paymentStatusFilter === "paid"
+            ? "Residents with no outstanding balance"
+            : paymentStatusFilter === "all" ? "Residents by payment status" : "Residents needing payment"}
         </h2>
         <p aria-live="polite" className="ml-auto rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-500 shadow-sm">
-          {paymentRows.length} {paymentRows.length === 1 ? "resident" : "residents"} with {unpaidBillings.length} outstanding {unpaidBillings.length === 1 ? "bill" : "bills"}.
+          {paymentStatusFilter === "paid"
+            ? `${visiblePaymentRows.length} paid resident${visiblePaymentRows.length === 1 ? "" : "s"}.`
+            : paymentStatusFilter === "all"
+              ? `${visiblePaymentRows.length} residents shown · ${unpaidBillings.length} outstanding bills.`
+              : `${paymentRows.length} ${paymentRows.length === 1 ? "resident" : "residents"} with ${unpaidBillings.length} outstanding ${unpaidBillings.length === 1 ? "bill" : "bills"}.`}
         </p>
       </div>
 
@@ -266,12 +316,30 @@ export default function PaymentProcessingPage() {
         role="search"
       >
         <Search
-          ariaLabel="Search residents with outstanding balances by name"
+          ariaLabel="Search residents by name"
           className="flex-1"
           onValueChange={setPaymentQuery}
           placeholder="Search resident name"
           value={paymentQuery}
         />
+        <Filter
+          ariaLabel="Filter residents by payment status"
+          className="w-full sm:w-48"
+          onValueChange={setPaymentStatusFilter}
+          options={[
+            { label: "All statuses", value: "all" },
+            { label: "Paid", value: "paid" },
+          ]}
+          value={paymentStatusFilter}
+        />
+        <Filter
+          ariaLabel="Filter residents by purok"
+          className="w-full sm:w-44"
+          onValueChange={setPurokFilter}
+          options={[{ label: "All puroks", value: "all" }, ...purokOptions.map((option) => ({ label: option, value: option }))]}
+          value={purokFilter}
+        />
+        {paymentStatusFilter !== "paid" && (
         <Filter
           ariaLabel="Filter residents by outstanding bill count"
           className="w-full sm:w-56"
@@ -283,6 +351,7 @@ export default function PaymentProcessingPage() {
           ]}
           value={paymentCountFilter}
         />
+        )}
       </div>
 
       <section aria-labelledby="outstanding-payments-heading" className="space-y-3">
@@ -299,14 +368,24 @@ export default function PaymentProcessingPage() {
               { key: "status", label: "Status" },
               { key: "action", label: "Action", className: "text-right" },
             ]}
-            data={visibleUnpaidBillings}
+            data={visiblePaymentRows}
             emptyDescription={
-              unpaidBillings.length
-                ? "No outstanding bills match the current search and filter."
-                : "Residents will appear here when they have a bill with an outstanding balance."
+              paymentStatusFilter === "paid"
+                ? "Residents with no outstanding bills will appear here."
+                : paymentStatusFilter === "all"
+                  ? allPaymentRows.length
+                    ? "No residents match the current search and filters."
+                    : "Residents will appear here when they have a billing record."
+                  : paymentRows.length
+                    ? "No outstanding bills match the current search and filter."
+                    : "Residents will appear here when they have a bill with an outstanding balance."
             }
             emptyTitle={
-              unpaidBillings.length ? "No matching residents" : "No residents need payment"
+              paymentStatusFilter === "paid"
+                ? "No paid residents found"
+                : paymentStatusFilter === "all"
+                  ? allPaymentRows.length ? "No matching residents" : "No billing records"
+                  : paymentRows.length ? "No matching residents" : "No residents need payment"
             }
             getRowKey={(resident) => resident.id}
             rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
@@ -322,30 +401,34 @@ export default function PaymentProcessingPage() {
                 </td>
                 <td className="px-4 py-4">
                   <p className="font-semibold text-slate-700">
-                    {resident.oldestBilling.billingPeriod}
+                    {resident.oldestBilling?.billingPeriod ?? "No outstanding bills"}
                   </p>
-                  <p className="mt-1 font-mono text-xs text-slate-500">
-                    {resident.oldestBilling.invoiceNumber} · Due {resident.oldestBilling.dueDate || "Not available"}
-                  </p>
+                  {resident.oldestBilling && (
+                    <p className="mt-1 font-mono text-xs text-slate-500">
+                      {resident.oldestBilling.invoiceNumber} · Due {resident.oldestBilling.dueDate || "Not available"}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-4 text-right font-mono font-extrabold tabular-nums text-navy-900">
                   ₱{resident.totalOutstanding.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </td>
                 <td className="px-4 py-4">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800">
-                    <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />
-                    {resident.outstandingBillCount} outstanding
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${resident.paymentStatus === "paid" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                    {resident.paymentStatus === "paid" ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> : <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />}
+                    {resident.paymentStatus === "paid" ? "Paid" : `${resident.outstandingBillCount} outstanding`}
                   </span>
                 </td>
                 <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
-                  <button
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700"
-                    onClick={() => openPaymentModal(resident.oldestBilling)}
-                    type="button"
-                  >
-                    <WalletCards aria-hidden="true" className="h-4 w-4" />
-                    Record Payment
-                  </button>
+                  {resident.oldestBilling ? (
+                    <button
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700"
+                      onClick={() => openPaymentModal(resident.oldestBilling)}
+                      type="button"
+                    >
+                      <WalletCards aria-hidden="true" className="h-4 w-4" />
+                      Record Payment
+                    </button>
+                  ) : <span className="text-xs font-semibold text-emerald-700">No payment due</span>}
                 </td>
               </>
             )}

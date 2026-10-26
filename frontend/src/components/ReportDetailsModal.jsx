@@ -17,6 +17,7 @@ const metricValue = (key, value) => {
 function recordSummary(record, type) {
   if (type === "billing") return `${record.billingDate} · ${record.consumerName} · ₱${Number(record.totalBill).toLocaleString("en-US", { minimumFractionDigits: 2 })} · ${record.status}`;
   if (type === "residents") return `${record.name} · ${record.username} · ${record.purok} · ${record.status}`;
+  if (type === "meter-incident") return `${record.effectiveDate} · ${record.consumerName} · ${record.purok} · ${record.oldMeterSerial} → ${record.newMeterSerial} · ${record.status}`;
   return `${record.readingDate} · ${record.consumerName} · ${record.purok} · ${Number(record.consumption).toLocaleString("en-US")} m³`;
 }
 
@@ -100,6 +101,18 @@ export default function ReportDetailsModal({ onClose, reportId }) {
                     {(report.report_data?.records ?? []).length === 0 && <p className="p-4 text-sm text-slate-500">No source records were included.</p>}
                   </div>
                   {(report.report_data?.records ?? []).length > 5 && <p className="mt-2 text-xs text-slate-500">Showing 5 of {report.record_count.toLocaleString()} records. The PDF contains the complete snapshot.</p>}
+                </section>
+              )}
+              {report.report_type === "consumption" && report.sections?.includes("incidents") && (
+                <section>
+                  <h3 className="font-extrabold text-navy-900">Meter change incidents</h3>
+                  <div className="mt-3 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                    {(report.report_data?.incidents ?? []).slice(0, 5).map((record) => (
+                      <div className="flex items-start gap-3 p-3 text-sm text-slate-600" key={record.id}><FileText aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-water-700" /><span>{recordSummary(record, "meter-incident")}</span></div>
+                    ))}
+                    {(report.report_data?.incidents ?? []).length === 0 && <p className="p-4 text-sm text-slate-500">No meter change incidents were recorded during this period.</p>}
+                  </div>
+                  {(report.report_data?.incidents ?? []).length > 5 && <p className="mt-2 text-xs text-slate-500">Showing 5 of {report.report_data.incidents.length} meter changes. The PDF contains all incidents.</p>}
                 </section>
               )}
             </div>
