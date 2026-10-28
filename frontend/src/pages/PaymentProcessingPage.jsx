@@ -268,7 +268,9 @@ export default function PaymentProcessingPage() {
     const matchesCount =
       resident.paymentStatus === "paid" ||
       paymentCountFilter === "all" ||
-      (paymentCountFilter === "1" ? resident.outstandingBillCount === 1 : resident.outstandingBillCount >= 2);
+      (paymentCountFilter === "1" && resident.outstandingBillCount === 1) ||
+      (paymentCountFilter === "2" && resident.outstandingBillCount === 2) ||
+      (paymentCountFilter === "3+" && resident.outstandingBillCount >= 3);
 
     return matchesName && matchesStatus && matchesCount && matchesPurok;
   });
@@ -347,7 +349,8 @@ export default function PaymentProcessingPage() {
           options={[
             { label: "All bill counts", value: "all" },
             { label: "1 outstanding bill", value: "1" },
-            { label: "2+ outstanding bills", value: "2+" },
+            { label: "2 outstanding bills", value: "2" },
+            { label: "3+ outstanding bills", value: "3+" },
           ]}
           value={paymentCountFilter}
         />
