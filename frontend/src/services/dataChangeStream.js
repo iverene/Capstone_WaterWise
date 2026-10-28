@@ -1,6 +1,7 @@
 import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 import { API_BASE_URL } from "./apiClient";
+import { getDataChangeClientId } from "./dataChangeClient";
 
 const RETRY_DELAY_MS = 3_000;
 const VERSION_KEY = "waterwise-data-change-version";
@@ -61,7 +62,10 @@ export function subscribeToDataChanges(onChange) {
       return;
     }
     try {
-      const headers = { Accept: "text/event-stream" };
+      const headers = {
+        Accept: "text/event-stream",
+        "X-Data-Change-Client": getDataChangeClientId(),
+      };
       try {
         const fingerprint = await getDeviceFingerprint();
         if (fingerprint) headers["X-Device-Fingerprint"] = fingerprint;
@@ -111,6 +115,12 @@ export function subscribeToDataChanges(onChange) {
               window.sessionStorage.setItem(VERSION_KEY, String(event.payload.version));
             }
             onChange(event.payload);
+          }
+          if (event?.eventName === "data-change-ack" && event.payload.version != null) {
+            // The current tab already applied this write locally. Advance the
+            // stream version without remounting the route tree, so reconnects
+            // do not mistake the acknowledged write for a missed update.
+            window.sessionStorage.setItem(VERSION_KEY, String(event.payload.version));
           }
           boundary = buffer.indexOf("\n\n");
         }

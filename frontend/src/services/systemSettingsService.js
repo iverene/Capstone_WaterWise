@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 export async function fetchSystemSettings(authorizationToken) {
   try {
@@ -43,13 +44,16 @@ export async function verifySettingsChangeOtp(challengeToken, otp) {
   }
 }
 
-export async function updateSystemSetting(key, value, authorizationToken) {
+export async function updateSystemSetting(key, value, authorizationToken, settingsPermissionToken) {
   try {
-    return await apiRequest(`/system-settings/${key}`, {
+    return await apiRequest(`/system-settings/${key}`, withDataChangeClient({
       method: "PATCH",
       body: JSON.stringify({ value }),
-      headers: { "X-Staff-Authorization": authorizationToken },
-    });
+      headers: {
+        "X-Staff-Authorization": authorizationToken,
+        "X-Settings-Permission": settingsPermissionToken,
+      },
+    }));
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to update the setting.", { cause: error });
   }

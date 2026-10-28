@@ -354,12 +354,12 @@ export async function verifyStaffActionPassword(req, res) {
   }
 }
 
-export const authorizeStaffAction = (expectedAction) => async (req, res, next) => {
+export const authorizeStaffAction = (expectedAction, options = {}) => async (req, res, next) => {
   try {
     for (const [authId, state] of staffActionAuthorizations) {
       if (state.expiresAt <= Date.now()) staffActionAuthorizations.delete(authId);
     }
-    const token = req.get("x-staff-authorization") ?? "";
+    const token = req.get(options.headerName ?? "x-staff-authorization") ?? "";
     const payload = jwt.verify(token, getJwtSecret(), { issuer: JWT_ISSUER, audience: STAFF_ACTION_AUDIENCE });
     // Exact action match: a page-view permission (manage-staff /
     // manage-system-settings) never authorizes a write, and vice versa.
@@ -374,7 +374,11 @@ export const authorizeStaffAction = (expectedAction) => async (req, res, next) =
     if (!isReusableGate) staffActionAuthorizations.set(payload.jti, { used: true, expiresAt: payload.exp * 1000 });
     return next();
   } catch (error) {
-    return res.status(403).json({ success: false, message: "Verify the Super Admin email OTP before continuing." });
+    return res.status(403).json({
+      success: false,
+      ...(options.failureCode ? { code: options.failureCode } : {}),
+      message: options.failureMessage ?? "Confirm the Super Admin password or email OTP before continuing.",
+    });
   }
 };
 

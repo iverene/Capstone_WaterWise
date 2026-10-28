@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 const client = {
   get: (path, options) => apiClient.get(`/consumption${path}`, options),
@@ -142,7 +143,7 @@ export async function createMeterReading(payload, options = {}) {
     ...(payload.estimateValue != null ? { estimateValue: Number(payload.estimateValue) } : {}),
     ...(payload.initialPreviousReading != null ? { initialPreviousReading: Number(payload.initialPreviousReading) } : {}),
     ...(payload.incident ? { incident: payload.incident } : {}),
-  }, options);
+  }, withDataChangeClient(options));
   return normalizeCreatedReading(response.data?.data ?? response.data);
 }
 

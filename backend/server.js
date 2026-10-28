@@ -89,8 +89,10 @@ app.use(
       "Content-Type",
       "Accept",
       "X-Staff-Authorization",
+      "X-Settings-Permission",
       "X-Consumer-Password-Authorization",
       "X-Device-Fingerprint",
+      "X-Data-Change-Client",
       "X-User-Activity",
     ],
     credentials: true,
@@ -111,8 +113,10 @@ const ignoredChangePaths = [
   "/api/auth/change-password/email-otp",
   "/api/auth/admin/staff-action/otp",
   "/api/auth/admin/staff-action/verify",
+  "/api/auth/admin/staff-action/verify-password",
   "/api/auth/admin/consumer-password/otp",
   "/api/auth/admin/consumer-password/verify",
+  "/api/auth/admin/consumer-password/verify-password",
   "/api/auth/consumer/change-email/otp",
   "/api/auth/consumer/change-email/verify",
   "/api/auth/admin/change-email/otp",
@@ -122,14 +126,29 @@ const ignoredChangePaths = [
   "/api/notifications/push/subscriptions/current",
 ];
 
+const isConsumerNotificationStateChange = (req) =>
+  (req.method === "PUT" &&
+    (req.path === "/api/notifications/read-all" ||
+      /^\/api\/notifications\/\d+\/read$/.test(req.path))) ||
+  (req.method === "POST" && req.path === "/api/notifications/delete");
+
 app.use((req, res, next) => {
-  if (!dataMutationMethods.has(req.method) || ignoredChangePaths.includes(req.path)) {
+  if (
+    !dataMutationMethods.has(req.method) ||
+    ignoredChangePaths.includes(req.path) ||
+    isConsumerNotificationStateChange(req)
+  ) {
     return next();
   }
 
   res.on("finish", () => {
     if (res.statusCode >= 200 && res.statusCode < 300 && req.user) {
-      publishDataChange({ actor: req.user, method: req.method, path: req.path });
+      publishDataChange({
+        actor: req.user,
+        method: req.method,
+        path: req.path,
+        sourceClientId: req.get("X-Data-Change-Client"),
+      });
     }
   });
   return next();

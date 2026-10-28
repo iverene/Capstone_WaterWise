@@ -12,6 +12,8 @@ const formatCountdown = (totalSeconds) => {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 };
 
+const currentTimestamp = () => Date.now();
+
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -49,14 +51,16 @@ export default function ForgotPassword() {
       setOtp("");
       toast.success("Code sent", result.message);
       setCooldownEmail(normalizedEmail);
-      setClock(Date.now());
-      setCooldownUntil(Date.now() + Number(result.cooldownSeconds ?? 300) * 1000);
+      const now = currentTimestamp();
+      setClock(now);
+      setCooldownUntil(now + Number(result.cooldownSeconds ?? 300) * 1000);
     } catch (requestError) {
       setError(requestError.message);
       if (requestError.retryAfterSeconds) {
         setCooldownEmail(normalizedEmail);
-        setClock(Date.now());
-        setCooldownUntil(Date.now() + requestError.retryAfterSeconds * 1000);
+        const now = currentTimestamp();
+        setClock(now);
+        setCooldownUntil(now + requestError.retryAfterSeconds * 1000);
       }
     } finally {
       setIsSubmitting(false);

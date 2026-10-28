@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 const paymentDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "2-digit",
@@ -94,7 +95,7 @@ export async function recordWaterfallPayment(payload, options = {}) {
     paymentMethod: payload.paymentMethod,
     referenceNumber: payload.referenceNumber || null,
     totalApplied: Number(payload.totalApplied ?? payload.amount),
-  }, options);
+  }, withDataChangeClient(options));
   const result = response.data?.data ?? {};
   const raws = Array.isArray(result.payments) ? result.payments : [];
   return {

@@ -449,9 +449,10 @@ export default function ConsumerOnboarding() {
                   className="ww-field mt-2 px-4 text-sm"
                   disabled={isSaving}
                   id="onboarding-contact-number"
-                  inputMode="tel"
+                  inputMode="numeric"
+                  maxLength={11}
                   onChange={(event) => {
-                    setContactNumber(event.target.value);
+                    setContactNumber(event.target.value.replace(/\D/g, "").slice(0, 11));
                     setError("");
                   }}
                   placeholder="09171234567"

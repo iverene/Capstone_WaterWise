@@ -69,6 +69,7 @@ export default function KPI({
   icon: Icon,
   menuLabel,
   onMenu,
+  size = "md",
   title,
   showTrendBadge = true,
   trend,
@@ -79,6 +80,7 @@ export default function KPI({
   value,
   valueTestId,
 }) {
+  const isSmall = size === "sm";
   const TrendIcon = trendIcons[trendDirection] ?? Minus;
   const supportingValue = trendBelow ? descriptionHighlight : (descriptionHighlight ?? trend);
   const SupportingIcon = DescriptionIcon ?? (trend ? TrendIcon : null);
@@ -106,14 +108,14 @@ export default function KPI({
   ) : null;
 
   return (
-    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-card ${compact ? "p-4" : "p-3 sm:p-4"} ${className}`.trim()} data-testid={cardTestId}>
-      <div className={`flex min-w-0 flex-wrap items-center ${compact ? "gap-2.5 sm:gap-3" : "gap-2 sm:gap-2.5"}`}>
+    <article className={`flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white shadow-card ${isSmall ? "p-2.5 sm:p-3" : compact ? "p-4" : "p-3 sm:p-4"} ${className}`.trim()} data-testid={cardTestId}>
+      <div className={`flex min-w-0 flex-wrap items-center ${isSmall ? "gap-2" : compact ? "gap-2.5 sm:gap-3" : "gap-2 sm:gap-2.5"}`}>
         {Icon ? (
-          <span className={`flex shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700 ${compact ? "h-8 w-8 sm:h-9 sm:w-9" : "h-8 w-8 sm:h-9 sm:w-9"}`}>
-            <Icon aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" />
+          <span className={`flex shrink-0 items-center justify-center rounded-lg bg-water-50 text-water-700 ${isSmall ? "h-6 w-6 sm:h-7 sm:w-7" : "h-8 w-8 sm:h-9 sm:w-9"}`}>
+            <Icon aria-hidden="true" className={isSmall ? "h-3.5 w-3.5" : "h-4 w-4 sm:h-5 sm:w-5"} />
           </span>
         ) : null}
-        <h2 className="min-w-0 flex-1 text-xs font-bold leading-4 text-slate-600 sm:text-[13px]">
+        <h2 className={`min-w-0 flex-1 font-bold leading-4 text-slate-600 ${isSmall ? "text-[11px] sm:text-xs" : "text-xs sm:text-[13px]"}`}>
           {title}
         </h2>
         {!trendBelow && trendBadge}
@@ -130,17 +132,17 @@ export default function KPI({
         ) : null}
       </div>
 
-      <p className={`min-w-0 overflow-hidden font-sans font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums ${compact ? "mt-2.5 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl" : "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl"}`} data-testid={valueTestId}>
+      <p className={`min-w-0 overflow-hidden font-sans font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums ${isSmall ? "mt-1.5 text-lg sm:text-xl" : compact ? "mt-2.5 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl" : "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl"}`} data-testid={valueTestId}>
         {value}
-        {unit ? <span className="ml-1 text-[10px] font-bold text-slate-500 sm:text-[13px]">{unit}</span> : null}
+        {unit ? <span className={`ml-1 font-bold text-slate-500 ${isSmall ? "text-[10px]" : "text-[10px] sm:text-[13px]"}`}>{unit}</span> : null}
       </p>
 
       {(supportingValue || description || (trendBelow && trendBadge)) ? (
-        <div className={`flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] leading-4 sm:text-xs ${compact ? "pt-2 sm:pt-2.5" : "pt-2 sm:pt-2.5"}`}>
+        <div className={`flex min-w-0 flex-wrap items-center gap-1.5 leading-4 ${isSmall ? "pt-1.5 text-[10px] sm:text-[11px]" : "text-[10px] sm:text-xs pt-2 sm:pt-2.5"}`}>
           {trendBelow && trendBadge}
           {supportingValue ? (
-            <span className={`inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 font-bold ring-1 ring-inset sm:px-2 sm:py-1 ${supportingToneStyles[resolvedTone] ?? supportingToneStyles.water}`}>
-              {SupportingIcon ? <SupportingIcon aria-hidden="true" className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" /> : null}
+            <span className={`inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 font-bold ring-1 ring-inset ${isSmall ? "" : "sm:px-2 sm:py-1"} ${supportingToneStyles[resolvedTone] ?? supportingToneStyles.water}`}>
+              {SupportingIcon ? <SupportingIcon aria-hidden="true" className={`shrink-0 ${isSmall ? "h-3 w-3" : "h-3 w-3 sm:h-3.5 sm:w-3.5"}`} /> : null}
               <span className="truncate capitalize" data-testid={descriptionHighlightTestId}>{supportingValue}</span>
             </span>
           ) : null}

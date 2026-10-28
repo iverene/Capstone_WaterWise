@@ -361,16 +361,21 @@ export default function EventManagementPage() {
     try {
       setSaving(true);
       setError("");
+      let saved;
       if (dialog.event) {
-        await updateEventRequest(dialog.event.id, { ...dialog.event, ...event });
+        saved = await updateEventRequest(dialog.event.id, { ...dialog.event, ...event });
       } else {
-        await createEventRequest({ ...event, status: "Scheduled" });
+        saved = await createEventRequest({ ...event, status: "Scheduled" });
       }
+      setEvents((current) =>
+        isEditing
+          ? current.map((item) => (item.id === saved.id ? saved : item))
+          : [saved, ...current.filter((item) => item.id !== saved.id)],
+      );
       setSelectedDate(event.date);
       const savedDate = parseDate(event.date);
       if (savedDate) setCurrentMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
       setDialog((current) => ({ ...current, isOpen: false }));
-      await loadEvents();
       toast.success(
         isEditing ? "Event updated" : "Event created",
         `${event.title} is scheduled for ${event.date}.`,
@@ -392,7 +397,7 @@ export default function EventManagementPage() {
       setError("");
       await deleteEventRequest(eventId);
       setDeleteConfirmation(null);
-      await loadEvents();
+      setEvents((current) => current.filter((event) => event.id !== eventId));
       toast.success("Event deleted", `${eventTitle} was removed from the calendar.`);
     } catch (requestError) {
       const message = requestError?.response?.data?.message ?? requestError.message ?? "Unable to delete the event.";
@@ -464,7 +469,7 @@ export default function EventManagementPage() {
             onTouchEnd={handleTouchEnd}
             onTouchStart={handleTouchStart}
           >
-            <div className="flex flex-col gap-4 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between sm:p-5">
+            <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-bold uppercase tracking-[0.12em] text-water-700">
                   Calendar period
@@ -475,7 +480,7 @@ export default function EventManagementPage() {
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     aria-label="Previous month"
-                    className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:flex"
+                    className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:flex"
                     onClick={() => changeMonth(-1)}
                     type="button"
                   >
@@ -502,7 +507,7 @@ export default function EventManagementPage() {
                   />
                   <button
                     aria-label="Next month"
-                    className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:flex"
+                    className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:flex"
                     onClick={() => changeMonth(1)}
                     type="button"
                   >
@@ -518,7 +523,7 @@ export default function EventManagementPage() {
                 </div>
               </div>
               <button
-                className="hidden min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:block"
+                className="hidden min-h-10 rounded-xl border border-slate-300 px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 sm:block"
                 onClick={returnToToday}
                 type="button"
               >
@@ -530,7 +535,7 @@ export default function EventManagementPage() {
               <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50" role="row">
                 {DAY_NAMES.map((day) => (
                   <div
-                    className="px-1 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs"
+                    className="px-1 py-2 text-center text-[11px] font-bold uppercase tracking-wide text-slate-500 sm:text-xs"
                     key={day}
                     role="columnheader"
                   >
@@ -557,7 +562,7 @@ export default function EventManagementPage() {
                     <button
                       aria-label={`${formatFullDate(date)}${dayEvents.length ? `, ${dayEvents.length} events` : ""}`}
                       aria-pressed={selected}
-                      className={`h-full min-h-16 w-full p-1.5 text-left transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600 sm:min-h-28 sm:p-2 ${
+                      className={`h-full min-h-16 w-full p-1.5 text-left transition-colors focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-water-600 sm:min-h-24 ${
                         selected
                           ? "bg-water-50 hover:bg-water-100"
                           : inCurrentMonth
@@ -568,7 +573,7 @@ export default function EventManagementPage() {
                       type="button"
                     >
                       <span
-                        className={`flex h-8 w-8 items-center justify-center rounded-full font-mono text-xs font-bold tabular-nums sm:text-sm ${
+                        className={`flex h-8 w-8 items-center justify-center rounded-full font-mono text-xs font-bold tabular-nums sm:h-7 sm:w-7 sm:text-sm ${
                           isToday
                             ? "bg-water-600 text-white"
                             : selected
@@ -590,7 +595,7 @@ export default function EventManagementPage() {
                       <span className="mt-1 hidden space-y-1 sm:block" aria-hidden="true">
                         {dayEvents.slice(0, 2).map((event) => (
                           <span
-                            className="block min-h-7 w-full truncate rounded-md bg-water-100 px-2 py-1 text-[11px] font-bold text-water-800"
+                            className="block min-h-6 w-full truncate rounded-md bg-water-100 px-1.5 py-0.5 text-[11px] font-bold leading-5 text-water-800"
                             key={event.id}
                             title={event.title}
                           >
@@ -598,7 +603,7 @@ export default function EventManagementPage() {
                           </span>
                         ))}
                         {dayEvents.length > 2 && (
-                          <span className="block min-h-7 w-full px-2 py-1 text-[11px] font-bold text-slate-500">
+                          <span className="block min-h-6 w-full px-1.5 py-0.5 text-[11px] font-bold leading-5 text-slate-500">
                             +{dayEvents.length - 2} more
                           </span>
                         )}
@@ -680,11 +685,10 @@ export default function EventManagementPage() {
               )}
             </div>
           </aside>
-          <div aria-label="Event summary" className="order-1 grid h-full grid-cols-2 gap-2 sm:gap-3 lg:flex lg:flex-col">
-            <KPI className="flex-1" compact description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
+          <div aria-label="Event summary" className="order-1 grid grid-cols-2 gap-2 sm:gap-3 lg:flex lg:flex-col lg:gap-3">
+            <KPI size="sm" description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
             <KPI
-              className="flex-1"
-              compact
+              size="sm"
               description={nextEvent ? `${nextEvent.title} · ${formatTime(nextEvent.time)}` : "Add an event to the community calendar"}
               icon={Clock3}
               title="Next Scheduled Event"

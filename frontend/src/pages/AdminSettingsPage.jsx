@@ -5,11 +5,13 @@ import Modal from "../components/Modal";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import OtpInput from "../components/OtpInput";
 import PageHeader from "../components/PageHeader";
+import StaffPasswordConfirmModal from "../components/StaffPasswordConfirmModal";
 import { useToast } from "../components/Toast";
+import { getCurrentAccount, verifyStaffActionPassword } from "../services/auth.service";
 import { requestSettingsChangeOtp, verifySettingsChangeOtp, updateSystemSetting, fetchSystemSettings } from "../services/systemSettingsService";
 import { getStoredAccount } from "../services/authToken";
 import { SETTINGS_PERMISSION_KEY } from "./AdminProfile";
-import { clearOtpChallenge, isChallengeExpired, loadOtpChallenge, saveOtpChallenge } from "../utils/otpChallenge";
+import { clearOtpChallenge, loadOtpChallenge, saveOtpChallenge } from "../utils/otpChallenge";
 
 const formatOtpCountdown = (totalSeconds) => `${String(Math.floor(totalSeconds / 60)).padStart(2, "0")}:${String(totalSeconds % 60).padStart(2, "0")}`;
 
@@ -33,6 +35,8 @@ const SETTING_UNITS = {
 
 // Meter replacements no longer expire, so this legacy setting is hidden.
 const HIDDEN_SETTING_KEYS = new Set(["incident_authorization_days"]);
+const SETTINGS_PERMISSION_EXPIRED_CODE = "SETTINGS_PERMISSION_EXPIRED";
+const SETTINGS_PERMISSION_EXPIRED_MESSAGE = "Your System Settings permission has expired. Return to your profile and verify again.";
 
 function getStoredSettingsPermission() {
   try {
@@ -68,10 +72,16 @@ export default function AdminSettingsPage() {
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [currentAdmin, setCurrentAdmin] = useState(null);
+  const [isPasswordPromptOpen, setIsPasswordPromptOpen] = useState(false);
+  const [staffPassword, setStaffPassword] = useState("");
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [staffPasswordError, setStaffPasswordError] = useState("");
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [passwordLockSeconds, setPasswordLockSeconds] = useState(0);
 
-  // Restore a pending verification code. Requesting a code is itself a
-  // mutation, and the app remounts its route tree whenever data changes, so
-  // without this the code section would come back empty after the remount.
+  // Restore a pending verification code so closing and reopening the editor
+  // does not waste a code that is still valid.
   const [restoredOtpChallenge] = useState(() => loadOtpChallenge("update-system-settings"));
   const [otpChallenge, setOtpChallenge] = useState(restoredOtpChallenge);
   const [otp, setOtp] = useState("");
@@ -85,20 +95,48 @@ export default function AdminSettingsPage() {
   );
   const [needsReverify, setNeedsReverify] = useState(false);
 
+  const lockSettingsPage = useCallback((message = SETTINGS_PERMISSION_EXPIRED_MESSAGE) => {
+    try {
+      window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY);
+    } catch {
+      // The UI lock remains effective even if browser storage is unavailable.
+    }
+    clearOtpChallenge("update-system-settings");
+    setSettings([]);
+    setLoading(false);
+    setLoadError(message);
+    setNeedsReverify(true);
+    setEditingKey(null);
+    setEditValue("");
+    setSaving(false);
+    setSaveError("");
+    setIsPasswordPromptOpen(false);
+    setStaffPassword("");
+    setShowStaffPassword(false);
+    setStaffPasswordError("");
+    setIsVerifyingPassword(false);
+    setOtpChallenge(null);
+    setOtp("");
+    setOtpError("");
+    setOtpSuccess(false);
+    setVerifying(false);
+    setCooldownSeconds(0);
+  }, []);
+
   const loadSettings = useCallback(async () => {
     try {
       setLoadError("");
       if (mountedRef.current) setNeedsReverify(false);
       const permission = getStoredSettingsPermission();
       if (!permission?.token) {
-        if (mountedRef.current) {
-          setLoadError("Your settings-view permission has expired. Return to your profile and verify again.");
-          setSettings([]);
-          setNeedsReverify(true);
-        }
+        if (mountedRef.current) lockSettingsPage();
         return;
       }
       const result = await fetchSystemSettings(permission.token);
+      if (!getStoredSettingsPermission()?.token) {
+        if (mountedRef.current) lockSettingsPage();
+        return;
+      }
       if (mountedRef.current) setSettings(result.data ?? []);
     } catch (error) {
       const status = error.cause?.response?.status;
@@ -107,30 +145,48 @@ export default function AdminSettingsPage() {
         status === 401 ||
         status === 403 ||
         /verify.*otp|expired|authorization|permission/i.test(message);
-      if (isAuthError) {
-        try {
-          window.sessionStorage.removeItem(SETTINGS_PERMISSION_KEY);
-        } catch {
-          // Storage may be unavailable; the reverify screen still works.
-        }
-      }
       if (mountedRef.current) {
-        setLoadError(message || "Unable to load system settings.");
         if (isAuthError) {
-          setSettings([]);
-          setNeedsReverify(true);
+          lockSettingsPage(message || SETTINGS_PERMISSION_EXPIRED_MESSAGE);
+        } else {
+          setLoadError(message || "Unable to load system settings.");
         }
       }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [lockSettingsPage]);
 
   useEffect(() => {
     mountedRef.current = true;
-    loadSettings();
+    queueMicrotask(() => {
+      if (mountedRef.current) loadSettings();
+    });
     return () => { mountedRef.current = false; };
   }, [loadSettings]);
+
+  useEffect(() => {
+    const permission = getStoredSettingsPermission();
+    if (!permission?.expiresAt) {
+      queueMicrotask(() => lockSettingsPage());
+      return undefined;
+    }
+    const remainingMs = Number(permission.expiresAt) - Date.now();
+    if (remainingMs <= 0) {
+      queueMicrotask(() => lockSettingsPage());
+      return undefined;
+    }
+    const timer = window.setTimeout(() => lockSettingsPage(), remainingMs);
+    return () => window.clearTimeout(timer);
+  }, [lockSettingsPage]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getCurrentAccount({ signal: controller.signal })
+      .then(({ user }) => setCurrentAdmin(user))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -138,7 +194,17 @@ export default function AdminSettingsPage() {
     return () => clearInterval(timer);
   }, [cooldownSeconds]);
 
+  useEffect(() => {
+    if (passwordLockSeconds <= 0) return;
+    const timer = setInterval(() => setPasswordLockSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [passwordLockSeconds]);
+
   const startEdit = (key, currentValue) => {
+    if (!getStoredSettingsPermission()?.token) {
+      lockSettingsPage();
+      return;
+    }
     setEditingKey(key);
     setEditValue(String(currentValue));
     setSaveError("");
@@ -159,11 +225,50 @@ export default function AdminSettingsPage() {
     setOtpSuccess(false);
   };
 
+  const closePasswordPrompt = () => {
+    setIsPasswordPromptOpen(false);
+    setStaffPassword("");
+    setShowStaffPassword(false);
+    setStaffPasswordError("");
+  };
+
+  const saveAuthorizedSetting = async (authorizationToken, settingKey, settingValue) => {
+    const settingsPermission = getStoredSettingsPermission();
+    if (!settingsPermission?.token) {
+      lockSettingsPage();
+      return false;
+    }
+    try {
+      setSaving(true);
+      setSaveError("");
+      await updateSystemSetting(settingKey, settingValue, authorizationToken, settingsPermission.token);
+      toast.success("Setting updated", `"${settingKey}" has been updated successfully.`);
+      cancelEdit();
+      await loadSettings();
+      return true;
+    } catch (error) {
+      if (error.cause?.response?.data?.code === SETTINGS_PERMISSION_EXPIRED_CODE) {
+        lockSettingsPage(error.message || SETTINGS_PERMISSION_EXPIRED_MESSAGE);
+        return false;
+      }
+      setSaveError(error.message);
+      setOtpChallenge(null);
+      setOtp("");
+      setOtpSuccess(false);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleRequestOtp = async () => {
+    if (!getStoredSettingsPermission()?.token) {
+      lockSettingsPage();
+      return;
+    }
     const scope = "update-system-settings";
     // Reuse the code that was already sent. The backend only allows one code
-    // every 5 minutes, and requesting a code is itself a mutation that
-    // remounts the app, so the challenge is kept in session storage.
+    // every 5 minutes, so the challenge is kept in session storage.
     const saved = loadOtpChallenge(scope);
     if (saved) {
       setOtpChallenge(saved);
@@ -188,6 +293,10 @@ export default function AdminSettingsPage() {
   };
 
   const handleVerifyOtp = async (otpValue) => {
+    if (!getStoredSettingsPermission()?.token) {
+      lockSettingsPage();
+      return;
+    }
     if (!editingKey) {
       setSaveError("No setting is being edited. Close and reopen the editor.");
       return;
@@ -204,25 +313,13 @@ export default function AdminSettingsPage() {
       setVerifying(true);
       setOtpError("");
       const result = await verifySettingsChangeOtp(otpChallenge.challengeToken, otpValue);
-      // The code is consumed by the server now. Drop the stored copy and the
-      // code section BEFORE the save: the save is itself a mutation, and the
-      // app remounts its route tree whenever data changes, so a remount in
-      // the middle of the save would otherwise bring the code section back.
+      // The code is consumed by the server now. Drop the stored copy before
+      // saving so a used code cannot be restored.
       clearOtpChallenge("update-system-settings");
       setOtpChallenge(null);
       setOtpSuccess(true);
       setTimeout(async () => {
-        try {
-          await updateSystemSetting(settingKey, settingValue, result.authorizationToken);
-          toast.success("Setting updated", `"${settingKey}" has been updated successfully.`);
-          cancelEdit();
-          loadSettings();
-        } catch (error) {
-          setSaveError(error.message);
-          setOtpChallenge(null);
-          setOtp("");
-          setOtpSuccess(false);
-        }
+        await saveAuthorizedSetting(result.authorizationToken, settingKey, settingValue);
       }, 600);
     } catch (error) {
       setOtpError(error.message);
@@ -233,17 +330,61 @@ export default function AdminSettingsPage() {
   };
 
   const handleSave = async () => {
+    if (!getStoredSettingsPermission()?.token) {
+      lockSettingsPage();
+      return;
+    }
     const numericValue = Number(editValue);
     if (!Number.isFinite(numericValue) || numericValue < 0) {
       setSaveError("Please enter a valid non-negative number.");
       return;
     }
-    // Reuse the code that was already sent instead of asking for another one,
-    // which the backend would rate limit for five minutes.
-    if (!otpChallenge || isChallengeExpired(otpChallenge.challengeToken)) {
-      await handleRequestOtp();
+    setStaffPassword("");
+    setStaffPasswordError("");
+    setShowStaffPassword(false);
+    setIsPasswordPromptOpen(true);
+  };
+
+  const handlePasswordConfirmation = async (event) => {
+    event.preventDefault();
+    if (!getStoredSettingsPermission()?.token) {
+      lockSettingsPage();
       return;
     }
+    const settingKey = editingKey;
+    const settingValue = Number(editValue);
+    if (!settingKey || !Number.isFinite(settingValue) || settingValue < 0) {
+      setStaffPasswordError("The setting value is no longer valid. Close this confirmation and try again.");
+      return;
+    }
+    if (!staffPassword) {
+      setStaffPasswordError("Enter your Super Admin password.");
+      return;
+    }
+    try {
+      setIsVerifyingPassword(true);
+      setStaffPasswordError("");
+      const result = await verifyStaffActionPassword("update-system-settings", null, staffPassword);
+      closePasswordPrompt();
+      await saveAuthorizedSetting(result.authorizationToken, settingKey, settingValue);
+    } catch (error) {
+      if (error.retryAfterSeconds) {
+        setPasswordLockSeconds(error.retryAfterSeconds);
+        toast.warning("Too many attempts", error.message);
+      } else if (error.status === 401 && Number.isFinite(error.remainingAttempts)) {
+        setStaffPasswordError(`${error.message} ${error.remainingAttempts} attempt${error.remainingAttempts === 1 ? "" : "s"} remaining.`);
+      } else {
+        setStaffPasswordError(error.message);
+      }
+      setStaffPassword("");
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
+
+  const useEmailOtpForSetting = async () => {
+    closePasswordPrompt();
+    await handleRequestOtp();
   };
 
   return (
@@ -410,7 +551,7 @@ export default function AdminSettingsPage() {
                   type="button"
                 >
                   {saving && <LoaderCircle className="h-4 w-4 animate-spin" />}
-                  {saving ? "Sending code…" : "Request verification code"}
+                  {saving ? "Saving changes…" : "Confirm and save"}
                 </button>
                 <button
                   className="min-h-10 rounded-xl px-4 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 sm:min-h-11"
@@ -425,6 +566,23 @@ export default function AdminSettingsPage() {
           </div>
         </div>
       </Modal>
+      <StaffPasswordConfirmModal
+        actionLabel={`Update ${TIER_LABELS[editingKey] ?? editingKey ?? "system setting"}`}
+        description="Enter your current Super Admin password to save this setting. This approval is single-use. You may use an email code instead."
+        error={staffPasswordError}
+        isOpen={isPasswordPromptOpen}
+        isVerifying={isVerifyingPassword}
+        lockSeconds={passwordLockSeconds}
+        onClose={closePasswordPrompt}
+        onPasswordChange={(value) => { setStaffPassword(value); setStaffPasswordError(""); }}
+        onSubmit={handlePasswordConfirmation}
+        onToggleShowPassword={() => setShowStaffPassword((visible) => !visible)}
+        onUseEmailOtp={useEmailOtpForSetting}
+        password={staffPassword}
+        showPassword={showStaffPassword}
+        title="Confirm Setting Update"
+        username={currentAdmin?.username ?? ""}
+      />
     </main>
   );
 }

@@ -3,8 +3,14 @@ import { randomUUID } from "node:crypto";
 const clients = new Set();
 let changeVersion = Date.now();
 
-export function publishDataChange({ actor, method, path }) {
+const normalizeClientId = (value) =>
+  typeof value === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(value)
+    ? value
+    : null;
+
+export function publishDataChange({ actor, method, path, sourceClientId }) {
   changeVersion += 1;
+  const normalizedSourceClientId = normalizeClientId(sourceClientId);
   const event = {
     id: randomUUID(),
     actor: actor ? { id: actor.id, role: actor.role } : null,
@@ -20,7 +26,17 @@ export function publishDataChange({ actor, method, path }) {
     version: event.version,
   };
   const message = `id: ${event.id}\nevent: data-change\ndata: ${JSON.stringify(publicEvent)}\n\n`;
-  for (const client of clients) client.write(message);
+  const sourceAcknowledgement = `id: ${event.id}\nevent: data-change-ack\ndata: ${JSON.stringify(publicEvent)}\n\n`;
+  for (const client of clients) {
+    if (
+      normalizedSourceClientId &&
+      client.clientId === normalizedSourceClientId
+    ) {
+      client.response.write(sourceAcknowledgement);
+      continue;
+    }
+    client.response.write(message);
+  }
 }
 
 export function streamDataChanges(req, res) {
@@ -34,11 +50,15 @@ export function streamDataChanges(req, res) {
   res.flushHeaders();
   res.write(`event: connected\ndata: ${JSON.stringify({ connected: true, version: changeVersion })}\n\n`);
 
-  clients.add(res);
+  const client = {
+    clientId: normalizeClientId(req.get("X-Data-Change-Client")),
+    response: res,
+  };
+  clients.add(client);
   const heartbeat = setInterval(() => res.write(": keep-alive\n\n"), 25_000);
 
   req.on("close", () => {
     clearInterval(heartbeat);
-    clients.delete(res);
+    clients.delete(client);
   });
 }

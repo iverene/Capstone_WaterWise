@@ -30,8 +30,6 @@ export default function RateLimitToast() {
   const expiryRef = useRef(0);
   const intervalRef = useRef(null);
   const metaRef = useRef({ title: "Too many requests", base: "" });
-  const toastRef = useRef(toast);
-  toastRef.current = toast;
 
   useEffect(() => {
     const clearTimer = () => {
@@ -44,7 +42,7 @@ export default function RateLimitToast() {
     const dismissNow = () => {
       clearTimer();
       if (toastIdRef.current) {
-        toastRef.current.dismiss(toastIdRef.current);
+        toast.dismiss(toastIdRef.current);
         toastIdRef.current = null;
       }
       expiryRef.current = 0;
@@ -64,7 +62,7 @@ export default function RateLimitToast() {
         return;
       }
       const { base } = metaRef.current;
-      toastRef.current.update(toastIdRef.current, {
+      toast.update(toastIdRef.current, {
         message: `${base} Retry in ${formatRetry(remaining)}.`,
       });
     };
@@ -84,7 +82,7 @@ export default function RateLimitToast() {
 
       // No server timer: plain 5s warning, no sticky state.
       if (retry <= 0) {
-        toastRef.current.warning(title, base, { key: "waterwise-rate-limit" });
+        toast.warning(title, base, { key: "waterwise-rate-limit" });
         return;
       }
 
@@ -92,13 +90,13 @@ export default function RateLimitToast() {
       const message = `${base} Retry in ${formatRetry(retry)}.`;
 
       if (!toastIdRef.current) {
-        toastIdRef.current = toastRef.current.warning(title, message, {
+        toastIdRef.current = toast.warning(title, message, {
           duration: 0,
           key: "waterwise-rate-limit",
           actions: [{ label: "Dismiss", onClick: dismissNow }],
         });
       } else {
-        toastRef.current.update(toastIdRef.current, { title, message });
+        toast.update(toastIdRef.current, { title, message });
       }
       ensureTimer();
       tick();
@@ -109,10 +107,11 @@ export default function RateLimitToast() {
       window.removeEventListener("waterwise:rate-limited", handler);
       if (intervalRef.current) window.clearInterval(intervalRef.current);
       intervalRef.current = null;
+      if (toastIdRef.current) toast.dismiss(toastIdRef.current);
       toastIdRef.current = null;
       expiryRef.current = 0;
     };
-  }, []);
+  }, [toast]);
 
   return null;
 }

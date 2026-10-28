@@ -13,8 +13,6 @@ const ANNOUNCEMENT_CATEGORIES = [
   "Water Interruption",
   "System Maintenance",
   "Service Restoration",
-  "Billing Notice",
-  "Meter Reading Advisory",
   "Emergency Notice",
 ];
 

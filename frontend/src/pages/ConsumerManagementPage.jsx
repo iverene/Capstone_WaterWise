@@ -15,7 +15,7 @@ import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { createConsumer, fetchConsumerDirectory, requestConsumerPasswordOtp, updateConsumer, verifyConsumerPasswordOtp, verifyConsumerPasswordWithAdminPassword } from "../services/consumerDirectoryAPI";
-import { getStoredAccount } from "../services/authToken";
+import { getCurrentAccount } from "../services/auth.service";
 import { clearOtpChallenge, loadOtpChallenge, saveOtpChallenge } from "../utils/otpChallenge";
 
 function toManagementConsumer(consumer) {
@@ -64,11 +64,10 @@ function ConsumerManagementPage() {
   const [residentStatus, setResidentStatus] = useState("all");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  // A pending verification code is kept in session storage so it survives the
-  // remount the app does on every change. It is deliberately NOT reopened
-  // here: the edit form that owns it is gone after a remount, and a dialog
-  // without its form would be orphaned. The administrator reopens the form
-  // and the code is reused from there.
+  const [currentAdmin, setCurrentAdmin] = useState(null);
+  // A pending verification code is kept in session storage so closing the
+  // verification dialog does not waste a still-valid code. It is deliberately
+  // not reopened without the edit form that owns the pending update.
   const [restoredChallenge] = useState(() => loadOtpChallenge(OTP_SCOPE));
   const [passwordChallenge, setPasswordChallenge] = useState(null);
   // Visibility is tracked separately from the challenge itself. The backend
@@ -90,6 +89,14 @@ function ConsumerManagementPage() {
       ? Math.max(0, Math.ceil((Number(restoredChallenge.expiresAt ?? 0) - Date.now()) / 1000))
       : 0,
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getCurrentAccount({ signal: controller.signal })
+      .then(({ user }) => setCurrentAdmin(user))
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (resendSeconds <= 0) return undefined;
@@ -194,9 +201,8 @@ function ConsumerManagementPage() {
 
     // Reuse the code that was already sent for this resident. The backend
     // only allows one code per resident every 5 minutes, so asking again
-    // after the dialog was closed would cost a full wait. The challenge is
-    // read from session storage because requesting it is itself a mutation,
-    // and the app remounts its route tree whenever data changes.
+    // after the dialog was closed would cost a full wait. Keep the challenge
+    // in session storage so closing and reopening the dialog preserves it.
     const saved = loadOtpChallenge(scope);
     if (saved && String(saved.consumerId) === String(selectedConsumer.id)) {
       setPasswordChallenge(saved);
@@ -277,9 +283,7 @@ function ConsumerManagementPage() {
     try {
       const result = await verifyConsumerPasswordOtp(passwordChallenge.challengeToken, passwordOtp);
       // The code is consumed by the server now. Close the dialog and drop
-      // the stored copy BEFORE the save: the save is itself a mutation, and
-      // the app remounts its route tree whenever data changes. A remount in
-      // the middle of the save would otherwise bring the dialog back.
+      // the stored copy before saving so a used code cannot be restored.
       clearOtpChallenge(scope);
       setPasswordChallenge(null);
       setIsPasswordOtpOpen(false);
@@ -446,7 +450,7 @@ function ConsumerManagementPage() {
         password={adminPassword}
         showPassword={showAdminPassword}
         title="Confirm Resident Password Change"
-        username={getStoredAccount()?.username ?? ""}
+        username={currentAdmin?.username ?? ""}
       />
 
       <Modal

@@ -95,7 +95,8 @@ export default function MeterIncidentsPage() {
     [consumers],
   );
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isActive = () => true) => {
+    if (!isActive()) return;
     try {
       setLoading(true);
       setError("");
@@ -103,21 +104,27 @@ export default function MeterIncidentsPage() {
         fetchMeterIncidents(),
         fetchConsumerDirectory(),
       ]);
+      if (!isActive()) return;
       setIncidents(incidentList);
       setConsumers(directory);
     } catch (requestError) {
+      if (!isActive()) return;
       setError(
         requestError?.response?.data?.message ??
           requestError.message ??
           "Unable to load meter incidents.",
       );
     } finally {
-      setLoading(false);
+      if (isActive()) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadData();
+    let active = true;
+    queueMicrotask(() => loadData(() => active));
+    return () => {
+      active = false;
+    };
   }, [loadData]);
 
   useEffect(() => {
@@ -321,7 +328,7 @@ export default function MeterIncidentsPage() {
       {error && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
           <span>{error}</span>
-          <button className="font-bold underline" onClick={loadData} type="button">Try again</button>
+          <button className="font-bold underline" onClick={() => loadData()} type="button">Try again</button>
         </div>
       )}
 

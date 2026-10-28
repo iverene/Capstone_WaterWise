@@ -26,11 +26,7 @@ const METER_READER_OFFLINE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function sanitizeMeterReaderUser(user) {
   if (!user || user.role !== "meter-reader" || user.id == null) return null;
-  const safe = { id: user.id, role: "meter-reader" };
-  if (user.username) safe.username = user.username;
-  if (user.email) safe.email = user.email;
-  if (user.name) safe.name = user.name;
-  return safe;
+  return { id: user.id, role: "meter-reader" };
 }
 
 function writePersistentMeterReader(user) {
@@ -68,6 +64,9 @@ export function getPersistentMeterReaderUser() {
       window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
       return null;
     }
+    if (JSON.stringify(session.user) !== JSON.stringify(safe)) {
+      window.localStorage.setItem(PERSISTENT_METER_READER_KEY, JSON.stringify({ ...session, user: safe }));
+    }
     const graceUntil = Number(session?.offlineGraceUntil);
     if (!Number.isFinite(graceUntil) || Date.now() >= graceUntil) {
       window.localStorage.removeItem(PERSISTENT_METER_READER_KEY);
@@ -86,11 +85,7 @@ function getPersistentMeterReaderSession() {
 
 function sanitizeConsumerUser(user) {
   if (!user || user.role !== "consumer" || user.id == null) return null;
-  const safe = { id: user.id, role: "consumer" };
-  if (user.username) safe.username = user.username;
-  if (user.email) safe.email = user.email;
-  if (user.name) safe.name = user.name;
-  return safe;
+  return { id: user.id, role: "consumer" };
 }
 
 function writePersistentConsumer(user) {
@@ -120,6 +115,9 @@ export function getPersistentConsumerUser() {
       window.localStorage.removeItem(CONSUMER_SESSION_KEY);
       return null;
     }
+    if (JSON.stringify(session.user) !== JSON.stringify(safe)) {
+      window.localStorage.setItem(CONSUMER_SESSION_KEY, JSON.stringify({ ...session, user: safe }));
+    }
     const graceUntil = Number(session?.graceUntil);
     if (!Number.isFinite(graceUntil) || Date.now() >= graceUntil) {
       window.localStorage.removeItem(CONSUMER_SESSION_KEY);
@@ -131,17 +129,20 @@ export function getPersistentConsumerUser() {
   }
 }
 
-function getPersistentConsumerSession() {
-  try {
-    const session = JSON.parse(window.localStorage.getItem(PERSISTENT_CONSUMER_KEY));
-    return session?.user?.role === "consumer" && session.token ? session : null;
-  } catch {
-    return null;
+export function sanitizeStoredAccount(user) {
+  if (!user?.id || !user?.role) return null;
+  const safe = { id: user.id, role: user.role };
+  if (user.status !== undefined && user.status !== null && user.status !== "") {
+    safe.status = user.status;
   }
+  return safe;
 }
 
-function getPersistentSession() {
-  return getPersistentMeterReaderSession() ?? getPersistentConsumerSession();
+export function storeAccountIdentity(user) {
+  const safe = sanitizeStoredAccount(user);
+  if (!safe) return null;
+  window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(safe));
+  return safe;
 }
 
 export function getAccessToken() {
@@ -171,7 +172,7 @@ export function storeSession({ user }) {
   } catch {
     // Ignore.
   }
-  window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+  storeAccountIdentity(user);
   try {
     window.sessionStorage.setItem("waterwise:last-activity-at", String(Date.now()));
     window.sessionStorage.removeItem("waterwise:session-inactive");
@@ -296,13 +297,22 @@ export function getStoredAccount() {
     if (window.sessionStorage.getItem(TOKEN_STORAGE_KEY)) {
       window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     }
+    // This obsolete format could contain a readable token and a full
+    // consumer profile. Current cookie-based sessions never use it.
+    window.localStorage.removeItem(PERSISTENT_CONSUMER_KEY);
   } catch {
     // Ignore storage failures.
   }
   try {
     const live = window.sessionStorage.getItem(ACCOUNT_STORAGE_KEY);
     const account = live ? JSON.parse(live) : null;
-    if (account?.id && account?.role) return account;
+    const safe = sanitizeStoredAccount(account);
+    if (safe) {
+      if (JSON.stringify(account) !== JSON.stringify(safe)) {
+        window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(safe));
+      }
+      return safe;
+    }
   } catch {
     // A damaged tab cache must not block restoration from localStorage.
   }
@@ -312,7 +322,7 @@ export function getStoredAccount() {
   const persistent = getPersistentMeterReaderSession();
   if (persistent?.user) {
     try {
-      window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(persistent.user));
+      storeAccountIdentity(persistent.user);
     } catch {
       // Best-effort restore; callers still get the user below.
     }
@@ -321,13 +331,13 @@ export function getStoredAccount() {
   const persistentConsumer = getPersistentConsumerUser();
   if (persistentConsumer) {
     try {
-      window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(persistentConsumer));
+      storeAccountIdentity(persistentConsumer);
     } catch {
       // Best-effort restore.
     }
     return persistentConsumer;
   }
-  return getPersistentSession()?.user ?? null;
+  return null;
 }
 
 export function hasAuthenticatedSession() {

@@ -212,16 +212,28 @@ export default function AdminProfile() {
   }, []);
 
   useEffect(() => {
-    if (account?.role !== "super-admin" || !isStaffManagementPage || !staffManagementPermission?.token) return;
-    setIsDirectoryLoading(true);
-    setDirectoryError("");
-    fetchStaffAccounts(directoryType, directoryPage, STAFF_PAGE_SIZE, staffManagementPermission?.token)
-      .then((result) => {
-        setStaffDirectory((current) => ({ ...current, [directoryType]: result.items ?? [] }));
-        setDirectoryMeta({ total: result.total ?? 0, totalPages: result.totalPages ?? 1 });
-      })
-      .catch((error) => setDirectoryError(error.message))
-      .finally(() => setIsDirectoryLoading(false));
+    if (account?.role !== "super-admin" || !isStaffManagementPage || !staffManagementPermission?.token) return undefined;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setIsDirectoryLoading(true);
+      setDirectoryError("");
+      fetchStaffAccounts(directoryType, directoryPage, STAFF_PAGE_SIZE, staffManagementPermission?.token)
+        .then((result) => {
+          if (!active) return;
+          setStaffDirectory((current) => ({ ...current, [directoryType]: result.items ?? [] }));
+          setDirectoryMeta({ total: result.total ?? 0, totalPages: result.totalPages ?? 1 });
+        })
+        .catch((error) => {
+          if (active) setDirectoryError(error.message);
+        })
+        .finally(() => {
+          if (active) setIsDirectoryLoading(false);
+        });
+    });
+    return () => {
+      active = false;
+    };
   }, [account?.role, directoryPage, directoryType, isStaffManagementPage, staffManagementPermission?.token]);
 
   const loadTrustedDevices = async () => {
@@ -551,7 +563,7 @@ export default function AdminProfile() {
       if (pendingAction.action === "manage-system-settings") {
         window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY);
         // Page-view permission authorizes GET /system-settings reads for
-        // 15 minutes; saving still requires its own update-system-settings OTP.
+        // 15 minutes; each save still requires password or email OTP confirmation.
         const permission = { token: result.authorizationToken, expiresAt: Number(result.authorizationExpiresAt ?? Date.now() + 15 * 60 * 1000), accountId: getCurrentStoredAccountId() };
         window.sessionStorage.setItem(SETTINGS_PERMISSION_KEY, JSON.stringify(permission));
         navigate("/admin/settings");
