@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 function normalizeTags(tags) {
   if (Array.isArray(tags)) return tags.filter(Boolean);
@@ -48,22 +49,27 @@ export async function fetchEventById(eventId) {
   return normalizeEvent(response.data);
 }
 
-export async function createEvent(event) {
-  const response = await apiRequest("/events", {
+export async function createEvent(event, options = {}) {
+  const response = await apiRequest("/events", withDataChangeClient({
+    ...options,
     method: "POST",
     body: JSON.stringify(eventPayload(event)),
-  });
+  }));
   return normalizeEvent(response.data);
 }
 
-export async function updateEvent(eventId, event) {
-  const response = await apiRequest(`/events/${eventId}`, {
+export async function updateEvent(eventId, event, options = {}) {
+  const response = await apiRequest(`/events/${eventId}`, withDataChangeClient({
+    ...options,
     method: "PUT",
     body: JSON.stringify(eventPayload(event)),
-  });
+  }));
   return normalizeEvent(response.data);
 }
 
-export async function deleteEvent(eventId) {
-  return apiRequest(`/events/${eventId}`, { method: "DELETE" });
+export async function deleteEvent(eventId, options = {}) {
+  return apiRequest(`/events/${eventId}`, withDataChangeClient({
+    ...options,
+    method: "DELETE",
+  }));
 }

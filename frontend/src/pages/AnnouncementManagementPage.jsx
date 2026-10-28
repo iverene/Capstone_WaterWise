@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FiPlus } from "react-icons/fi";
 import AnnouncementForm from "../components/AnnouncementForm";
 import AnnouncementPage from "../components/AnnouncementPage";
@@ -20,22 +20,6 @@ export default function AnnouncementManagementPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
-
-  const loadAnnouncements = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setAnnouncements(await fetchAnnouncements());
-    } catch (requestError) {
-      setError(
-        requestError?.response?.data?.message ??
-          requestError.message ??
-          "Unable to load announcements.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -72,8 +56,11 @@ export default function AnnouncementManagementPage() {
     try {
       setError("");
       const saved = await createAnnouncement(announcement);
+      setAnnouncements((current) => [
+        saved,
+        ...current.filter((item) => item.id !== saved.id),
+      ]);
       toast.success("Announcement published", "The announcement is now visible in every resident portal.");
-      await loadAnnouncements();
       return saved;
     } catch (requestError) {
       const validationErrors = requestError?.response?.data?.errors;

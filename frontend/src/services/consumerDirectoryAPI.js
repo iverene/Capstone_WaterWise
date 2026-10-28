@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 const client = {
   get: (path, options) => apiClient.get(`/consumers${path}`, options),
@@ -77,25 +78,37 @@ export async function fetchConsumerDirectory(options = {}) {
 }
 
 export async function createConsumer(consumer, options = {}) {
-  const response = await client.post("/", toConsumerPayload(consumer, true), options);
+  const response = await client.post(
+    "/",
+    toConsumerPayload(consumer, true),
+    withDataChangeClient(options),
+  );
 
   return response.data?.data ? normalizeConsumer(response.data.data) : null;
 }
 
 export async function updateConsumer(id, consumer, options = {}) {
   const { passwordAuthorization, ...requestOptions } = options;
-  const response = await client.patch(`/${id}`, toConsumerPayload(consumer, true, true), {
-    ...requestOptions,
-    headers: {
-      ...requestOptions.headers,
-      ...(passwordAuthorization ? { "X-Consumer-Password-Authorization": passwordAuthorization } : {}),
-    },
-  });
+  const response = await client.patch(
+    `/${id}`,
+    toConsumerPayload(consumer, true, true),
+    withDataChangeClient({
+      ...requestOptions,
+      headers: {
+        ...requestOptions.headers,
+        ...(passwordAuthorization ? { "X-Consumer-Password-Authorization": passwordAuthorization } : {}),
+      },
+    }),
+  );
   return response.data?.data ? normalizeConsumer(response.data.data) : null;
 }
 
 export async function disconnectFlaggedConsumer(id, options = {}) {
-  const response = await client.post(`/${id}/disconnect`, {}, options);
+  const response = await client.post(
+    `/${id}/disconnect`,
+    {},
+    withDataChangeClient(options),
+  );
   return response.data?.data ? normalizeConsumer(response.data.data) : null;
 }
 

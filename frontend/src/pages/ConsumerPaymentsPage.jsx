@@ -122,7 +122,6 @@ export default function ConsumerPaymentsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setError("");
     fetchBillingLedger({ signal: controller.signal })
       .then((data) => {
         if (!controller.signal.aborted) setLedger(data);
@@ -138,14 +137,13 @@ export default function ConsumerPaymentsPage() {
     return () => controller.abort();
   }, [requestVersion]);
 
-  const payments = ledger?.payments ?? [];
+  const payments = useMemo(() => ledger?.payments ?? [], [ledger?.payments]);
   const requestedPaymentId = Number(searchParams.get("paymentId"));
-
-  useEffect(() => {
-    if (!Number.isInteger(requestedPaymentId) || requestedPaymentId < 1) return;
-    const payment = payments.find((item) => Number(item.id) === requestedPaymentId);
-    if (payment) setSelectedPayment(payment);
+  const requestedPayment = useMemo(() => {
+    if (!Number.isInteger(requestedPaymentId) || requestedPaymentId < 1) return null;
+    return payments.find((item) => Number(item.id) === requestedPaymentId) ?? null;
   }, [payments, requestedPaymentId]);
+  const activePayment = selectedPayment ?? requestedPayment;
 
   const closeReceipt = () => {
     setSelectedPayment(null);
@@ -170,6 +168,7 @@ export default function ConsumerPaymentsPage() {
   const latestPayment = visiblePayments[0] ?? null;
 
   const retry = () => {
+    setError("");
     setIsLoading(true);
     setRequestVersion((version) => version + 1);
   };
@@ -267,7 +266,7 @@ export default function ConsumerPaymentsPage() {
         </>
       )}
 
-      <PaymentReceiptModal isOpen={Boolean(selectedPayment)} onClose={closeReceipt} receiptData={selectedPayment} />
+      <PaymentReceiptModal isOpen={Boolean(activePayment)} onClose={closeReceipt} receiptData={activePayment} />
     </main>
   );
 }

@@ -145,7 +145,6 @@ export default function ReportMeterIncidentPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedConsumerId = searchParams.get("consumerId")?.trim() ?? "";
   const requestedConsumerIdRef = useRef(requestedConsumerId);
-  requestedConsumerIdRef.current = requestedConsumerId;
   const prefillHandledRef = useRef(false);
   const [consumers, setConsumers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -163,6 +162,10 @@ export default function ReportMeterIncidentPage() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    requestedConsumerIdRef.current = requestedConsumerId;
+  }, [requestedConsumerId]);
 
   const selectedConsumer = useMemo(
     () => consumers.find((consumer) => String(consumer.id) === String(consumerId)) ?? null,
@@ -201,16 +204,19 @@ export default function ReportMeterIncidentPage() {
     [matchingConsumers],
   );
 
-  const loadDirectory = useCallback(async () => {
+  const loadDirectory = useCallback(async (isActive = () => true) => {
+    if (!isActive()) return;
     try {
       setLoading(true);
       setLoadError("");
       setMeterFilterError("");
       const loadIncidents = (status) =>
         fetchMeterIncidents({ status, limit: 500 }).catch((error) => {
-          setMeterFilterError(
-            requestMessage(error, "Unable to load the meter-change list."),
-          );
+          if (isActive()) {
+            setMeterFilterError(
+              requestMessage(error, "Unable to load the meter-change list."),
+            );
+          }
           return [];
         });
       const [directory, pendingIncidents, authorizedIncidents] = await Promise.all([
@@ -218,6 +224,7 @@ export default function ReportMeterIncidentPage() {
         loadIncidents("pending"),
         loadIncidents("authorized"),
       ]);
+      if (!isActive()) return;
       setConsumers(directory);
       const prefillConsumerId = requestedConsumerIdRef.current;
       if (!prefillHandledRef.current && prefillConsumerId) {
@@ -247,14 +254,20 @@ export default function ReportMeterIncidentPage() {
       );
 
     } catch (requestError) {
-      setLoadError(requestMessage(requestError, "Unable to load the resident directory."));
+      if (isActive()) {
+        setLoadError(requestMessage(requestError, "Unable to load the resident directory."));
+      }
     } finally {
-      setLoading(false);
+      if (isActive()) setLoading(false);
     }
   }, [setSearchParams]);
 
   useEffect(() => {
-    loadDirectory();
+    let active = true;
+    queueMicrotask(() => loadDirectory(() => active));
+    return () => {
+      active = false;
+    };
   }, [loadDirectory]);
 
   useEffect(() => {
@@ -432,7 +445,7 @@ export default function ReportMeterIncidentPage() {
       {loadError && (
         <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
           <span>{loadError}</span>
-          <button className="font-bold underline" onClick={loadDirectory} type="button">Try again</button>
+          <button className="font-bold underline" onClick={() => loadDirectory()} type="button">Try again</button>
         </div>
       )}
 

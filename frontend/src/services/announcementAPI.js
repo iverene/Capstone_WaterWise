@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 function currentLocalDate() {
   const now = new Date();
@@ -31,7 +32,7 @@ export async function fetchAnnouncements(options = {}) {
     : [];
 }
 
-export async function createAnnouncement(payload) {
+export async function createAnnouncement(payload, options = {}) {
   const category = payload.relatedEvent || "General Announcement";
   const priority = payload.priority ?? (
     category === "Emergency Notice"
@@ -40,7 +41,8 @@ export async function createAnnouncement(payload) {
         ? "high"
         : "normal"
   );
-  const response = await apiRequest("/notifications", {
+  const response = await apiRequest("/notifications", withDataChangeClient({
+    ...options,
     method: "POST",
     body: JSON.stringify({
       consumerId: payload.consumerId ?? null,
@@ -51,6 +53,6 @@ export async function createAnnouncement(payload) {
       announcementDate: currentLocalDate(),
       message: payload.content,
     }),
-  });
+  }));
   return normalizeAnnouncement(response.data);
 }

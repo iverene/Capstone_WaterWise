@@ -1,5 +1,5 @@
 import { Info } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import AnalyticsDescriptivePanel from "../components/AnalyticsDescriptivePanel";
 import AdminOverallConsumptionCard from "../components/AdminOverallConsumptionCard";
@@ -12,7 +12,7 @@ import PerPurokConsumptionTrend from "../components/PerPurokConsumptionTrend";
 import RecommendationSection from "../components/RecommendationSection";
 import { fetchMonthlyHistory, fetchYearlyHistory } from "../services/consumptionAPI";
 import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
-import { hasShownAnalyticsBaselineWarning, markAnalyticsBaselineWarningShown } from "../utils/analyticsBaselineToastSession";
+import { hasDismissedAnalyticsBaselineWarning, markAnalyticsBaselineWarningDismissed } from "../utils/analyticsBaselineToastSession";
 import { useToast } from "../components/Toast";
 import PageHeader from "../components/PageHeader";
 
@@ -38,9 +38,10 @@ export default function AnalyticsDashboard() {
     ? requestedTab
     : "descriptive";
   const toast = useToast();
+  const predictiveToastId = useRef(null);
 
   useEffect(() => {
-    if (activeTab !== "prediction") return;
+    if (activeTab !== "prediction") return undefined;
     let active = true;
     Promise.all([fetchMonthlyHistory(), fetchYearlyHistory().catch(() => null)])
       .then(([monthlyResponse, yearlyResponse]) => {
@@ -55,18 +56,30 @@ export default function AnalyticsDashboard() {
         if (!monthlyStatus.isComplete) parts.push(monthlyStatus.message);
         if (!yearlyStatus.isComplete) parts.push(yearlyStatus.message);
         if (parts.length === 0) return;
-        if (hasShownAnalyticsBaselineWarning("predictive")) return;
-        markAnalyticsBaselineWarningShown("predictive");
+        if (hasDismissedAnalyticsBaselineWarning("predictive")) return;
         const toastId = toast.info("Predictive baseline information", parts.join(" "), {
           key: "predictive-baseline",
           duration: 0,
           wide: true,
-          actions: [{ label: "Dismiss", onClick: () => toast.dismiss(toastId) }],
+          actions: [{
+            label: "Dismiss",
+            onClick: () => {
+              markAnalyticsBaselineWarningDismissed("predictive");
+              toast.dismiss(toastId);
+            },
+          }],
         });
+        predictiveToastId.current = toastId;
       })
       .catch(() => {});
     return () => {
       active = false;
+      // Leaving Predictive — another analytics tab or another page — hides the
+      // toast. Coming back shows it again until the admin dismisses it.
+      if (predictiveToastId.current) {
+        toast.dismiss(predictiveToastId.current);
+        predictiveToastId.current = null;
+      }
     };
   }, [activeTab, toast]);
 

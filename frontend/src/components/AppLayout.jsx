@@ -14,7 +14,7 @@ import {
   FiWifiOff,
 } from "react-icons/fi";
 import { useLocation, useNavigate } from "react-router";
-import { ACCOUNT_STORAGE_KEY, getCurrentAccount, logout } from "../services/auth.service";
+import { getCurrentAccount, logout } from "../services/auth.service";
 import { enableConsumerPushSessionPersistence, getStoredAccount } from "../services/authToken";
 import { isCanceledRequest } from "../services/apiClient";
 import { getPendingMeterReadings } from "../services/offlineMeterReadings";
@@ -323,19 +323,26 @@ export default function AppLayout({ children }) {
     isEnablingPushRef.current = false;
   }, [accountId, toast]);
 
+  const closeNotificationHub = useCallback((restoreFocus = false) => {
+    setIsNotificationOpen(false);
+    setSelectedIds(new Set());
+    if (restoreFocus) {
+      requestAnimationFrame(() => notificationTriggerRef.current?.focus());
+    }
+  }, []);
+
   useEffect(() => {
     if (!isNotificationOpen) return undefined;
 
     const closeOnOutsideClick = (event) => {
       if (isDeleteConfirmOpen) return;
       if (!notificationMenuRef.current?.contains(event.target)) {
-        setIsNotificationOpen(false);
+        closeNotificationHub();
       }
     };
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        setIsNotificationOpen(false);
-        notificationTriggerRef.current?.focus();
+        closeNotificationHub(true);
       }
     };
 
@@ -346,26 +353,15 @@ export default function AppLayout({ children }) {
       document.removeEventListener("pointerdown", closeOnOutsideClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isNotificationOpen, isDeleteConfirmOpen]);
-
-  useEffect(() => {
-    if (!isNotificationOpen) {
-      setSelectedIds(new Set());
-    }
-  }, [isNotificationOpen]);
+  }, [closeNotificationHub, isNotificationOpen, isDeleteConfirmOpen]);
 
   useEffect(() => {
     // The change-email page announces success through this event (replacing
-    // the old modal's onSuccess): sync the header account state and storage.
+    // the old modal's onSuccess): sync the in-memory header account state.
     const syncEmailChanged = (event) => {
       const nextEmail = event.detail?.email;
       if (!nextEmail) return;
       setAccount((current) => (current ? { ...current, email: nextEmail } : current));
-      try {
-        window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify({ ...getStoredAccount(), email: nextEmail }));
-      } catch {
-        // Storage may be unavailable; the profile page still shows the update.
-      }
     };
     const requestLogout = () => setIsLogoutConfirmOpen(true);
     window.addEventListener("waterwise:email-changed", syncEmailChanged);
@@ -401,7 +397,7 @@ export default function AppLayout({ children }) {
       toast.warning("Signed out locally", "The server could not confirm sign-out, but this device session was cleared.");
     } finally {
       setAccount(null);
-      setIsNotificationOpen(false);
+      closeNotificationHub();
       setIsLogoutConfirmOpen(false);
       setIsSigningOut(false);
       navigate("/login");
@@ -454,7 +450,7 @@ export default function AppLayout({ children }) {
   };
 
   const handleNotificationClick = (notification) => {
-    setIsNotificationOpen(false);
+    closeNotificationHub();
     if (notification.actionPath) {
       navigate(notification.actionPath);
       return;
@@ -492,7 +488,10 @@ export default function AppLayout({ children }) {
               <NotificationBadgeTrigger
                 buttonRef={notificationTriggerRef}
                 isOpen={isNotificationOpen}
-                onToggleHub={() => setIsNotificationOpen((isOpen) => !isOpen)}
+                onToggleHub={() => {
+                  if (isNotificationOpen) closeNotificationHub();
+                  else setIsNotificationOpen(true);
+                }}
                 unreadCount={unreadCount}
               />
               {isNotificationOpen && (

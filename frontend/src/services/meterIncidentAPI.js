@@ -1,4 +1,5 @@
 import apiClient from "./apiClient";
+import { withDataChangeClient } from "./dataChangeClient";
 
 const client = {
   get: (path, options) => apiClient.get(`/meter-incidents${path}`, options),
@@ -81,7 +82,11 @@ const buildIncidentPayload = (payload) => ({
 });
 
 export async function logMeterIncident(payload, options = {}) {
-  const response = await client.post("", buildIncidentPayload(payload), options);
+  const response = await client.post(
+    "",
+    buildIncidentPayload(payload),
+    withDataChangeClient(options),
+  );
   return normalizeIncident(response.data?.data);
 }
 
@@ -102,7 +107,7 @@ export async function correctMeterIncident(id, payload, options = {}) {
           ? 0
           : Number(payload.newBaseline),
     },
-    options,
+    withDataChangeClient(options),
   );
   return normalizeIncident(response.data?.data);
 }

@@ -7,6 +7,7 @@ import {
   getPersistentMeterReaderUser,
   getStoredAccount,
   refreshMeterReaderPersistence,
+  storeAccountIdentity,
   storeSession,
 } from "./authToken";
 import { disableCurrentPushNotifications } from "./pushNotifications";
@@ -279,7 +280,7 @@ export async function getCurrentAccount(options) {
     if (value !== undefined && value !== null && value !== "") user[key] = value;
   }
   if (sameAccount) {
-    window.sessionStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify(user));
+    storeAccountIdentity(user);
   } else {
     // Restart account-scoped listeners after cookie-only recovery and clear
     // stale account caches if another tab has changed the signed-in account.

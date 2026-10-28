@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BrainCircuit,
   ChevronDown,
@@ -16,7 +16,7 @@ import {
 } from "../services/consumptionAPI";
 import { fetchAllRecommendations } from "../services/recommendationAPI";
 import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
-import { hasShownAnalyticsBaselineWarning, markAnalyticsBaselineWarningShown } from "../utils/analyticsBaselineToastSession";
+import { hasDismissedAnalyticsBaselineWarning, markAnalyticsBaselineWarningDismissed } from "../utils/analyticsBaselineToastSession";
 import { useToast } from "./Toast";
 import LoadingSkeleton from "./LoadingSkeleton";
 
@@ -166,6 +166,8 @@ export default function RecommendationSection() {
   const [baselineMonthlyHistory, setBaselineMonthlyHistory] = useState([]);
   const [baselineYearlyHistory, setBaselineYearlyHistory] = useState([]);
   const toast = useToast();
+  const baselineToastId = useRef(null);
+  const baselineToastMessage = useRef(null);
   const [expandedPurok, setExpandedPurok] = useState(null);
 
   const loadRecommendations = useCallback(async (signal) => {
@@ -249,15 +251,39 @@ export default function RecommendationSection() {
 
   useEffect(() => {
     if (loading || errorMessage || !baselineStatus || baselineStatus.isComplete) return;
-    if (hasShownAnalyticsBaselineWarning("prescriptive")) return;
-    markAnalyticsBaselineWarningShown("prescriptive");
+    if (hasDismissedAnalyticsBaselineWarning("prescriptive")) return;
+    if (baselineToastId.current) {
+      // Still on Prescriptive (period switch, refresh): update the message
+      // instead of popping the toast a second time.
+      if (baselineToastMessage.current === baselineStatus.message) return;
+      baselineToastMessage.current = baselineStatus.message;
+      toast.update(baselineToastId.current, { message: baselineStatus.message });
+      return;
+    }
     const toastId = toast.info("Prescriptive baseline information", baselineStatus.message, {
-      key: `prescriptive-baseline-${period}`,
+      key: "prescriptive-baseline",
       duration: 0,
       wide: true,
-      actions: [{ label: "Dismiss", onClick: () => toast.dismiss(toastId) }],
+      actions: [{
+        label: "Dismiss",
+        onClick: () => {
+          markAnalyticsBaselineWarningDismissed("prescriptive");
+          toast.dismiss(toastId);
+        },
+      }],
     });
+    baselineToastId.current = toastId;
+    baselineToastMessage.current = baselineStatus.message;
   }, [loading, errorMessage, period, baselineStatus, toast]);
+
+  // The toast belongs to Prescriptive only: leaving the tab or the page hides
+  // it, and revisiting brings it back until the admin dismisses it.
+  useEffect(() => () => {
+    if (!baselineToastId.current) return;
+    toast.dismiss(baselineToastId.current);
+    baselineToastId.current = null;
+    baselineToastMessage.current = null;
+  }, [toast]);
 
   const purokItems = useMemo(() => {
     const source = period === "monthly"
