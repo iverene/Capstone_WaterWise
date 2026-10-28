@@ -20,7 +20,7 @@ export default function NotFoundPage() {
         <img
           alt="Sucol WaterWise logo"
           className="h-[72px] w-auto sm:h-[88px]"
-          src="/Sucol_logo.png"
+          src="/Sucol_logo.webp"
         />
         <div className="ww-glass-strong mt-8 w-full rounded-2xl bg-white p-6 text-center sm:p-8">
           <p aria-hidden="true" className="text-5xl font-extrabold tracking-[-0.04em] text-water-200 sm:text-6xl">
