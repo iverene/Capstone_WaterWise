@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { supabase } from "../config/supabase.js";
 import { composeFullName } from "../models/consumerModels.js";
 import { insertGeneratedReport } from "../models/reportModels.js";
+import { currentManilaDate } from "../utils/billingPolicy.js";
+import { reportDateRangeError } from "../utils/reportPolicy.js";
 
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = join(serviceDir, "..", "assets", "Sucol_logo.png");
@@ -28,6 +30,13 @@ const REPORT_TYPES = {
   analytics: { label: "Analytics", sections: ["summary", "trend", "analytics"] },
 };
 
+const REPORT_DATE_SOURCES = {
+  analytics: { column: "reading_date", table: "consumption" },
+  billing: { column: "billing_date", table: "billing" },
+  consumption: { column: "reading_date", table: "consumption" },
+  residents: { column: "created_at", table: "consumers" },
+};
+
 const serviceError = (message, statusCode = 400) => {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -46,13 +55,48 @@ const parseDate = (value, label) => {
   return value;
 };
 
-const validateRequest = ({ type, startDate, endDate, sections }) => {
+export async function getReportDateRange(type) {
+  const template = REPORT_TYPES[type];
+  if (!template) throw serviceError("Select a supported report type.");
+
+  const source = REPORT_DATE_SOURCES[type];
+  const { data, error } = await supabase
+    .from(source.table)
+    .select(source.column)
+    .order(source.column, { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    throw serviceError(`Failed to retrieve the ${template.label.toLowerCase()} date range: ${error.message}`, 500);
+  }
+
+  const rawMinimum = data?.[source.column];
+  const minDate = rawMinimum ? String(rawMinimum).slice(0, 10) : null;
+  return {
+    hasData: Boolean(minDate),
+    maxDate: currentManilaDate(),
+    minDate,
+    type,
+  };
+}
+
+const validateRequest = async ({ type, startDate, endDate, sections }) => {
   const template = REPORT_TYPES[type];
   if (!template) throw serviceError("Select a supported report type.");
 
   const start = parseDate(startDate, "Start date");
   const end = parseDate(endDate, "End date");
-  if (end < start) throw serviceError("The end date must be on or after the start date.");
+  const range = await getReportDateRange(type);
+  if (!range.hasData) {
+    throw serviceError(`No ${template.label.toLowerCase()} data is available yet.`, 409);
+  }
+  const rangeError = reportDateRangeError({
+    endDate: end,
+    maxDate: range.maxDate,
+    minDate: range.minDate,
+    startDate: start,
+  });
+  if (rangeError) throw serviceError(rangeError);
   const periodDays = (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000;
   if (periodDays > 366) throw serviceError("A report period cannot exceed one year.");
 
@@ -275,7 +319,7 @@ const buildAnalyticsInsights = ({ analytics, summary, trend }) => {
 };
 
 async function buildSnapshot(request) {
-  const validated = validateRequest(request);
+  const validated = await validateRequest(request);
   let records;
   let summary;
   let analytics = [];

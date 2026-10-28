@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { followingMonthTenth } from "../utils/billingPolicy.js";
 import { composeFullName } from "./consumerModels.js";
 import { computeTieredBill, getTieredRates } from "../services/billingTiers.js";
 
@@ -90,15 +91,7 @@ const getMonthRange = (billingDate) => {
   };
 };
 
-const defaultDueDate = (billingDate) => {
-  const billing = new Date(`${billingDate}T00:00:00Z`);
-  const dueDate = new Date(Date.UTC(
-    billing.getUTCFullYear(),
-    billing.getUTCMonth() + 1,
-    0,
-  ));
-  return formatDate(dueDate);
-};
+const defaultDueDate = followingMonthTenth;
 
 export const createMonthlyBilling = async ({
   consumerId,

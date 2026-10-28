@@ -151,7 +151,6 @@ Supported actions: `manage-staff`, `create-admin`, `create-meter-reader`, `updat
 | `/api/notifications` | Notifications |
 | `/api/events` | Community events |
 | `/api/consumption/prediction` | AI predictions |
-| `/api/anomaly` | AI anomaly detection |
 | `/api/recommendation` | AI recommendations |
 | `/api/reports` | Report generation |
 | `/api/system-settings` | System-wide settings (Super Admin only) |

@@ -48,6 +48,23 @@ const parseOptionalText = (value, fieldName, maximumLength) => {
   return normalized;
 };
 
+const getConsumerNotificationCutoff = async (consumerId) => {
+  const { data, error } = await supabase
+    .from("consumers")
+    .select("created_at")
+    .eq("id", consumerId)
+    .maybeSingle();
+
+  if (error) {
+    throw createError(`Failed to retrieve consumer notification cutoff: ${error.message}`, 500);
+  }
+  if (!data?.created_at) {
+    throw createError("Consumer account not found.", 404);
+  }
+
+  return data.created_at;
+};
+
 export async function createNotification({
   consumerId = null,
   announcementType,
@@ -132,9 +149,10 @@ export async function getNotifications({ consumerId } = {}) {
 
   if (consumerId !== undefined && consumerId !== null && consumerId !== "") {
     normalizedConsumerId = parsePositiveId(consumerId, "consumer ID");
+    const accountCreatedAt = await getConsumerNotificationCutoff(normalizedConsumerId);
     query = query.or(
       `consumer_id.eq.${normalizedConsumerId},consumer_id.is.null`,
-    );
+    ).gte("created_at", accountCreatedAt);
   }
 
   const { data, error } = await query;
@@ -265,11 +283,13 @@ export async function markNotificationAsRead(notificationIdValue, consumerIdValu
 
 export async function markAllNotificationsAsRead(consumerIdValue) {
   const consumerId = parsePositiveId(consumerIdValue, "consumer ID");
+  const accountCreatedAt = await getConsumerNotificationCutoff(consumerId);
 
   const { data: notifications, error: fetchError } = await supabase
     .from("notifications")
     .select("id")
-    .or(`consumer_id.eq.${consumerId},consumer_id.is.null`);
+    .or(`consumer_id.eq.${consumerId},consumer_id.is.null`)
+    .gte("created_at", accountCreatedAt);
 
   if (fetchError) {
     throw createError(

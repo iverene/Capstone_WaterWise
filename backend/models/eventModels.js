@@ -1,4 +1,9 @@
 import { supabase } from "../config/supabase.js";
+import {
+  hasEventStarted,
+  isAllowedEventLocation,
+  isPastEventSchedule,
+} from "../utils/eventPolicy.js";
 
 const EVENT_FIELDS =
   "id, title, description, event_date, event_time, location, tags, status, created_by, created_at, updated_at";
@@ -59,6 +64,14 @@ const parseTags = (value) => {
   return [...new Set(normalized)];
 };
 
+const parseLocation = (value) => {
+  const location = parseText(value, "Event location", 200);
+  if (!isAllowedEventLocation(location)) {
+    throw createError("Event location must be All Puroks or Purok 1 through Purok 6.");
+  }
+  return location;
+};
+
 const parseStatus = (value = "Scheduled") => {
   if (!EVENT_STATUSES.has(value)) {
     throw createError("Event status must be Scheduled or Cancelled.");
@@ -71,11 +84,23 @@ const eventPayload = (event, createdBy) => ({
   description: parseText(event.description, "Event description", 2000),
   event_date: parseDate(event.date ?? event.event_date),
   event_time: parseTime(String(event.time ?? event.event_time ?? "").slice(0, 5)),
-  location: parseText(event.location, "Event location", 200),
+  location: parseLocation(event.location),
   tags: parseTags(event.tags),
   status: parseStatus(event.status),
   ...(createdBy ? { created_by: createdBy } : {}),
 });
+
+const requireCurrentOrFutureEventSchedule = (eventDate, eventTime) => {
+  if (isPastEventSchedule(eventDate, eventTime)) {
+    throw createError("Events must be scheduled for the current Manila time or later.", 409);
+  }
+};
+
+const requireEditableEvent = (event) => {
+  if (isPastEventSchedule(event.event_date, String(event.event_time).slice(0, 5))) {
+    throw createError("Past events and events that have already started are view-only.", 409);
+  }
+};
 
 const throwDatabaseError = (error, operation) => {
   throw createError(`Failed to ${operation} event: ${error.message}`, 500);
@@ -104,9 +129,11 @@ export async function getEventById(value) {
 }
 
 export async function createEvent(event, createdBy) {
+  const payload = eventPayload(event, createdBy);
+  requireCurrentOrFutureEventSchedule(payload.event_date, payload.event_time);
   const { data, error } = await supabase
     .from("events")
-    .insert(eventPayload(event, createdBy))
+    .insert(payload)
     .select(EVENT_FIELDS)
     .single();
   if (error) throwDatabaseError(error, "create");
@@ -115,9 +142,13 @@ export async function createEvent(event, createdBy) {
 
 export async function updateEvent(value, event) {
   const id = parseId(value);
+  const existing = await getEventById(id);
+  requireEditableEvent(existing);
+  const payload = eventPayload(event);
+  requireCurrentOrFutureEventSchedule(payload.event_date, payload.event_time);
   const { data, error } = await supabase
     .from("events")
-    .update({ ...eventPayload(event), updated_at: new Date().toISOString() })
+    .update({ ...payload, updated_at: new Date().toISOString() })
     .eq("id", id)
     .select(EVENT_FIELDS)
     .maybeSingle();
@@ -128,6 +159,7 @@ export async function updateEvent(value, event) {
 
 export async function deleteEvent(value) {
   const id = parseId(value);
+  requireEditableEvent(await getEventById(id));
   const { data, error } = await supabase
     .from("events")
     .delete()
@@ -148,7 +180,13 @@ const toEventContextItem = (event) => ({
   status: event.status,
 });
 
-export async function getRecommendationEventContext({ years = [], limit = 100 } = {}) {
+export async function getRecommendationEventContext({
+  years = [],
+  limit = 100,
+  locations = [],
+  occurredOnly = false,
+  statuses = [],
+} = {}) {
   let query = supabase
     .from("events")
     .select("id, title, event_date, event_time, location, tags, status")
@@ -162,7 +200,16 @@ export async function getRecommendationEventContext({ years = [], limit = 100 } 
       query = query.gte("event_date", `${minYear}-01-01`).lte("event_date", `${maxYear}-12-31`);
     }
   }
+  if (Array.isArray(locations) && locations.length > 0) {
+    query = query.in("location", [...new Set(locations)]);
+  }
+  if (Array.isArray(statuses) && statuses.length > 0) {
+    query = query.in("status", [...new Set(statuses)]);
+  }
   const { data, error } = await query;
   if (error) throwDatabaseError(error, "retrieve event context");
-  return (data ?? []).map(toEventContextItem);
+  const events = (data ?? []).map(toEventContextItem);
+  return occurredOnly
+    ? events.filter((event) => hasEventStarted(event.date, event.time))
+    : events;
 }

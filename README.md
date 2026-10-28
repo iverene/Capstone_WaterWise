@@ -10,11 +10,14 @@ WaterWise is a full-stack water consumption, billing, payment, and account-manag
 - Create and update consumer accounts using any complete, valid email domain.
 - View consumer meter readings through the administrator read-only endpoint.
 - Manage persistent community events and announcements. Creating or changing an event automatically synchronizes a system-wide consumer notification.
+- Schedule new community events only for the current Manila time or later; events that have already started remain view-only.
+- Assign each event to All Puroks or one specific Purok from 1 through 6.
+- Use completed Purok-specific and All-Puroks events as cautious context in per-Purok AI recommendations while keeping consumption history as the primary evidence.
 - Review one grouped row per resident in Readings, Billing, and Payments, then open resident-specific record details.
 - Process the oldest outstanding bill first or settle every outstanding bill from oldest to newest.
-- Review residents with three or more outstanding monthly bills from the Flagged Accounts workspace.
+- Review residents with three or more overdue monthly bills from the Flagged Accounts workspace.
 - Confirm account disconnection only after the backend revalidates the resident's outstanding bills.
-- View consumption predictions, anomaly detection, recommendations, analytics, and reports.
+- View consumption predictions, recommendations, analytics, and reports.
 - Use email OTP two-factor authentication before entering the admin portal.
 - Review the administrator username and manage email and security options from Admin Profile Management.
 - Change the administrator password using registered-email OTP only.
@@ -424,7 +427,6 @@ The backend independently restricts `POST /api/admins` and `POST /api/meter-read
 | `/api/notifications` | Announcements and notification state |
 | `/api/events` | Admin-only persistent community-event CRUD and automatic consumer-notification synchronization |
 | `/api/consumption/prediction` | AI consumption predictions |
-| `/api/anomaly` | AI anomaly detection |
 | `/api/recommendation` | AI recommendations |
 | `/api/reports` | Report previews, snapshots, and PDF downloads |
 | `/api/system-settings` | System-wide settings management (Super Admin only, OTP-gated) |
@@ -485,7 +487,7 @@ The main administrator tables group records by resident to avoid repeating the s
 - **Readings:** shows Account, Name, Purok, and **View readings**. The resident modal lists Reading Date, Previous, Current, Status, and **View record**. The full record remains printable and downloadable.
 - **Billing:** shows Name, Purok, overall bill count/amount, and **View all billings**. The resident modal lists Billing Period, Reading Date, Consumption, Total Bill, Balance, and Status.
 - **Payments:** shows one row per resident with the outstanding bill count, oldest unpaid bill, total balance, and **Record payment**.
-- **Flagged Accounts:** shows one row per resident with at least three outstanding monthly bills, including the oldest period, total outstanding balance, account state, and payment/disconnection actions.
+- **Flagged Accounts:** shows one row per resident with at least three overdue monthly bills, including the oldest period, overdue balance, grace countdown, account state, and disconnection action.
 
 Search and table filters operate at the grouped resident level. Detail modals retain the individual monthly records.
 
@@ -503,15 +505,17 @@ The relevant payment endpoint is POST /api/payments/allocate. Direct API calls a
 
 ## Flagged Accounts and Disconnection
 
-- A resident is flagged when three or more monthly bills have a remaining balance. Unpaid and partially paid bills both count while their balance is greater than zero.
-- The notification scheduler creates a one-time critical `disconnection_warning` notification for a newly eligible resident. It runs when the backend starts and then at the configured reminder interval.
-- Flagging does **not** automatically deactivate an account.
-- An administrator must review the account and select **Confirm disconnection**.
-- `POST /api/consumers/:id/disconnect` rechecks that the resident still has at least three outstanding bills, creates the critical warning if it does not already exist, and then changes the consumer status to `inactive`.
-- The existing consumer-status database trigger creates an additional account-status notification when the account is deactivated or reactivated.
-- Inactive consumers cannot create a new login session. Reactivation remains an administrator action through resident account management.
+- New bills are due on the 10th day of the month after their reading/billing date. Existing stored due dates are preserved.
+- A resident is flagged when three or more monthly bills are past due and still have a remaining balance. Unpaid and partially paid overdue bills both count.
+- The notification scheduler creates a one-time critical `disconnection_warning` when the resident enters the three-day grace period.
+- The Flagged Accounts action shows a three-day countdown. After three complete grace days, **Confirm disconnection** becomes available and remains a manual administrator action.
+- Flagging and grace expiry do **not** automatically disconnect an account. Payments remain available and can remove eligibility.
+- `POST /api/consumers/:id/disconnect` rechecks the overdue-bill count and grace deadline before changing the consumer status to `disconnected`.
+- The consumer-status database trigger creates the final disconnection notification. Disconnected consumers can still sign in to review bills and payments.
 
 Disconnection notifications are currently in-app notifications. Email and SMS disconnection delivery are not included.
+
+Resident notification history begins at the account's exact `created_at` timestamp. Historical targeted or broadcast notifications created before the resident account are retained for administrators but are not returned to that resident or included by **Mark all as read**.
 
 ## Production Checks
 

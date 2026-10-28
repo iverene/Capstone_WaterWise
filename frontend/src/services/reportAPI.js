@@ -6,6 +6,12 @@ export async function fetchGeneratedReports(options = {}) {
   return unwrap(await apiRequest("/reports", { signal: options.signal }));
 }
 
+export async function fetchReportDateRange(type, options = {}) {
+  return unwrap(await apiRequest(`/reports/date-range?type=${encodeURIComponent(type)}`, {
+    signal: options.signal,
+  }));
+}
+
 export async function fetchReportDetails(reportId, options = {}) {
   return unwrap(await apiRequest(`/reports/${reportId}`, { signal: options.signal }));
 }

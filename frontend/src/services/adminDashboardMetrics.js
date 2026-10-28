@@ -1,6 +1,7 @@
 import { fetchBillingHistory } from "./billingAPI";
 import { fetchConsumerDirectory } from "./consumerDirectoryAPI";
 import { fetchPaymentHistory } from "./paymentAPI";
+import { isOverdueBilling, manilaToday } from "../utils/billingPolicy";
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -75,6 +76,7 @@ export async function fetchAdminDashboardMetrics() {
   let partialOutstanding = 0;
   const debtors = new Set();
   const outstandingByResident = new Map();
+  const today = manilaToday();
   const purokUsage = new Map();
   const readingsThisMonth = new Set();
 
@@ -85,7 +87,9 @@ export async function fetchAdminDashboardMetrics() {
     if (balance > 0) {
       outstandingTotal += balance;
       debtors.add(key);
-      outstandingByResident.set(key, (outstandingByResident.get(key) ?? 0) + 1);
+      if (isOverdueBilling(record, today)) {
+        outstandingByResident.set(key, (outstandingByResident.get(key) ?? 0) + 1);
+      }
       if (balance < due) partialOutstanding += balance;
       else unpaidOutstanding += balance;
     }

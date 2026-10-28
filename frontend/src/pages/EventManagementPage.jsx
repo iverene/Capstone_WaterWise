@@ -20,6 +20,7 @@ import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
 import PageHeader from "../components/PageHeader";
 import { useToast } from "../components/Toast";
+import { manilaTimeNow, manilaToday } from "../utils/billingPolicy";
 import {
   createEvent as createEventRequest,
   deleteEvent as deleteEventRequest,
@@ -71,10 +72,11 @@ const formatTime = (value) => {
 };
 
 function getDisplayStatus(event) {
-  const todayKey = toDateKey(new Date());
+  const todayKey = manilaToday();
+  const currentTime = manilaTimeNow();
   if (event.status && event.status !== "Scheduled") return event.status;
+  if (event.date < todayKey || (event.date === todayKey && event.time < currentTime)) return "Past";
   if (event.date === todayKey) return "Today";
-  if (event.date && event.date < todayKey) return "Past";
   return "Scheduled";
 }
 
@@ -100,7 +102,7 @@ function EventStatus({ event }) {
   );
 }
 
-function EventDialog({ defaultDate, event, isOpen, onClose, onSubmit, submitting }) {
+function EventDialog({ defaultDate, event, isOpen, minimumDate, minimumTime, onClose, onSubmit, submitting }) {
   return (
     <Modal
       bodyClassName="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6"
@@ -117,6 +119,8 @@ function EventDialog({ defaultDate, event, isOpen, onClose, onSubmit, submitting
           <EventForm
             defaultDate={defaultDate}
             initialEvent={event}
+            minimumDate={minimumDate}
+            minimumTime={minimumTime}
             onCancel={onClose}
             onSubmit={onSubmit}
             submitting={submitting}
@@ -125,7 +129,7 @@ function EventDialog({ defaultDate, event, isOpen, onClose, onSubmit, submitting
   );
 }
 
-function EventCard({ event, isConfirmingDelete, onCancelDelete, onDelete, onEdit }) {
+function EventCard({ event, isConfirmingDelete, onCancelDelete, onDelete, onEdit, readOnly = false }) {
   const tags = Array.isArray(event.tags) ? event.tags : [];
 
   return (
@@ -163,7 +167,11 @@ function EventCard({ event, isConfirmingDelete, onCancelDelete, onDelete, onEdit
         </div>
       )}
 
-      {isConfirmingDelete ? (
+      {readOnly ? (
+        <p className="mt-4 border-t border-slate-100 pt-3 text-sm font-semibold text-slate-500">
+          Past events are view-only.
+        </p>
+      ) : isConfirmingDelete ? (
         <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3" role="alert">
           <p className="text-sm font-semibold text-red-800">Delete this event permanently?</p>
           <div className="mt-3 flex gap-2">
@@ -209,8 +217,9 @@ function EventCard({ event, isConfirmingDelete, onCancelDelete, onDelete, onEdit
 
 export default function EventManagementPage() {
   const toast = useToast();
-  const today = useMemo(() => new Date(), []);
-  const todayKey = toDateKey(today);
+  const [todayKey, setTodayKey] = useState(manilaToday());
+  const [currentTime, setCurrentTime] = useState(manilaTimeNow());
+  const today = useMemo(() => parseDate(todayKey), [todayKey]);
   const [events, setEvents] = useState([]);
   const [currentMonth, setCurrentMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
@@ -267,6 +276,20 @@ export default function EventManagementPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const refreshManilaClock = () => {
+      setTodayKey(manilaToday());
+      setCurrentTime(manilaTimeNow());
+    };
+    const timer = window.setInterval(refreshManilaClock, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const eventIsPast = useCallback(
+    (event) => event.date < todayKey || (event.date === todayKey && event.time < currentTime),
+    [currentTime, todayKey],
+  );
+
   const eventsByDate = useMemo(() => {
     const grouped = new Map();
     events.forEach((event) => {
@@ -296,7 +319,7 @@ export default function EventManagementPage() {
   const visibleMonthPrefix = `${currentMonth.getFullYear()}-${pad(currentMonth.getMonth() + 1)}`;
   const monthEventCount = events.filter((event) => event.date?.startsWith(visibleMonthPrefix)).length;
   const nextEvent = [...events]
-    .filter((event) => event.date >= todayKey)
+    .filter((event) => event.date > todayKey || (event.date === todayKey && event.time >= currentTime))
     .sort((first, second) => `${first.date} ${first.time}`.localeCompare(`${second.date} ${second.time}`))[0];
   const yearOptions = useMemo(() => {
     const eventYears = events
@@ -308,8 +331,10 @@ export default function EventManagementPage() {
     return Array.from({ length: lastYear - firstYear + 1 }, (_, index) => firstYear + index);
   }, [currentMonth, events, today]);
 
-  const openCreateDialog = (date = selectedDate) =>
-    setDialog({ isOpen: true, event: null, date: date || todayKey });
+  const openCreateDialog = (date = selectedDate) => {
+    const allowedDate = date && date >= todayKey ? date : todayKey;
+    setDialog({ isOpen: true, event: null, date: allowedDate });
+  };
   const openEditDialog = (event) =>
     setDialog({ isOpen: true, event, date: event.date || selectedDate });
   const closeInfoPopup = useCallback(() => {
@@ -321,8 +346,11 @@ export default function EventManagementPage() {
     setSelectedDate(key);
     if (window.matchMedia("(min-width: 1024px)").matches) return;
     const dayEvents = eventsByDate.get(key) ?? [];
-    if (dayEvents.length === 0) openCreateDialog(key);
-    else setInfoDateKey(key);
+    if (dayEvents.length === 0) {
+      if (key >= todayKey) openCreateDialog(key);
+      return;
+    }
+    setInfoDateKey(key);
   };
   const closeDialog = useCallback(() => {
     if (!saving) setDialog((current) => ({ ...current, isOpen: false }));
@@ -597,14 +625,16 @@ export default function EventManagementPage() {
                     : "No events scheduled"}
                 </p>
               </div>
-              <button
-                aria-label={`Add event on ${formatFullDate(selectedDate)}`}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-600 text-white hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
-                onClick={() => openCreateDialog(selectedDate)}
-                type="button"
-              >
-                <Plus aria-hidden="true" className="h-5 w-5" />
-              </button>
+              {selectedDate >= todayKey && (
+                <button
+                  aria-label={`Add event on ${formatFullDate(selectedDate)}`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-water-600 text-white hover:bg-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 focus-visible:ring-offset-2"
+                  onClick={() => openCreateDialog(selectedDate)}
+                  type="button"
+                >
+                  <Plus aria-hidden="true" className="h-5 w-5" />
+                </button>
+              )}
             </div>
 
             <div className="mt-4 space-y-3">
@@ -620,6 +650,7 @@ export default function EventManagementPage() {
                       : setDeleteConfirmation(event.id)
                   }
                   onEdit={() => openEditDialog(event)}
+                  readOnly={eventIsPast(event)}
                 />
               ))}
 
@@ -628,17 +659,23 @@ export default function EventManagementPage() {
                   <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-water-50 text-water-700">
                     <CalendarDays aria-hidden="true" className="h-6 w-6" />
                   </span>
-                  <h3 className="mt-4 font-bold text-navy-900">This day is clear</h3>
+                  <h3 className="mt-4 font-bold text-navy-900">
+                    {selectedDate < todayKey ? "No events recorded" : "This day is clear"}
+                  </h3>
                   <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Add an activity or select another date to review its schedule.
+                    {selectedDate < todayKey
+                      ? "Past dates are available for historical viewing only."
+                      : "Add an activity or select another date to review its schedule."}
                   </p>
-                  <button
-                    className="mt-4 min-h-11 rounded-xl bg-water-50 px-4 text-sm font-bold text-water-700 hover:bg-water-100"
-                    onClick={() => openCreateDialog(selectedDate)}
-                    type="button"
-                  >
-                    Add event on this day
-                  </button>
+                  {selectedDate >= todayKey && (
+                    <button
+                      className="mt-4 min-h-11 rounded-xl bg-water-50 px-4 text-sm font-bold text-water-700 hover:bg-water-100"
+                      onClick={() => openCreateDialog(selectedDate)}
+                      type="button"
+                    >
+                      Add event on this day
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -691,6 +728,7 @@ export default function EventManagementPage() {
                 closeInfoPopup();
                 openEditDialog(event);
               }}
+              readOnly={eventIsPast(event)}
             />
           ))}
         </div>
@@ -700,6 +738,8 @@ export default function EventManagementPage() {
         defaultDate={dialog.date}
         event={dialog.event}
         isOpen={dialog.isOpen}
+        minimumDate={todayKey}
+        minimumTime={currentTime}
         onClose={closeDialog}
         onSubmit={saveEvent}
         submitting={saving}

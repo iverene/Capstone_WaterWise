@@ -9,6 +9,7 @@ import Search from "../components/Search";
 import Table from "../components/Table";
 import { useToast } from "../components/Toast";
 import { fetchBillingHistory } from "../services/billingAPI";
+import { disconnectionGrace, isOverdueBilling, manilaToday } from "../utils/billingPolicy";
 import {
   disconnectFlaggedConsumer,
   fetchConsumerDirectory,
@@ -17,11 +18,11 @@ import {
 const currency = (value) =>
   `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
-function groupFlaggedAccounts(billingRecords) {
+function groupFlaggedAccounts(billingRecords, today) {
   const groups = new Map();
 
   billingRecords
-    .filter((billing) => Number(billing.outstandingBalance) > 0)
+    .filter((billing) => isOverdueBilling(billing, today))
     .forEach((billing) => {
       const residentId = String(billing.raw?.user_id ?? billing.consumerName);
       const current = groups.get(residentId) ?? [];
@@ -33,24 +34,28 @@ function groupFlaggedAccounts(billingRecords) {
     .filter(([, bills]) => bills.length >= 3)
     .map(([residentId, bills]) => {
       const sortedBills = [...bills].sort((first, second) => {
-        const dateComparison = String(first.raw?.billing_date ?? "").localeCompare(
-          String(second.raw?.billing_date ?? ""),
+        const dateComparison = String(first.dueDate ?? "").localeCompare(
+          String(second.dueDate ?? ""),
         );
         return dateComparison || Number(first.id) - Number(second.id);
       });
       const oldestBill = sortedBills[0];
+      const thirdOverdueBill = sortedBills[2];
+      const grace = disconnectionGrace(thirdOverdueBill.dueDate, today);
 
       return {
         id: residentId,
         consumerName: oldestBill.consumerName,
         oldestBill,
         oldestPeriod: oldestBill.billingPeriod,
-        outstandingBillCount: sortedBills.length,
+        overdueBillCount: sortedBills.length,
         purok: oldestBill.purok,
-        totalOutstanding: sortedBills.reduce(
+        totalOverdue: sortedBills.reduce(
           (total, bill) => total + Number(bill.outstandingBalance || 0),
           0,
         ),
+        thirdOverdueBill,
+        ...grace,
       };
     })
     .sort((first, second) =>
@@ -70,6 +75,7 @@ export default function FlaggedAccountsPage() {
   const [error, setError] = useState("");
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [today, setToday] = useState(manilaToday());
 
   const loadFlaggedAccounts = useCallback(async () => {
     try {
@@ -121,15 +127,20 @@ export default function FlaggedAccountsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setToday(manilaToday()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const flaggedAccounts = useMemo(
     () => {
       const statuses = new Map(consumers.map((consumer) => [String(consumer.id), consumer.status]));
-      return groupFlaggedAccounts(billingRecords).map((account) => ({
+      return groupFlaggedAccounts(billingRecords, today).map((account) => ({
         ...account,
         accountStatus: statuses.get(account.id) === "active" ? "active" : "disconnected",
       }));
     },
-    [billingRecords, consumers],
+    [billingRecords, consumers, today],
   );
   const searchTerm = query.trim().toLowerCase();
   const visibleAccounts = flaggedAccounts.filter((account) =>
@@ -140,7 +151,7 @@ export default function FlaggedAccountsPage() {
       )),
   );
   const totalOutstanding = flaggedAccounts.reduce(
-    (total, account) => total + account.totalOutstanding,
+    (total, account) => total + account.totalOverdue,
     0,
   );
 
@@ -173,23 +184,23 @@ export default function FlaggedAccountsPage() {
   return (
     <main className="min-w-0 space-y-6">
       <PageHeader
-        description="Review residents with three or more outstanding monthly bills for disconnection action."
+        description="Review residents with three or more overdue monthly bills and their disconnection grace period."
         title="Flagged Accounts"
       />
 
       <section aria-label="Flagged account summary" className="grid gap-2 sm:grid-cols-2 sm:gap-3">
         <KPI
           compact
-          description="Residents with at least 3 outstanding bills"
+          description="Residents with at least 3 overdue bills"
           icon={AlertTriangle}
           title="For Disconnection"
           value={flaggedAccounts.length}
         />
         <KPI
           compact
-          description="Combined balance of flagged accounts"
+          description="Combined overdue balance of flagged accounts"
           icon={WalletCards}
-          title="Outstanding Balance"
+          title="Overdue Balance"
           value={currency(totalOutstanding)}
         />
       </section>
@@ -231,7 +242,7 @@ export default function FlaggedAccountsPage() {
           ariaLabel="Accounts flagged for disconnection"
           columns={[
             { key: "resident", label: "Name" },
-            { key: "bills", label: "Outstanding bills" },
+            { key: "bills", label: "Overdue bills" },
             { key: "oldest", label: "Oldest unpaid period" },
             { key: "balance", label: "Total balance", className: "text-right" },
             { key: "status", label: "Status" },
@@ -241,7 +252,7 @@ export default function FlaggedAccountsPage() {
           emptyDescription={
             flaggedAccounts.length
               ? "No flagged accounts match the current search and status filter."
-              : "Residents will appear here when they reach three outstanding monthly bills."
+              : "Residents will appear here when three monthly bills are past due."
           }
           emptyTitle={flaggedAccounts.length ? "No matching accounts" : "No accounts flagged"}
           getRowKey={(account) => account.id}
@@ -254,7 +265,7 @@ export default function FlaggedAccountsPage() {
                 <p className="mt-1 text-xs text-slate-500">{account.purok}</p>
               </td>
               <td className="px-4 py-4 font-mono font-extrabold text-red-700">
-                {account.outstandingBillCount}
+                {account.overdueBillCount}
               </td>
               <td className="px-4 py-4">
                 <span className="inline-flex items-center gap-2 font-semibold text-slate-700">
@@ -263,7 +274,7 @@ export default function FlaggedAccountsPage() {
                 </span>
               </td>
               <td className="px-4 py-4 text-right font-mono font-extrabold tabular-nums text-navy-900">
-                {currency(account.totalOutstanding)}
+                {currency(account.totalOverdue)}
               </td>
               <td className="px-4 py-4">
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${
@@ -272,19 +283,32 @@ export default function FlaggedAccountsPage() {
                     : "border-red-200 bg-red-50 text-red-700"
                 }`}>
                   <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
-                  {account.accountStatus === "disconnected" ? "Disconnected" : "For disconnection"}
+                  {account.accountStatus === "disconnected"
+                    ? "Disconnected"
+                    : account.isEligible
+                      ? "For disconnection"
+                      : "Grace period"}
                 </span>
               </td>
               <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
                 <div className="grid gap-2 md:flex md:justify-end">
-                  <button
-                    className="min-h-11 rounded-xl bg-red-600 px-3 font-bold text-white hover:bg-red-700 disabled:cursor-default disabled:bg-slate-200 disabled:text-slate-500"
-                    disabled={account.accountStatus === "disconnected"}
-                    onClick={() => setSelectedAccount(account)}
-                    type="button"
-                  >
-                    {account.accountStatus === "disconnected" ? "Disconnected" : "Confirm disconnection"}
-                  </button>
+                  {account.accountStatus === "disconnected" ? (
+                    <span className="inline-flex min-h-11 items-center rounded-xl bg-slate-100 px-3 font-bold text-slate-500">
+                      Disconnected
+                    </span>
+                  ) : account.isEligible ? (
+                    <button
+                      className="min-h-11 rounded-xl bg-red-600 px-3 font-bold text-white hover:bg-red-700"
+                      onClick={() => setSelectedAccount(account)}
+                      type="button"
+                    >
+                      Confirm disconnection
+                    </button>
+                  ) : (
+                    <span className="inline-flex min-h-11 items-center rounded-xl border border-amber-200 bg-amber-50 px-3 font-bold text-amber-800">
+                      {account.daysRemaining} {account.daysRemaining === 1 ? "day" : "days"} remaining
+                    </span>
+                  )}
                 </div>
               </td>
             </>
@@ -307,8 +331,8 @@ export default function FlaggedAccountsPage() {
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
             <p className="font-bold text-red-900">{selectedAccount?.consumerName}</p>
             <p className="mt-2 text-sm leading-6 text-red-700">
-              This resident has {selectedAccount?.outstandingBillCount} outstanding monthly bills
-              totaling {currency(selectedAccount?.totalOutstanding)}. A critical account-status
+              This resident has {selectedAccount?.overdueBillCount} overdue monthly bills
+              totaling {currency(selectedAccount?.totalOverdue)}. A critical account-status
               notification will be sent after confirmation.
             </p>
           </div>

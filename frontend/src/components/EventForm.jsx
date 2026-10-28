@@ -15,6 +15,16 @@ const EVENT_CATEGORIES = [
   "Holiday observance",
 ];
 
+const EVENT_LOCATIONS = [
+  "All Puroks",
+  "Purok 1",
+  "Purok 2",
+  "Purok 3",
+  "Purok 4",
+  "Purok 5",
+  "Purok 6",
+];
+
 function toTimeInputValue(value = "") {
   const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(value);
   if (!match) return value;
@@ -24,6 +34,12 @@ function toTimeInputValue(value = "") {
   if (meridiem === "AM" && hours === 12) hours = 0;
   if (meridiem === "PM" && hours !== 12) hours += 12;
   return `${String(hours).padStart(2, "0")}:${minutes}`;
+}
+
+function blockManualPickerEntry(event) {
+  const allowedKeys = new Set(["Tab", "Enter", "Escape"]);
+  if (allowedKeys.has(event.key) || (event.altKey && event.key === "ArrowDown")) return;
+  event.preventDefault();
 }
 
 function initialValues(initialEvent, defaultDate) {
@@ -37,7 +53,7 @@ function initialValues(initialEvent, defaultDate) {
     description: initialEvent?.description ?? "",
     date: initialEvent?.date ?? defaultDate ?? "",
     time: toTimeInputValue(initialEvent?.time),
-    location: initialEvent?.location ?? "",
+    location: EVENT_LOCATIONS.includes(initialEvent?.location) ? initialEvent.location : "",
     category,
     customCategory: category === "Others" ? tags : "",
     tags,
@@ -47,6 +63,8 @@ function initialValues(initialEvent, defaultDate) {
 export default function EventForm({
   defaultDate = "",
   initialEvent,
+  minimumDate = "",
+  minimumTime = "",
   onCancel,
   onSubmit,
   submitting = false,
@@ -98,7 +116,13 @@ export default function EventForm({
     if (!event.title.trim()) nextErrors.title = "Enter an event title.";
     if (!event.description.trim()) nextErrors.description = "Add a short description for residents.";
     if (!event.date) nextErrors.date = "Select the event date.";
+    else if (minimumDate && event.date < minimumDate) {
+      nextErrors.date = "Events can only be scheduled for today or a future date.";
+    }
     if (!event.time) nextErrors.time = "Select the event time.";
+    else if (event.date === minimumDate && minimumTime && event.time < minimumTime) {
+      nextErrors.time = "Select the current Manila time or a later time.";
+    }
     if (!event.location.trim()) nextErrors.location = "Enter the event location.";
     if (!event.category) nextErrors.category = "Select an event category.";
     if (event.category === "Others" && !event.customCategory.trim()) {
@@ -157,8 +181,12 @@ export default function EventForm({
               {...accessibility("date")}
               className={fieldClass("date", "pl-11 font-mono tabular-nums")}
               id="event-date"
+              min={minimumDate || undefined}
               name="date"
               onChange={handleChange}
+              onDrop={(event) => event.preventDefault()}
+              onKeyDown={blockManualPickerEntry}
+              onPaste={(event) => event.preventDefault()}
               type="date"
               value={event.date}
             />
@@ -174,8 +202,12 @@ export default function EventForm({
               {...accessibility("time")}
               className={fieldClass("time", "pl-11 font-mono tabular-nums")}
               id="event-time"
+              min={event.date === minimumDate ? minimumTime || undefined : undefined}
               name="time"
               onChange={handleChange}
+              onDrop={(inputEvent) => inputEvent.preventDefault()}
+              onKeyDown={blockManualPickerEntry}
+              onPaste={(inputEvent) => inputEvent.preventDefault()}
               type="time"
               value={event.time}
             />
@@ -185,19 +217,19 @@ export default function EventForm({
 
         <div>
           <label className={labelClass} htmlFor="event-location">Location</label>
-          <div className="relative">
-            <MapPin aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 mt-1 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              {...accessibility("location")}
-              autoComplete="off"
-              className={fieldClass("location", "pl-11")}
-              id="event-location"
-              name="location"
-              onChange={handleChange}
-              placeholder="Barangay Hall or purok"
-              value={event.location}
-            />
-          </div>
+          <Dropdown
+            ariaDescribedBy={accessibility("location")["aria-describedby"]}
+            ariaInvalid={accessibility("location")["aria-invalid"]}
+            ariaLabel="Select event location"
+            className="mt-2"
+            icon={MapPin}
+            id="event-location"
+            name="location"
+            onValueChange={(value) => handleChange({ target: { name: "location", value } })}
+            options={EVENT_LOCATIONS.map((location) => ({ label: location, value: location }))}
+            placeholder="Select purok coverage"
+            value={event.location}
+          />
           {fieldError("location")}
         </div>
 

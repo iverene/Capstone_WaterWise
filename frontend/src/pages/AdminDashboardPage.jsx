@@ -168,7 +168,7 @@ export default function AdminDashboardPage() {
             />
             <KPI
               compact
-              description="Unpaid for 3+ Months"
+              description="3+ Overdue Bills"
               descriptionHighlight={metrics.flaggedCount > 0 ? "Needs Review" : "None Flagged"}
               descriptionIcon={metrics.flaggedCount > 0 ? Flag : CheckCircle2}
               descriptionTone={metrics.flaggedCount > 0 ? "warning" : "positive"}
