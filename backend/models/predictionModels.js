@@ -27,6 +27,7 @@ export async function getConsumptionSourceVersion() {
     const { data: eventData, count: eventCount, error: eventError } = await supabase
       .from("events")
       .select("id, updated_at", { count: "exact" })
+      .order("updated_at", { ascending: false })
       .order("id", { ascending: false })
       .limit(1);
     if (!eventError) {

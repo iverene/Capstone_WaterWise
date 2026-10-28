@@ -9,7 +9,7 @@ import AdminPerPurokConsumptionCard from "../components/AdminPerPurokConsumption
 import MonthlyConsumptionTrend from "../components/MonthlyConsumptionTrend";
 import YearlyConsumptionTrend from "../components/YearlyConsumptionTrend";
 import PerPurokConsumptionTrend from "../components/PerPurokConsumptionTrend";
-import AnomalyRecommendationSection from "../components/AnomalyRecommendationSection";
+import RecommendationSection from "../components/RecommendationSection";
 import { fetchMonthlyHistory, fetchYearlyHistory } from "../services/consumptionAPI";
 import { getMonthlyBaselineStatus, getYearlyBaselineStatus } from "../utils/baselineStatus";
 import { hasShownAnalyticsBaselineWarning, markAnalyticsBaselineWarningShown } from "../utils/analyticsBaselineToastSession";
@@ -184,7 +184,7 @@ export default function AnalyticsDashboard() {
           role="tabpanel"
           tabIndex={0}
         >
-          <AnomalyRecommendationSection />
+          <RecommendationSection />
         </section>
       )}
     </main>

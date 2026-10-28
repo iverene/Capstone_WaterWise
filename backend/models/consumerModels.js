@@ -7,6 +7,10 @@ import {
   ensureAccountIdentityIsUnique,
 } from "./accountIdentityModels.js";
 import { hashAccountPassword } from "./authModels.js";
+import {
+  currentManilaDate,
+  disconnectionGrace,
+} from "../utils/billingPolicy.js";
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -598,12 +602,14 @@ export const completeConsumerOnboarding = async (id, newPassword) => {
 
 export const disconnectFlaggedConsumer = async (id) => {
   const consumerId = parseId(id);
+  const today = currentManilaDate();
   const { data: outstandingBills, error: billingError } = await supabase
     .from("billing")
-    .select("id, billing_date, remaining_balance")
+    .select("id, billing_date, due_date, remaining_balance")
     .eq("user_id", consumerId)
     .gt("remaining_balance", 0)
-    .order("billing_date", { ascending: true })
+    .lt("due_date", today)
+    .order("due_date", { ascending: true })
     .order("id", { ascending: true });
 
   if (billingError) {
@@ -611,7 +617,16 @@ export const disconnectFlaggedConsumer = async (id) => {
   }
   if ((outstandingBills ?? []).length < 3) {
     throw createError(
-      "This account is no longer eligible for disconnection because it has fewer than three outstanding bills.",
+      "This account is no longer eligible for disconnection because it has fewer than three overdue bills.",
+      409,
+    );
+  }
+
+  const thirdOverdueBill = outstandingBills[2];
+  const grace = disconnectionGrace(thirdOverdueBill.due_date, today);
+  if (!grace.isEligible) {
+    throw createError(
+      `This account is still within its disconnection grace period. ${grace.daysRemaining} ${grace.daysRemaining === 1 ? "day remains" : "days remain"}.`,
       409,
     );
   }
@@ -634,13 +649,13 @@ export const disconnectFlaggedConsumer = async (id) => {
         action_path: "/consumer/billing-ledger",
         announcement_date: notificationDate,
         announcement_type: "Account Alert",
-        billing_id: outstandingBills[0].id,
+        billing_id: thirdOverdueBill.id,
         consumer_id: consumerId,
-        event_key: `disconnection-warning:${consumerId}:3-outstanding-bills`,
-        message: `Your account has been flagged for disconnection because it has ${outstandingBills.length} outstanding monthly bills totaling PHP ${totalOutstanding.toFixed(2)}. Contact the water district office immediately.`,
+        event_key: `disconnection-grace:${consumerId}:${thirdOverdueBill.id}`,
+        message: `Your account has been flagged for possible disconnection because you have ${outstandingBills.length} overdue monthly bills totaling PHP ${totalOutstanding.toFixed(2)}. You have a 3-day grace period to settle at least your oldest overdue bill. Please make your payment within the grace period to avoid water service disconnection. Contact the water district office if you need assistance.`,
         notification_type: "disconnection_warning",
         priority: "critical",
-        title: "Account flagged for disconnection",
+        title: "Account flagged — 3-day grace period",
       },
       { ignoreDuplicates: true, onConflict: "event_key" },
     );

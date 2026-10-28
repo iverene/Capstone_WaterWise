@@ -1,41 +1,16 @@
 import { supabase } from "../config/supabase.js";
 import { publishDataChange } from "./changeEventService.js";
+import {
+  addDays,
+  currentManilaDate,
+  dateAtUtcMidnight,
+  daysBetween,
+} from "../utils/billingPolicy.js";
 
 const DEFAULT_REMINDER_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const UPCOMING_DUE_WINDOW_DAYS = 3;
 
-const toDateString = (date) => date.toISOString().slice(0, 10);
-
-const dateAtUtcMidnight = (value) => {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) {
-    throw new TypeError("Reminder date must use the YYYY-MM-DD format.");
-  }
-  return date;
-};
-
-export const currentManilaDate = (now = new Date()) => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Asia/Manila",
-    year: "numeric",
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-};
-
-const addDays = (value, days) => {
-  const date = dateAtUtcMidnight(value);
-  date.setUTCDate(date.getUTCDate() + days);
-  return toDateString(date);
-};
-
-const daysBetween = (from, to) =>
-  Math.round(
-    (dateAtUtcMidnight(to).getTime() - dateAtUtcMidnight(from).getTime()) /
-      86_400_000,
-  );
+export { currentManilaDate };
 
 const currency = (value) =>
   new Intl.NumberFormat("en-PH", {
@@ -116,12 +91,16 @@ export async function processBillingReminders({ today = currentManilaDate() } = 
     return groups;
   }, new Map());
   const disconnectionNotices = Array.from(billsByConsumer.entries())
-    .filter(([, consumerBills]) => consumerBills.length >= 3)
     .map(([consumerId, consumerBills]) => {
-      const oldestBill = [...consumerBills].sort((first, second) =>
-        String(first.billing_date).localeCompare(String(second.billing_date)),
-      )[0];
-      const totalBalance = consumerBills.reduce(
+      const overdueBills = consumerBills
+        .filter((bill) => bill.due_date < today)
+        .sort((first, second) =>
+          String(first.due_date).localeCompare(String(second.due_date)) || first.id - second.id,
+        );
+      if (overdueBills.length < 3) return null;
+
+      const thirdOverdueBill = overdueBills[2];
+      const totalBalance = overdueBills.reduce(
         (total, bill) => total + Number(bill.remaining_balance || 0),
         0,
       );
@@ -130,15 +109,16 @@ export async function processBillingReminders({ today = currentManilaDate() } = 
         action_path: "/consumer/billing-ledger",
         announcement_date: today,
         announcement_type: "Account Alert",
-        billing_id: oldestBill.id,
+        billing_id: thirdOverdueBill.id,
         consumer_id: consumerId,
-        event_key: `disconnection-warning:${consumerId}:3-outstanding-bills`,
-        message: `Your account has been flagged for possible disconnection because it has ${consumerBills.length} outstanding monthly bills totaling ${currency(totalBalance)}. Please settle your oldest bill or contact the water district office immediately.`,
+        event_key: `disconnection-grace:${consumerId}:${thirdOverdueBill.id}`,
+        message: `Your account has been flagged for possible disconnection because you have ${overdueBills.length} overdue monthly bills totaling ${currency(totalBalance)}. You have a 3-day grace period to settle at least your oldest overdue bill. Please make your payment within the grace period to avoid water service disconnection. Contact the water district office if you need assistance.`,
         notification_type: "disconnection_warning",
         priority: "critical",
-        title: "Account flagged for disconnection",
+        title: "Account flagged — 3-day grace period",
       };
-    });
+    })
+    .filter(Boolean);
   const notifications = [...reminders, ...disconnectionNotices];
   if (notifications.length === 0) {
     return { checked: 0, created: 0, date: today };

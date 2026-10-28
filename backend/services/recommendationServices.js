@@ -14,6 +14,7 @@ import {
 } from "./consumptionServices.js";
 import { getPurokPredictionData } from "../models/consumptionModels.js";
 import { getRecommendationEventContext } from "../models/eventModels.js";
+import { eventAppliesToPurok } from "../utils/eventPolicy.js";
 import { getConsumptionSourceVersion } from "../models/predictionModels.js";
 import {
   getStoredRecommendation,
@@ -91,6 +92,15 @@ const formatEventContext = (events) => {
   return JSON.stringify(events);
 };
 
+const formatEventsByPurok = (events, puroks) => JSON.stringify(
+  Object.fromEntries(
+    puroks.map((purok) => [
+      purok,
+      events.filter((event) => eventAppliesToPurok(event.location, purok)),
+    ]),
+  ),
+);
+
 const resolveOverallMonthlyTargetYear = async () => {
   try {
     const records = await getPurokPredictionData();
@@ -100,6 +110,32 @@ const resolveOverallMonthlyTargetYear = async () => {
     return null;
   }
 };
+
+const resolvePurokMonthlyTargetYear = async (purok) => {
+  try {
+    const records = (await getPurokPredictionData())
+      .filter((record) => record.purok === purok);
+    const years = records.map((record) => Number(record.year)).filter(Number.isFinite);
+    return years.length > 0 ? Math.max(...years) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getPurokEventContext = (purok, years) =>
+  getRecommendationEventContext({
+    years,
+    locations: [purok, "All Puroks"],
+    occurredOnly: true,
+    statuses: ["Scheduled"],
+  });
+
+const getAllPuroksEventContext = (years) =>
+  getRecommendationEventContext({
+    years,
+    occurredOnly: true,
+    statuses: ["Scheduled"],
+  });
 
 const createEmptyRecommendation =
   (purok = undefined) => {
@@ -412,6 +448,12 @@ const generatePerPurokMonthlyRecommendationsUncached =
       );
     }
 
+    const targetYear = await resolvePurokMonthlyTargetYear(normalizedPurok);
+    const events = await getPurokEventContext(
+      normalizedPurok,
+      targetYear ? [targetYear] : [],
+    );
+
     const prompt = `
 You are an AI decision support assistant for a water utility administrator.
 
@@ -422,11 +464,18 @@ Historical monthly water consumption:
 
 ${JSON.stringify(historical)}
 
+Relevant completed community events for ${normalizedPurok} or All Puroks:
+
+${formatEventContext(events)}
+
 Generate only practical and actionable administrative recommendations for this purok based on the observed consumption trend.
 
 Rules:
 - Base every recommendation only on the supplied historical data.
 - Preserve the supplied purok name exactly.
+- Before finalizing the recommendation, check whether a relevant event falls in or near a month with a noticeable increase or decrease.
+- You may mention an aligned event as possible context using cautious wording such as "coincided with," but never state that it caused the change.
+- If no event aligns with the trend, ignore the events section.
 - Do not assume the exact cause of an increase or decrease.
 - Do not speculate about leaks, illegal connections, damaged pipes, faulty meters, weather conditions, or population growth unless directly supported by the data.
 - If consumption remains stable, recommend routine monitoring and continued observation.
@@ -492,6 +541,11 @@ const generatePerPurokYearlyRecommendationsUncached =
       );
     }
 
+    const historicalYears = historical
+      .map((item) => Number(item.year))
+      .filter(Number.isFinite);
+    const events = await getPurokEventContext(normalizedPurok, historicalYears);
+
     const prompt = `
 You are an AI decision support assistant for a water utility administrator.
 
@@ -502,11 +556,18 @@ Historical yearly water consumption:
 
 ${JSON.stringify(historical)}
 
+Relevant completed community events for ${normalizedPurok} or All Puroks:
+
+${formatEventContext(events)}
+
 Generate only practical and actionable administrative recommendations for this purok based on the observed consumption trend.
 
 Rules:
 - Base every recommendation only on the supplied historical data.
 - Preserve the supplied purok name exactly.
+- Before finalizing the recommendation, check whether a relevant event falls in or near a year with a noticeable increase or decrease.
+- You may mention an aligned event as possible context using cautious wording such as "coincided with," but never state that it caused the change.
+- If no event aligns with the trend, ignore the events section.
 - Do not assume the exact cause of an increase or decrease.
 - Do not speculate about leaks, illegal connections, damaged pipes, faulty meters, weather conditions, or population growth unless directly supported by the data.
 - If consumption remains stable, recommend routine monitoring and continued observation.
@@ -565,6 +626,10 @@ const generateAllPuroksMonthlyRecommendationsUncached =
           (item) => item.purok
         )
         .filter(Boolean);
+    const eventYears = [...new Set(
+      historical.map((item) => Number(item.latestYear)).filter(Number.isFinite),
+    )];
+    const events = await getAllPuroksEventContext(eventYears);
 
     const prompt = `
 You are an AI decision support assistant for a water utility administrator.
@@ -573,12 +638,20 @@ Historical monthly water consumption for every purok:
 
 ${JSON.stringify(historical)}
 
+Completed community events in the same period, with their Purok coverage:
+
+${formatEventsByPurok(events, puroks)}
+
 Generate only practical and actionable administrative recommendations for every purok based on the observed consumption trends.
 
 Rules:
 - Base every recommendation only on the supplied historical data.
 - Return exactly one result for every supplied purok.
 - Preserve every purok name exactly.
+- For each purok, consider only events whose location matches that purok or is All Puroks.
+- Check whether a relevant event falls in or near a month with a noticeable increase or decrease before mentioning it.
+- An aligned event may be described only as possible context using cautious wording such as "coincided with"; never state that it caused the change.
+- If no relevant event aligns for a purok, ignore the events section for that purok.
 - Do not assume the exact cause of an increase or decrease.
 - Do not speculate about leaks, illegal connections, damaged pipes, faulty meters, weather conditions, or population growth unless directly supported by the data.
 - If a purok has stable consumption, recommend routine monitoring and continued observation.
@@ -666,6 +739,13 @@ const generateAllPuroksYearlyRecommendationsUncached =
           (item) => item.purok
         )
         .filter(Boolean);
+    const eventYears = [...new Set(
+      historical
+        .flatMap((item) => item.historical ?? [])
+        .map((item) => Number(item.year))
+        .filter(Number.isFinite),
+    )];
+    const events = await getAllPuroksEventContext(eventYears);
 
     const prompt = `
 You are an AI decision support assistant for a water utility administrator.
@@ -674,12 +754,20 @@ Historical yearly water consumption for every purok:
 
 ${JSON.stringify(historical)}
 
+Completed community events in the same years, with their Purok coverage:
+
+${formatEventsByPurok(events, puroks)}
+
 Generate only practical and actionable administrative recommendations for every purok based on the observed consumption trends.
 
 Rules:
 - Base every recommendation only on the supplied historical data.
 - Return exactly one result for every supplied purok.
 - Preserve every purok name exactly.
+- For each purok, consider only events whose location matches that purok or is All Puroks.
+- Check whether a relevant event falls in or near a year with a noticeable increase or decrease before mentioning it.
+- An aligned event may be described only as possible context using cautious wording such as "coincided with"; never state that it caused the change.
+- If no relevant event aligns for a purok, ignore the events section for that purok.
 - Do not assume the exact cause of an increase or decrease.
 - Do not speculate about leaks, illegal connections, damaged pipes, faulty meters, weather conditions, or population growth unless directly supported by the data.
 - If a purok has stable consumption, recommend routine monitoring and continued observation.

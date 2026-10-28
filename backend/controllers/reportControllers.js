@@ -1,6 +1,7 @@
 import {
   buildReportPreview,
   createPersistentReport,
+  getReportDateRange,
   renderReportPdf,
   toReportFilename,
 } from "../services/reportServices.js";
@@ -22,6 +23,17 @@ export async function previewReport(req, res) {
     return res.status(200).json({ success: true, data: await buildReportPreview(req.body ?? {}) });
   } catch (error) {
     return sendError(res, error, "Failed to preview report.");
+  }
+}
+
+export async function showReportDateRange(req, res) {
+  try {
+    return res.status(200).json({
+      success: true,
+      data: await getReportDateRange(req.query.type),
+    });
+  } catch (error) {
+    return sendError(res, error, "Failed to retrieve the available report dates.");
   }
 }
 

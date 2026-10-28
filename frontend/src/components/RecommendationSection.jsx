@@ -149,7 +149,7 @@ const buildConsumptionMap = (response, period) => {
   return map;
 };
 
-export default function AnomalyRecommendationSection() {
+export default function RecommendationSection() {
   const [recommendations, setRecommendations] = useState(
     EMPTY_RECOMMENDATIONS,
   );
@@ -308,7 +308,7 @@ export default function AnomalyRecommendationSection() {
 
   return (
     <section
-      data-testid="anomaly-recommendation-section"
+      data-testid="recommendation-section"
     >
       <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
         <BrainCircuit aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />

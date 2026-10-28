@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   FileDown,
@@ -11,10 +11,12 @@ import { useToast } from "./Toast";
 import { clearSession, getStoredAccount } from "../services/authToken";
 import {
   downloadReportPDF,
+  fetchReportDateRange,
   generateReport,
   openPrintableReport,
   savePdfBlob,
 } from "../services/reportAPI";
+import { manilaToday } from "../utils/billingPolicy";
 
 const REPORT_TYPES = {
   consumption: {
@@ -49,7 +51,7 @@ const SECTION_LABELS = {
   trend: "Period trend",
 };
 
-const today = new Date().toISOString().slice(0, 10);
+const today = manilaToday();
 const initialType = "consumption";
 const initialForm = {
   endDate: today,
@@ -60,6 +62,12 @@ const initialForm = {
 
 const requestMessage = (error, fallback) =>
   error?.response?.data?.message ?? error.message ?? fallback;
+
+function blockManualPickerEntry(event) {
+  const allowedKeys = new Set(["Tab", "Enter", "Escape"]);
+  if (allowedKeys.has(event.key) || (event.altKey && event.key === "ArrowDown")) return;
+  event.preventDefault();
+}
 
 const toTitleCaseFilename = (title) =>
   `${String(title ?? "")
@@ -77,14 +85,60 @@ export default function ReportGenerator({ onGenerated }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState("");
   const [busyAction, setBusyAction] = useState("");
+  const [dateRange, setDateRange] = useState(null);
+  const [rangeLoading, setRangeLoading] = useState(true);
+  const [rangeError, setRangeError] = useState("");
 
   const template = REPORT_TYPES[form.type];
+  const activeRange = dateRange?.type === form.type ? dateRange : null;
   const typeOptions = useMemo(
     () => Object.entries(REPORT_TYPES).map(([value, item]) => ({ label: item.label, value })),
     [],
   );
 
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    fetchReportDateRange(form.type, { signal: controller.signal })
+      .then((range) => {
+        if (!active) return;
+        setDateRange(range);
+        setForm((current) => {
+          if (current.type !== range.type) return current;
+          if (!range.hasData) return { ...current, endDate: "", startDate: "" };
+
+          const currentMonthStart = `${range.maxDate.slice(0, 7)}-01`;
+          let endDate = current.endDate || range.maxDate;
+          if (endDate > range.maxDate || endDate < range.minDate) endDate = range.maxDate;
+
+          let startDate = current.startDate || currentMonthStart;
+          if (startDate < range.minDate) startDate = range.minDate;
+          if (startDate > range.maxDate) startDate = range.maxDate;
+          if (startDate > endDate) startDate = endDate;
+          return { ...current, endDate, startDate };
+        });
+      })
+      .catch((requestError) => {
+        if (!active || requestError?.name === "AbortError" || requestError?.code === "ERR_CANCELED") return;
+        setDateRange(null);
+        setRangeError(requestMessage(requestError, "Unable to load the available report dates."));
+      })
+      .finally(() => {
+        if (active) setRangeLoading(false);
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [form.type]);
+
   const changeField = (name, value) => {
+    if (name === "type") {
+      setRangeLoading(true);
+      setRangeError("");
+    }
     setForm((current) => {
       if (name === "type") {
         return { ...current, type: value, sections: REPORT_TYPES[value].sections };
@@ -106,8 +160,18 @@ export default function ReportGenerator({ onGenerated }) {
 
   const validate = () => {
     const nextErrors = {};
+    if (!activeRange?.hasData) {
+      setError(rangeError || `No ${template.label.toLowerCase()} data is available yet.`);
+      return false;
+    }
     if (!form.startDate) nextErrors.startDate = "Select a start date.";
     if (!form.endDate) nextErrors.endDate = "Select an end date.";
+    if (form.startDate && form.startDate < activeRange.minDate) {
+      nextErrors.startDate = `Select ${activeRange.minDate} or a later date.`;
+    }
+    if (form.endDate && form.endDate > activeRange.maxDate) {
+      nextErrors.endDate = `Select ${activeRange.maxDate} or an earlier date.`;
+    }
     if (form.startDate && form.endDate && form.endDate < form.startDate) {
       nextErrors.endDate = "End date must be on or after the start date.";
     }
@@ -213,10 +277,15 @@ export default function ReportGenerator({ onGenerated }) {
             aria-describedby={fieldErrors.startDate ? "report-start-error" : undefined}
             aria-invalid={Boolean(fieldErrors.startDate)}
             className="ww-field mt-2 px-4 text-sm"
+            disabled={rangeLoading || !activeRange?.hasData}
             id="report-start"
-            max={form.endDate || today}
+            max={form.endDate || activeRange?.maxDate || today}
+            min={activeRange?.minDate || undefined}
             name="startDate"
             onChange={(event) => changeField("startDate", event.target.value)}
+            onDrop={(event) => event.preventDefault()}
+            onKeyDown={blockManualPickerEntry}
+            onPaste={(event) => event.preventDefault()}
             type="date"
             value={form.startDate}
           />
@@ -228,16 +297,29 @@ export default function ReportGenerator({ onGenerated }) {
             aria-describedby={fieldErrors.endDate ? "report-end-error" : undefined}
             aria-invalid={Boolean(fieldErrors.endDate)}
             className="ww-field mt-2 px-4 text-sm"
+            disabled={rangeLoading || !activeRange?.hasData}
             id="report-end"
+            max={activeRange?.maxDate || today}
             min={form.startDate}
             name="endDate"
             onChange={(event) => changeField("endDate", event.target.value)}
+            onDrop={(event) => event.preventDefault()}
+            onKeyDown={blockManualPickerEntry}
+            onPaste={(event) => event.preventDefault()}
             type="date"
             value={form.endDate}
           />
           {fieldErrors.endDate && <p className="mt-1.5 text-sm font-semibold text-red-600" id="report-end-error">{fieldErrors.endDate}</p>}
         </div>
       </div>
+
+      {rangeLoading && <p className="mt-3 text-sm text-slate-500">Checking available report dates…</p>}
+      {!rangeLoading && activeRange && !activeRange.hasData && (
+        <p className="mt-3 text-sm font-semibold text-amber-700" role="status">
+          No {template.label.toLowerCase()} data is available yet.
+        </p>
+      )}
+      {!rangeLoading && rangeError && <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{rangeError}</p>}
 
       <fieldset className="mt-6">
         <legend className="text-sm font-bold text-navy-900">Included sections</legend>
@@ -259,7 +341,7 @@ export default function ReportGenerator({ onGenerated }) {
       </fieldset>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-        <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white hover:bg-water-700 disabled:opacity-60" disabled={Boolean(busyAction)} onClick={generate} type="button">
+        <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-water-600 px-5 font-bold text-white hover:bg-water-700 disabled:opacity-60" disabled={Boolean(busyAction) || rangeLoading || !activeRange?.hasData} onClick={generate} type="button">
           {busyAction === "generate" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <FileText aria-hidden="true" className="h-4 w-4" />}
           {busyAction === "generate" ? "Generating report…" : "Generate report"}
         </button>

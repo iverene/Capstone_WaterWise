@@ -322,7 +322,7 @@ BEGIN
         remaining_balance, status
     ) VALUES (
         v_reading.id, p_consumer_id, v_reading_date,
-        (date_trunc('month', v_reading_date) + INTERVAL '1 month - 1 day')::DATE,
+        (date_trunc('month', v_reading_date) + INTERVAL '1 month 9 days')::DATE,
         v_total, v_total, 'Unpaid'
     )
     RETURNING * INTO v_billing;

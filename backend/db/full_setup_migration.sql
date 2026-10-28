@@ -239,6 +239,24 @@ CREATE TABLE IF NOT EXISTS billing (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+CREATE OR REPLACE FUNCTION set_billing_due_date_to_next_month_tenth()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.due_date := (
+        date_trunc('month', NEW.billing_date) + INTERVAL '1 month 9 days'
+    )::DATE;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_billing_due_date_policy ON billing;
+CREATE TRIGGER trg_billing_due_date_policy
+BEFORE INSERT ON billing
+FOR EACH ROW
+EXECUTE FUNCTION set_billing_due_date_to_next_month_tenth();
+
 -- CREATE PAYMENTS TABLE
 CREATE TABLE IF NOT EXISTS payments (
     id SERIAL PRIMARY KEY,
@@ -479,7 +497,7 @@ BEGIN
         remaining_balance, status
     ) VALUES (
         v_reading.id, p_consumer_id, v_reading_date,
-        (date_trunc('month', v_reading_date) + INTERVAL '1 month - 1 day')::DATE,
+        (date_trunc('month', v_reading_date) + INTERVAL '1 month 9 days')::DATE,
         v_total, v_total, 'Unpaid'
     ) RETURNING * INTO v_billing;
 
@@ -865,6 +883,8 @@ $$;
 -- Indexes for lightning-fast queries when filtering notifications by target consumer
 CREATE INDEX IF NOT EXISTS notifications_consumer_id_idx
 ON notifications (consumer_id);
+CREATE INDEX IF NOT EXISTS notifications_consumer_created_at_idx
+ON notifications (consumer_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS notifications_billing_id_idx ON notifications (billing_id);
 CREATE INDEX IF NOT EXISTS notifications_type_date_idx
 ON notifications (notification_type, announcement_date DESC);
@@ -1023,10 +1043,16 @@ BEGIN
             NEW.id,
             'Account Alert',
             'account_status_changed',
-            CASE WHEN NEW.status = 'inactive' THEN 'critical' ELSE 'high' END,
-            CASE WHEN NEW.status = 'inactive' THEN 'Account deactivated' ELSE 'Account activated' END,
+            CASE WHEN NEW.status IN ('inactive', 'disconnected') THEN 'critical' ELSE 'high' END,
+            CASE
+                WHEN NEW.status = 'disconnected' THEN 'Water service disconnected'
+                WHEN NEW.status = 'inactive' THEN 'Account deactivated'
+                ELSE 'Account activated'
+            END,
             (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::DATE,
             CASE
+                WHEN NEW.status = 'disconnected'
+                    THEN 'Your water service has been disconnected after administrative confirmation. You may still review your bills and payments. Contact the water district office for assistance.'
                 WHEN NEW.status = 'inactive'
                     THEN 'Your WaterWise account has been deactivated. Contact the water district office if you need assistance.'
                 ELSE 'Your WaterWise account is active again. You may now sign in and use the consumer portal.'
@@ -1049,12 +1075,12 @@ EXECUTE FUNCTION generate_consumer_status_notification();
 -- New unified cache query.
 
 -- 13. UNIFIED GEMINI AI CONSUMPTION CACHE
--- Prediction, anomaly, and recommendation results are stored together.
--- result_type separates cache keys that are shared by the three AI features.
+-- Prediction and recommendation results are stored together.
+-- result_type separates cache keys shared by the two AI features.
 CREATE TABLE IF NOT EXISTS ai_consumption_cache (
     id BIGSERIAL PRIMARY KEY,
     result_type VARCHAR(30) NOT NULL CHECK (
-        result_type IN ('prediction', 'anomaly', 'recommendation')
+        result_type IN ('prediction', 'recommendation')
     ),
     cache_key VARCHAR(255) NOT NULL,
     scope VARCHAR(30) NOT NULL CHECK (
@@ -2202,7 +2228,7 @@ BEGIN
         remaining_balance, status
     ) VALUES (
         v_reading.id, p_consumer_id, v_reading_date,
-        (date_trunc('month', v_reading_date) + INTERVAL '1 month - 1 day')::DATE,
+        (date_trunc('month', v_reading_date) + INTERVAL '1 month 9 days')::DATE,
         v_total, v_total, 'Unpaid'
     )
     RETURNING * INTO v_billing;
