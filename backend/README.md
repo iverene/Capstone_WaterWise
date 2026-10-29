@@ -201,6 +201,7 @@ Run migrations from `db/` folder in Supabase SQL Editor:
 | `SUPABASE_KEY` | Yes | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
 | `JWT_SECRET` | Yes | JWT signing secret (min 32 chars) |
+| `DISABLE_ADMIN_LOGIN_OTP` | No | Set to `true` to bypass the Admin and Super Admin login OTP only (default: `false`) |
 | `GEMINI_API_KEY` | Yes | Google Gemini API key |
 | `BREVO_API_KEY` | Yes | Brevo email API key |
 | `BREVO_FROM_EMAIL` | Yes | Verified sender email |

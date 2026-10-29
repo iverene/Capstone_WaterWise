@@ -10,6 +10,12 @@ export const JWT_ISSUER = "waterwise-api";
 export const JWT_AUDIENCE = "waterwise-frontend";
 export const REFRESH_AUDIENCE = "waterwise-refresh";
 
+export function isAdminLoginOtpDisabled() {
+  return String(process.env.DISABLE_ADMIN_LOGIN_OTP ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
 export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret || secret.length < 32) {
