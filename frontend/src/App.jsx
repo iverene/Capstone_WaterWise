@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { isAnyModalOpen, subscribeToModalStack } from "./components/modalStack";
-import AppLayout from "./components/AppLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import LoadingSkeleton from "./components/LoadingSkeleton";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import RateLimitToast from "./components/RateLimitToast";
 import RouteAccessError from "./components/RouteAccessError";
@@ -11,40 +11,44 @@ import {
   getStoredAccount as getSessionAccount,
   hasAuthenticatedSession,
 } from "./services/authToken";
-import BillingLedger from "./pages/BillingLedger";
-import ConsumerProfile from "./pages/ConsumerProfile";
-import ConsumerAccountInformation from "./pages/ConsumerAccountInformation";
-import ConsumerHome from "./pages/ConsumerHome";
-import ConsumerOnboarding from "./pages/ConsumerOnboarding";
-import AnnouncementsPage from "./pages/AnnouncementsPage";
 import Login from "./pages/Login";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import ChangePasswordPage from "./pages/ChangePasswordPage";
-import ChangeEmailPage from "./pages/ChangeEmailPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import UsageMetrics from "./pages/UsageMetrics";
-import AnalyticsDashboard from "./pages/analyticsDashboard";
-import Reports from "./pages/Reports";
-import ConsumerManagementPage from "./pages/ConsumerManagementPage";
-import AdminReadingsPage from "./pages/AdminReadingsPage";
-import ConsumerBillsPage from "./pages/ConsumerBillsPage";
-import ConsumerPaymentsPage from "./pages/ConsumerPaymentsPage";
-import ConsumerReadingsPage from "./pages/ConsumerReadingsPage";
-import BillingManagementPage from "./pages/BillingManagementPage";
-import EventManagementPage from "./pages/EventManagementPage";
-import AnnouncementManagementPage from "./pages/AnnouncementManagementPage";
-import PaymentProcessingPage from "./pages/PaymentProcessingPage";
-import FlaggedAccountsPage from "./pages/FlaggedAccountsPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import AdminProfile from "./pages/AdminProfile";
-import AdminSettingsPage from "./pages/AdminSettingsPage";
-import AdminAccountInformation from "./pages/AdminAccountInformation";
-import MeterIncidentsPage from "./pages/MeterIncidentsPage";
-import RecordConsumptionPage from "./pages/RecordConsumptionPage";
-import ReportMeterIncidentPage from "./pages/ReportMeterIncidentPage";
-import MeterReaderProfile from "./pages/MeterReaderProfile";
-import MeterReaderAccountInformation from "./pages/MeterReaderAccountInformation";
+import {
+  AdminAccountInformation,
+  AdminDashboardPage,
+  AdminProfile,
+  AdminReadingsPage,
+  AdminSettingsPage,
+  AnalyticsDashboard,
+  AnnouncementManagementPage,
+  AnnouncementsPage,
+  AppLayout,
+  BillingLedger,
+  BillingManagementPage,
+  ChangeEmailPage,
+  ChangePasswordPage,
+  ConsumerAccountInformation,
+  ConsumerBillsPage,
+  ConsumerHome,
+  ConsumerManagementPage,
+  ConsumerOnboarding,
+  ConsumerPaymentsPage,
+  ConsumerProfile,
+  ConsumerReadingsPage,
+  EventManagementPage,
+  FlaggedAccountsPage,
+  ForgotPassword,
+  getRolePrefetchLoaders,
+  MeterIncidentsPage,
+  MeterReaderAccountInformation,
+  MeterReaderProfile,
+  NotFoundPage,
+  PaymentProcessingPage,
+  RecordConsumptionPage,
+  ReportMeterIncidentPage,
+  Reports,
+  ResetPassword,
+  UsageMetrics,
+} from "./routeModules";
 import { clearApiCache } from "./services/apiCache";
 import { getCurrentAccount } from "./services/auth.service";
 import { subscribeToDataChanges } from "./services/dataChangeStream";
@@ -109,6 +113,51 @@ roleAccess["super-admin"] = {
   label: "Super Admin",
   paths: [...roleAccess.admin.paths, "/admin/staff-management", "/admin/settings"],
 };
+
+function RouteChunkFallback() {
+  return (
+    <main className="min-h-screen bg-canvas px-4 py-6 sm:px-6" aria-busy="true">
+      <div className="mx-auto w-full max-w-[1440px]">
+        <LoadingSkeleton count={3} label="Loading page" variant="list" />
+      </div>
+    </main>
+  );
+}
+
+function prefetchRoleModules(role) {
+  const queue = getRolePrefetchLoaders(role);
+  let cancelled = false;
+  let idleHandle = null;
+  let delayHandle = null;
+
+  const scheduleNext = () => {
+    if (cancelled || queue.length === 0) return;
+    const run = () => {
+      if (cancelled) return;
+      const load = queue.shift();
+      load().catch(() => {
+        // Navigation will retry through React.lazy and the error boundary.
+      }).finally(scheduleNext);
+    };
+    if ("requestIdleCallback" in window) {
+      idleHandle = window.requestIdleCallback(run, { timeout: 3000 });
+    } else {
+      idleHandle = window.setTimeout(run, 250);
+    }
+  };
+
+  // Let the destination page finish its own first paint before downloading
+  // the rest of that role's routes one at a time in the background.
+  delayHandle = window.setTimeout(scheduleNext, 1000);
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(delayHandle);
+    if (idleHandle == null) return;
+    if ("cancelIdleCallback" in window) window.cancelIdleCallback(idleHandle);
+    else window.clearTimeout(idleHandle);
+  };
+}
 
 function SessionExpiryGuard() {
   // Cookie-only: no readable JWT exp. Backend 401 + apiClient interceptor
@@ -607,6 +656,12 @@ export default function App() {
     return () => window.removeEventListener("waterwise-session-changed", sessionChanged);
   }, []);
 
+  useEffect(() => {
+    const role = getSessionAccount()?.role;
+    if (!role) return undefined;
+    return prefetchRoleModules(role);
+  }, [sessionRevision]);
+
   return (
     <BrowserRouter>
       <SessionExpiryGuard />
@@ -614,7 +669,9 @@ export default function App() {
       <RateLimitToast />
       <ConsumerOnboardingGate />
       <ErrorBoundary>
-        <AppRoutes key={dataRevision} />
+        <Suspense fallback={<RouteChunkFallback />}>
+          <AppRoutes key={dataRevision} />
+        </Suspense>
       </ErrorBoundary>
       <PWAInstallPrompt />
     </BrowserRouter>
