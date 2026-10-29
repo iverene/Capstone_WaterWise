@@ -69,6 +69,9 @@ function normalizeRecordingContext(record) {
     latestPreviousReading: record.latest_previous_reading == null ? null : Number(record.latest_previous_reading),
     latestPresentReading: record.latest_present_reading == null ? null : Number(record.latest_present_reading),
     latestConsumption: record.latest_consumption == null ? null : Number(record.latest_consumption),
+    latestCarriedConsumption: record.latest_carried_consumption == null
+      ? 0
+      : Number(record.latest_carried_consumption),
     latestReadingSource: record.latest_reading_source ?? "actual",
     averageRecentConsumption: record.average_recent_consumption == null ? null : Number(record.average_recent_consumption),
     averageWindow: Number(record.average_window ?? 3),

@@ -52,16 +52,6 @@ export async function fetchConsumerMeterIncidents(consumerId, options = {}) {
   return Array.isArray(response.data?.data) ? response.data.data.map(normalizeIncident) : [];
 }
 
-export async function fetchAveragePreview(consumerId, options = {}) {
-  const response = await client.get(`/average/${consumerId}`, options);
-  const data = response.data?.data ?? {};
-  return {
-    average: data.average == null ? null : Number(data.average),
-    sampleCount: Number(data.sampleCount ?? 0),
-    window: Number(data.window ?? 3),
-  };
-}
-
 const toOptionalNumber = (value) =>
   value === "" || value == null ? undefined : Number(value);
 
@@ -71,8 +61,6 @@ const buildIncidentPayload = (payload) => ({
   effectiveDate: payload.effectiveDate || undefined,
   oldMeterSerial: payload.oldMeterSerial || undefined,
   oldFinalReading: toOptionalNumber(payload.oldFinalReading),
-  priorUsage: toOptionalNumber(payload.priorUsage),
-  priorUsageBasis: payload.priorUsageBasis ?? "average",
   newMeterSerial: payload.newMeterSerial || undefined,
   newBaseline: payload.newBaseline === "" || payload.newBaseline == null
     ? 0
@@ -100,7 +88,6 @@ export async function correctMeterIncident(id, payload, options = {}) {
     `/${id}`,
     {
       oldFinalReading: closingReading,
-      priorUsageBasis: closingReading == null ? "average" : "final_reading",
       newMeterSerial: payload.newMeterSerial === "" ? null : payload.newMeterSerial,
       newBaseline:
         payload.newBaseline === "" || payload.newBaseline == null

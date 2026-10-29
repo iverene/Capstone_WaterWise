@@ -3,7 +3,6 @@
 import { supabase } from "../config/supabase.js";
 import { composeFullName } from "./consumerModels.js";
 import {
-  getAveragePriorUsage,
   getAverageWindowMonths,
   listOpenIncidents,
   normalizeIncident,
@@ -385,6 +384,7 @@ const buildReadingContext = (consumer, records, billings, readingDate, options =
     latest_previous_reading: latest ? Number(latest.previous_reading) : null,
     latest_present_reading: latest ? Number(latest.present_reading) : null,
     latest_consumption: latest ? Number(latest.consumption) : null,
+    latest_carried_consumption: latest ? Number(latest.carried_consumption ?? 0) : null,
     average_recent_consumption: averageConsumption == null
       ? null
       : Number(averageConsumption.toFixed(2)),
@@ -682,36 +682,19 @@ export const createConsumptionReading = async ({
   let incidentPayload = null;
   if (incident && typeof incident === "object") {
     if (incident.id != null) {
-      // The RPC owns the billing math, so it needs the average to estimate a
-      // meter change that measured nothing. It is resolved here on the server,
-      // never taken from the browser, and only used when the gap reads as zero.
-      const average = await getAveragePriorUsage(
-        parsedConsumerId,
-        await getAverageWindowMonths(),
-      );
       incidentPayload = {
         id: Number(incident.id),
-        averageFallback: average.average,
-        forceZero: incident.forceZero === true,
       };
-    } else if (
-      incident.priorUsage != null ||
-      incident.oldFinalReading != null ||
-      incident.priorUsageBasis != null
-    ) {
+    } else if (incident.oldFinalReading != null) {
       const recorderId = recordedById ?? incident.recordedById;
       if (!Number.isInteger(Number(recorderId)) || Number(recorderId) < 1) {
         throw readingError("The meter incident must be recorded by an authenticated user.", 401);
       }
-      // Re-derive on the server. The closing reading and the system average are
-      // authoritative, so a tampered field payload cannot change the bill.
+      // Re-derive on the server so a tampered field payload cannot change the bill.
       const resolved = await resolveIncidentPriorUsage(parsedConsumerId, {
         oldFinalReading: incident.oldFinalReading == null
           ? null
           : Number(incident.oldFinalReading),
-        priorUsageBasis: incident.priorUsageBasis ?? "average",
-        suppliedUsage: incident.priorUsage == null ? null : Number(incident.priorUsage),
-        allowOverride: false,
       });
       incidentPayload = {
         incidentType: incident.incidentType ?? "replacement",

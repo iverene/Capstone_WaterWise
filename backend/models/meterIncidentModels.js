@@ -100,41 +100,6 @@ export async function getAverageWindowMonths() {
   }
 }
 
-/**
- * Average prior usage from the consumer's most recent ACTUAL readings.
- * Estimated and incident rows are excluded so the average cannot feed on itself.
- */
-export async function getAveragePriorUsage(consumerId, window = 3) {
-  const { data, error } = await supabase
-    .from("consumption")
-    .select("consumption, reading_date, reading_source, carried_consumption")
-    .eq("consumer_id", Number(consumerId))
-    .order("reading_date", { ascending: false })
-    .limit(Math.max(window * 3, 12));
-
-  if (error) {
-    throw createError(`Failed to load consumption history: ${error.message}`, 500);
-  }
-
-  const currentMonth = manilaMonthKey();
-  const rows = (data ?? []).filter((row) => {
-    if ((row.reading_source ?? "actual") !== "actual") return false;
-    if (Number(row.carried_consumption ?? 0) > 0) return false;
-    if (manilaMonthKey(row.reading_date) === currentMonth) return false;
-    const value = Number(row.consumption);
-    // A month with no usage says nothing about typical usage, and including it
-    // drags the average down (0, 22 and 20 would average 14 instead of 21).
-    return Number.isFinite(value) && value > 0;
-  });
-
-  const sample = rows.slice(0, window);
-  const average = sample.length
-    ? round2(sample.reduce((total, row) => total + Number(row.consumption), 0) / sample.length)
-    : null;
-
-  return { average, sampleCount: sample.length, window };
-}
-
 export async function listMeterIncidents({ status, consumerId, limit = 200 } = {}) {
   let query = supabase
     .from("meter_incidents")
@@ -221,7 +186,7 @@ const assertConsumer = async (consumerId) => {
 const latestRecordedReading = async (consumerId) => {
   const { data, error } = await supabase
     .from("consumption")
-    .select("present_reading")
+    .select("present_reading, consumption")
     .eq("consumer_id", Number(consumerId))
     .order("reading_date", { ascending: false })
     .order("id", { ascending: false })
@@ -231,115 +196,56 @@ const latestRecordedReading = async (consumerId) => {
   if (error) {
     throw createError(`Failed to load the previous reading: ${error.message}`, 500);
   }
-  return data ? Number(data.present_reading) : null;
+  return data
+    ? {
+        presentReading: Number(data.present_reading),
+        consumption: round2(Math.max(Number(data.consumption ?? 0), 0)),
+      }
+    : null;
 };
 
 /**
  * Resolve the old-meter usage carried into the next reading.
  *
- * The closing reading always wins because it is the only measured value. The
- * system average is the default when the meter was replaced without one, and a
- * reported volume is the last resort. Callers cannot invent a number while an
- * authoritative source exists, so the API and the field reader share one rule.
+ * Positive movement uses the closing-reading difference. An unchanged or lower
+ * closing value carries the consumer's latest completed consumption.
  */
 export async function resolveIncidentPriorUsage(
   consumerId,
-  { oldFinalReading = null, priorUsageBasis = "average", suppliedUsage = null, allowOverride = true } = {},
+  { oldFinalReading = null } = {},
 ) {
-  const window = await getAverageWindowMonths();
-  const basis = ["final_reading", "reported", "average"].includes(priorUsageBasis)
-    ? priorUsageBasis
-    : "average";
+  if (oldFinalReading == null) {
+    throw createError("Enter the old meter closing reading.");
+  }
 
-  if (oldFinalReading != null) {
-    const latest = await latestRecordedReading(consumerId);
-    if (latest == null) {
-      // First digital record: the closing reading is the whole carried volume.
-      return {
-        priorUsage: round2(oldFinalReading),
-        basis: "final_reading",
-        averageValue: null,
-        window,
-        lastRecordedReading: null,
-      };
-    }
-    const derived = round2(oldFinalReading - latest);
-    if (derived < 0) {
-      throw createError(
-        "The old meter final reading cannot be lower than the last recorded reading.",
-      );
-    }
+  const latest = await latestRecordedReading(consumerId);
+  if (latest == null) {
     return {
-      priorUsage: derived,
+      priorUsage: round2(oldFinalReading),
       basis: "final_reading",
       averageValue: null,
-      window,
-      lastRecordedReading: latest,
-    };
-  }
-
-  if (basis === "reported") {
-    if (suppliedUsage == null || suppliedUsage < 0) {
-      throw createError("Enter the volume reported by the resident or the field staff.");
-    }
-    return {
-      priorUsage: round2(suppliedUsage),
-      basis,
-      averageValue: null,
-      window,
+      window: null,
       lastRecordedReading: null,
     };
   }
 
-  const computed = await getAveragePriorUsage(consumerId, window);
-
-  if (basis === "average") {
-    if (computed.average != null) {
-      if (allowOverride && suppliedUsage != null) {
-        // An explicit override is allowed for admins, but the system average is
-        // still stored so auto-authorization can prove the value was untouched.
-        return {
-          priorUsage: round2(suppliedUsage),
-          basis,
-          averageValue: computed.average,
-          window,
-          lastRecordedReading: null,
-        };
-      }
-      return {
-        priorUsage: computed.average,
-        basis,
-        averageValue: computed.average,
-        window,
-        lastRecordedReading: null,
-      };
-    }
-    if (suppliedUsage != null) {
-      // Fewer than two actual readings: treat the typed volume as reported.
-      return {
-        priorUsage: round2(suppliedUsage),
-        basis: "reported",
-        averageValue: null,
-        window,
-        lastRecordedReading: null,
-      };
-    }
-    throw createError(
-      "Not enough actual readings to compute an average. Enter the old meter closing reading or the reported volume.",
-    );
-  }
-
-  // basis === "final_reading" but no closing reading was supplied.
-  if (suppliedUsage != null) {
+  const derived = round2(oldFinalReading - latest.presentReading);
+  if (derived <= 0) {
     return {
-      priorUsage: round2(suppliedUsage),
-      basis: "reported",
+      priorUsage: latest.consumption,
+      basis: "previous_consumption",
       averageValue: null,
-      window,
-      lastRecordedReading: null,
+      window: null,
+      lastRecordedReading: latest.presentReading,
     };
   }
-  throw createError("Enter the old meter closing reading.");
+  return {
+    priorUsage: derived,
+    basis: "final_reading",
+    averageValue: null,
+    window: null,
+    lastRecordedReading: latest.presentReading,
+  };
 }
 
 const normalizeIncidentType = (value, fallback = "replacement") => {
@@ -373,15 +279,10 @@ export async function createMeterIncident(payload, actor) {
 
   const resolved = await resolveIncidentPriorUsage(consumerId, {
     oldFinalReading,
-    priorUsageBasis: payload.priorUsageBasis,
-    suppliedUsage: toNumberOrNull(payload.priorUsage),
-    allowOverride: isAdminActor(actor),
   });
 
   if (resolved.priorUsage == null || resolved.priorUsage < 0) {
-    throw createError(
-      "Prior usage is required. Enter the closing reading or record enough actual readings for an average.",
-    );
+    throw createError("Prior usage is required. Enter the old meter closing reading.");
   }
 
   const isField = !isAdminActor(actor);
@@ -495,9 +396,6 @@ export async function updateMeterIncident(id, payload, actor) {
 
   const resolved = await resolveIncidentPriorUsage(consumerId, {
     oldFinalReading,
-    priorUsageBasis: payload.priorUsageBasis ?? incident.priorUsageBasis,
-    suppliedUsage: toNumberOrNull(payload.priorUsage),
-    allowOverride: !isField,
   });
 
   // This is an inventory correction, not a new approval request. The next

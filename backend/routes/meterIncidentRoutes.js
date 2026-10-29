@@ -3,7 +3,6 @@ import {
   listConsumerIncidents,
   listIncidents,
   logIncident,
-  showAveragePreview,
   showIncident,
   updateIncident,
 } from "../controllers/meterIncidentControllers.js";
@@ -21,7 +20,6 @@ router.get(
   authorizeOwnerOrRoles("consumerId", "consumer", "admin", "meter-reader"),
   listConsumerIncidents,
 );
-router.get("/average/:consumerId", authorizeRoles("admin", "meter-reader"), showAveragePreview);
 // Reporting a meter replacement is a field operation performed by the meter
 // reader. Admins cannot create a replacement, but they can correct a recorded
 // one before a reading consumes it.
