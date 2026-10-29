@@ -425,7 +425,9 @@ export default function Login() {
         <img
           alt="Sucol WaterWise logo"
           className="h-[102px] w-auto sm:h-[118px]"
+          height="314"
           src="/Sucol_logo.webp"
+          width="314"
         />
         <h1 className="mt-4 text-center text-xl font-extrabold leading-tight tracking-[-0.04em] text-slate-900 sm:text-2xl">
           {adminChallengeToken ? "Verify admin sign in" : "Sign in to your account"}

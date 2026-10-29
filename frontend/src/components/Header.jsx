@@ -9,7 +9,14 @@ export default function Header({
     <header className="relative z-30 bg-slate-50 lg:absolute lg:right-0 lg:top-0 lg:w-auto lg:bg-transparent lg:backdrop-blur-none">
       <div className="flex min-h-16 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:min-h-0 lg:justify-end lg:px-8 lg:py-6">
         <div className="flex min-w-0 items-center gap-3 lg:hidden">
-          <img alt="" className="h-8 w-8 shrink-0 object-contain" src="/Sucol_logo.webp" />
+          <img
+            alt=""
+            className="h-8 w-8 shrink-0 object-contain"
+            height="48"
+            src="/Sucol_logo-48.webp"
+            srcSet="/Sucol_logo-48.webp 1x, /Sucol_logo-96.webp 2x"
+            width="48"
+          />
           <div className="min-w-0">
             <p className="truncate text-lg font-extrabold tracking-tight text-navy-900">{title === "WaterWise" ? <>Water<span className="text-water-600">Wise</span></> : title}</p>
           </div>
