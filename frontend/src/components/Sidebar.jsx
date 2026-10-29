@@ -286,7 +286,7 @@ export default function Sidebar({
                 onClick={() => { persistCollapsed(false); setIsCollapsed(false); }}
                 type="button"
               >
-                <img alt="" className="h-11 w-11 rounded-xl bg-white object-contain group-hover:hidden group-focus-visible:hidden" src="/Sucol_logo.webp" />
+                <img alt="" className="h-11 w-11 rounded-xl bg-white object-contain group-hover:hidden group-focus-visible:hidden" height="48" src="/Sucol_logo-48.webp" srcSet="/Sucol_logo-48.webp 1x, /Sucol_logo-96.webp 2x" width="48" />
                 <span className="hidden h-11 w-11 items-center justify-center rounded-xl bg-water-600 text-white shadow-sm group-hover:flex group-focus-visible:flex">
                   <FiChevronRight aria-hidden="true" className="h-5 w-5" />
                 </span>
@@ -294,7 +294,7 @@ export default function Sidebar({
               </button>
             ) : (
               <>
-                <img alt="" className="h-11 w-11 shrink-0 rounded-xl bg-white object-contain" src="/Sucol_logo.webp" />
+                <img alt="" className="h-11 w-11 shrink-0 rounded-xl bg-white object-contain" height="48" src="/Sucol_logo-48.webp" srcSet="/Sucol_logo-48.webp 1x, /Sucol_logo-96.webp 2x" width="48" />
                 <div className="ww-popover-enter min-w-0 flex-1">
                   <p className="truncate text-base font-extrabold tracking-tight text-navy-900">{title === "WaterWise" ? <>Water<span className="waterwise-brand-accent">Wise</span></> : title}</p>
                   <p className="truncate text-[11px] font-medium text-slate-500">{subtitle}</p>
