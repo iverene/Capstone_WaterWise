@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   FiBarChart2,
   FiAlertTriangle,
@@ -27,6 +27,7 @@ import {
 } from "../services/consumerPortal.service";
 import NotificationPage from "../pages/NotificationPage";
 import Header from "./Header";
+import LoadingSkeleton from "./LoadingSkeleton";
 import LogoutConfirmationModal from "./LogoutConfirmationModal";
 import NotificationBadgeTrigger from "./NotificationBadgeTrigger";
 import PWAInstallButton from "./PWAInstallButton";
@@ -587,7 +588,9 @@ export default function AppLayout({ children }) {
           id="main-content"
         >
           <div className="mx-auto w-full max-w-[1440px] px-4 pb-5 pt-3 sm:px-6 sm:py-6 lg:px-8">
-            {children}
+            <Suspense fallback={<LoadingSkeleton count={3} label="Loading page content" variant="list" />}>
+              {children}
+            </Suspense>
           </div>
         </main>
       </div>
