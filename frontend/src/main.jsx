@@ -9,12 +9,25 @@ import { initPWAInstallCapture } from './services/pwaInstall.js'
 // Capture `beforeinstallprompt` before React mounts so no download icon misses it.
 initPWAInstallCapture()
 
-registerSW({
+const registerServiceWorker = () => registerSW({
   immediate: true,
   onRegisterError(error) {
     console.error('WaterWise service worker registration failed.', error)
   },
 })
+
+// Avoid competing with the first paint on slower mobile devices. Once the
+// page is loaded, install/update the PWA cache during an idle browser window.
+const scheduleServiceWorker = () => {
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(registerServiceWorker, { timeout: 4000 })
+  } else {
+    window.setTimeout(registerServiceWorker, 1500)
+  }
+}
+
+if (document.readyState === 'complete') scheduleServiceWorker()
+else window.addEventListener('load', scheduleServiceWorker, { once: true })
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
