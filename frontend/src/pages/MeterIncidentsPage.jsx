@@ -10,7 +10,6 @@ import Table from "../components/Table";
 import { useToast } from "../components/Toast";
 import { fetchConsumerDirectory } from "../services/consumerDirectoryAPI";
 import { correctMeterIncident, fetchMeterIncidents } from "../services/meterIncidentAPI";
-import { fetchSystemSetting } from "../services/systemSettingsService";
 
 const currencyFormat = new Intl.DateTimeFormat("en-PH", {
   dateStyle: "medium",
@@ -49,6 +48,7 @@ const isOpenIncident = (incident) =>
 
 const basisLabel = {
   final_reading: "Old meter closing reading",
+  previous_consumption: "Previous consumption",
   reported: "Resident reported",
   average: "System average",
 };
@@ -79,7 +79,6 @@ export default function MeterIncidentsPage() {
   const toast = useToast();
   const [incidents, setIncidents] = useState([]);
   const [consumers, setConsumers] = useState([]);
-  const [averageWindow, setAverageWindow] = useState(3);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
@@ -126,21 +125,6 @@ export default function MeterIncidentsPage() {
       active = false;
     };
   }, [loadData]);
-
-  useEffect(() => {
-    let active = true;
-    fetchSystemSetting("average_window_months")
-      .then((setting) => {
-        const value = Number(setting?.data?.setting_value ?? setting?.setting_value);
-        if (active && Number.isInteger(value) && value > 0) setAverageWindow(value);
-      })
-      .catch(() => {
-        // The backend falls back to 3 when the setting is unavailable.
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const visibleIncidents = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -227,6 +211,10 @@ export default function MeterIncidentsPage() {
       correctionForm.oldFinalReading === ""
         ? null
         : Number(correctionForm.oldFinalReading);
+    if (closingReading == null) {
+      setCorrectionError("Enter the old meter closing reading.");
+      return;
+    }
     if (
       closingReading != null &&
       (!Number.isFinite(closingReading) || closingReading < 0)
@@ -296,11 +284,9 @@ export default function MeterIncidentsPage() {
       <div className="rounded-xl border border-water-100 bg-water-50 p-4 text-sm leading-6 text-water-900">
         <p className="font-bold">How a replacement is billed</p>
         <p className="mt-1 text-[13px] text-slate-600">
-          The old meter&apos;s remaining usage is added to the new meter&apos;s first reading. When the field team
-          records the old meter&apos;s closing reading, the carry is measured against the last reading. When it was
-          not recorded, the carry is estimated from the resident&apos;s average of the last {averageWindow} actual
-          readings at the next reading. If the swap measured nothing at all, the reading itself is estimated from
-          that average.
+          The old meter&apos;s carried usage is added to the new meter&apos;s first reading. A closing value above the
+          latest reading uses their difference. An equal or lower closing value carries the resident&apos;s previous
+          consumption. No average is used.
         </p>
       </div>
 
@@ -454,12 +440,13 @@ export default function MeterIncidentsPage() {
                   className="ww-field mt-2 p-3 font-mono tabular-nums"
                   inputMode="decimal"
                   onChange={updateCorrectionDecimalField("oldFinalReading")}
-                  placeholder="Leave blank to use the system average"
+                  placeholder="Required"
+                  required
                   type="text"
                   value={correctionForm.oldFinalReading}
                 />
                 <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
-                  Leave blank when the old meter was not read. The carried usage will come from the resident&apos;s average and is recalculated when you save.
+                  A higher value uses the difference from the latest reading. An equal or lower value uses the previous consumption.
                 </span>
               </label>
             </div>

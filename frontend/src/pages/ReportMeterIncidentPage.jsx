@@ -36,6 +36,7 @@ const INCIDENT_STATUS_LABELS = {
 
 const PRIOR_USAGE_BASIS_LABELS = {
   final_reading: "Old meter closing reading",
+  previous_consumption: "Previous consumption",
   reported: "Resident reported",
   average: "System average",
 };
@@ -67,7 +68,6 @@ const isOpenMeterChangeIncident = (incident) =>
 
 const emptyForm = () => ({
   oldFinalReading: "",
-  closingReadingNotVisible: false,
   newMeterSerial: "",
   newBaseline: "0",
 });
@@ -175,7 +175,6 @@ export default function ReportMeterIncidentPage() {
   const hasUnsavedEntry =
     !openIncident &&
     (form.oldFinalReading !== "" ||
-      form.closingReadingNotVisible ||
       form.newMeterSerial !== "" ||
       form.newBaseline !== "0");
 
@@ -355,16 +354,13 @@ export default function ReportMeterIncidentPage() {
     if (lastRecorded == null) return entered;
     return Math.round((entered - Number(lastRecorded)) * 100) / 100;
   }, [form.oldFinalReading, lastRecorded]);
-  const isClosingTooLow = closingDerived != null && closingDerived < 0;
-
   const baselineValue = form.newBaseline === "" ? 0 : Number(form.newBaseline);
-
-  const hasClosingReading = !form.closingReadingNotVisible && form.oldFinalReading !== "";
-  // The carry is either measured here (closing reading − last recorded reading)
-  // or estimated when the reading is recorded. The system average is never shown
-  // on this form: it belongs to the reading, where the meter itself shows
-  // whether anything was measured at all.
-  const carried = closingDerived;
+  const previousConsumption = context?.latestConsumption ?? null;
+  const usesPreviousConsumption =
+    closingDerived != null && closingDerived <= 0 && lastRecorded != null;
+  const carried = usesPreviousConsumption
+    ? Number(previousConsumption ?? 0)
+    : closingDerived;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -373,17 +369,17 @@ export default function ReportMeterIncidentPage() {
       toast.error("Resident required", "Select the resident whose meter changed.");
       return;
     }
-    if (!hasClosingReading && context && context.averageRecentConsumption == null) {
+    if (form.oldFinalReading === "") {
       toast.error(
         "Closing reading required",
-        "Enter the old meter's closing reading. This resident has no actual readings to average yet.",
+        "Enter the old meter's closing reading.",
       );
       return;
     }
-    if (carried != null && (!Number.isFinite(carried) || isClosingTooLow)) {
+    if (carried != null && !Number.isFinite(carried)) {
       toast.error(
-        "Closing reading too low",
-        "The old meter's closing reading cannot be lower than the last recorded reading.",
+        "Invalid closing reading",
+        "Enter a valid old meter closing reading.",
       );
       return;
     }
@@ -391,13 +387,9 @@ export default function ReportMeterIncidentPage() {
     const payload = {
       consumerId: Number(consumerId),
       incidentType: "replacement",
-      oldFinalReading: hasClosingReading ? form.oldFinalReading : "",
+      oldFinalReading: form.oldFinalReading,
       newMeterSerial: form.newMeterSerial,
       newBaseline: baselineValue,
-      // Without a closing reading the carried usage is estimated from the
-      // resident's average when the reading is recorded, not decided here.
-      priorUsageBasis: hasClosingReading ? "final_reading" : "average",
-      priorUsage: "",
     };
 
     try {
@@ -720,45 +712,26 @@ export default function ReportMeterIncidentPage() {
                 <label className="block text-sm font-bold text-slate-700">
                   Old meter closing reading
                   <input
-                    aria-invalid={isClosingTooLow}
                     className="ww-field mt-2 p-3 font-mono tabular-nums"
-                    disabled={form.closingReadingNotVisible}
                     inputMode="decimal"
                     onChange={updateDecimalForm("oldFinalReading")}
                     placeholder="e.g. 470"
+                    required
                     type="text"
                     value={form.oldFinalReading}
                   />
                   <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
-                    {form.closingReadingNotVisible
-                      ? "The old meter reading will be treated as unavailable. The resident's average will be used at the next reading."
-                      : lastRecorded == null
-                        ? "Leave blank when the old meter was not read. The carried usage is then taken from the resident's average."
-                        : `Must be at least ${Number(lastRecorded).toLocaleString()} m³ (latest recorded). Prior usage = closing reading − latest recorded reading.`}
+                    {lastRecorded == null
+                      ? "Enter the final value shown by the old meter."
+                      : `Latest recorded reading: ${Number(lastRecorded).toLocaleString()} m³. A higher closing value uses the difference; an equal or lower value uses the previous consumption.`}
                   </span>
                   {closingDerived != null && (
-                    <span className={`mt-1.5 block text-xs font-semibold ${isClosingTooLow ? "text-red-600" : "text-water-800"}`}>
-                      {isClosingTooLow
-                        ? "The closing reading is below the last recorded reading."
-                        : `Carried usage: ${closingDerived.toLocaleString()} m³`}
+                    <span className="mt-1.5 block text-xs font-semibold text-water-800">
+                      {usesPreviousConsumption
+                        ? `Carried usage: ${Number(carried).toLocaleString()} m³ from the previous consumption.`
+                        : `Carried usage: ${Number(carried).toLocaleString()} m³ from the closing-reading difference.`}
                     </span>
                   )}
-                </label>
-                <label className="mt-3 flex items-start gap-2 text-sm font-semibold text-slate-700">
-                  <input
-                    checked={form.closingReadingNotVisible}
-                    className="mt-0.5 h-4 w-4 accent-water-700"
-                    onChange={(event) => {
-                      const checked = event.target.checked;
-                      setForm((current) => ({
-                        ...current,
-                        closingReadingNotVisible: checked,
-                        oldFinalReading: checked ? "" : current.oldFinalReading,
-                      }));
-                    }}
-                    type="checkbox"
-                  />
-                  <span>Old meter reading not visible — use average</span>
                 </label>
               </div>
               <label className="block text-sm font-bold text-slate-700">
@@ -776,9 +749,9 @@ export default function ReportMeterIncidentPage() {
 
             <div className="rounded-xl border border-water-200 bg-water-50 p-3 text-xs leading-5 text-slate-700">
               {carried == null ? (
-                <>The old meter was not read. The carried usage is taken from the resident&apos;s average of recent actual readings, and the next reading applies it.</>
-              ) : Number(carried) === 0 ? (
-                <>The old meter did not move since the last reading, so 0 m³ is carried. If the new meter also shows no usage at the next reading, that reading is estimated from the resident&apos;s average.</>
+                <>Enter the old meter&apos;s closing reading to calculate the carried usage.</>
+              ) : usesPreviousConsumption ? (
+                <>The closing reading is equal to or below the latest reading, so the previous consumption of <strong>{Number(carried).toLocaleString()} m³</strong> will be carried.</>
               ) : (
                 <>
                   This carries
@@ -797,7 +770,7 @@ export default function ReportMeterIncidentPage() {
               >
                 Cancel
               </button>
-              <button className="ww-primary-button min-h-11 px-5 text-sm" disabled={saving || lookupLoading || isClosingTooLow} type="submit">
+              <button className="ww-primary-button min-h-11 px-5 text-sm" disabled={saving || lookupLoading} type="submit">
                 {saving ? "Saving…" : "Save replacement"}
               </button>
             </div>

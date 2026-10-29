@@ -1784,7 +1784,7 @@ CREATE TABLE IF NOT EXISTS meter_incidents (
 
     prior_usage       NUMERIC(10,2) NOT NULL CHECK (prior_usage >= 0),
     prior_usage_basis TEXT NOT NULL
-                      CHECK (prior_usage_basis IN ('final_reading', 'reported', 'average')),
+                      CHECK (prior_usage_basis IN ('final_reading', 'reported', 'average', 'previous_consumption')),
     average_window    INTEGER,
     average_value     NUMERIC(10,2),
 

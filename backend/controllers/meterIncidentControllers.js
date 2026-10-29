@@ -1,7 +1,5 @@
 import {
   createMeterIncident,
-  getAveragePriorUsage,
-  getAverageWindowMonths,
   getConsumerIncidentHistory,
   getMeterIncident,
   listMeterIncidents,
@@ -73,15 +71,5 @@ export const listConsumerIncidents = async (req, res) => {
     });
   } catch (error) {
     return sendError(res, error, "Failed to retrieve the consumer meter history.");
-  }
-};
-
-export const showAveragePreview = async (req, res) => {
-  try {
-    const window = await getAverageWindowMonths();
-    const result = await getAveragePriorUsage(req.params.consumerId, window);
-    return res.status(200).json({ success: true, data: result });
-  } catch (error) {
-    return sendError(res, error, "Failed to compute the average prior usage.");
   }
 };
