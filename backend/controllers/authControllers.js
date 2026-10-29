@@ -12,6 +12,7 @@ import {
   getOtpMaxAttempts,
   getOtpResendCooldownSeconds,
   getRefreshTokenDuration,
+  isAdminLoginOtpDisabled,
   JWT_AUDIENCE,
   JWT_ISSUER,
   REFRESH_AUDIENCE,
@@ -548,13 +549,19 @@ export async function login(req, res) {
     const user = await authenticateAccount(identifier ?? email, password);
 
     if (["admin", "super-admin"].includes(user.role)) {
+      const adminLoginOtpDisabled = isAdminLoginOtpDisabled();
       const deviceToken = readDeviceToken(req);
       const isTrustedDevice = await verifyTrustedDevice({
         token: deviceToken,
         adminId: user.id,
         role: user.role,
       });
-      if (!isTrustedDevice) {
+      const otpBypassed = adminLoginOtpDisabled && !isTrustedDevice;
+      if (otpBypassed) {
+        console.warn(
+          `[auth] Admin login OTP bypassed by DISABLE_ADMIN_LOGIN_OTP for ${user.role} ${user.id}.`
+        );
+      } else if (!isTrustedDevice) {
         // Observability for "OTP every login" reports: distinguishes a
         // browser that never sends the cookie (blocked/mismatched host)
         // from a stale one (expired/revoked/unknown token).
@@ -562,7 +569,7 @@ export async function login(req, res) {
           `[trusted-device] OTP required for ${user.role} ${user.id}: ${deviceToken ? "trust cookie present but invalid, expired, or revoked" : "no trust cookie sent by browser"}`
         );
       }
-      if (isTrustedDevice) {
+      if (isTrustedDevice || adminLoginOtpDisabled) {
         const dfp = req.get("x-device-fingerprint");
         if (dfp) await storeDeviceFingerprint(user.id, user.role, dfp);
         const passwordHash = await getPasswordHash(user.id, user.role);
@@ -578,7 +585,8 @@ export async function login(req, res) {
         return res.status(200).json({
           success: true,
           user,
-          trustedDevice: true,
+          trustedDevice: isTrustedDevice,
+          ...(otpBypassed ? { otpBypassed: true } : {}),
         });
       }
 
