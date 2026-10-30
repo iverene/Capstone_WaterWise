@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { AlertCircle, CalendarDays, TrendingDown, TrendingUp } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchAllPuroksMonthlyHistory, fetchAllPuroksYearlyHistory } from "../services/consumptionAPI";
@@ -69,6 +69,7 @@ function normalize(response, mode, selectedYear) {
 }
 
 function PurokGraph({ color, data, purok }) {
+  const gradientId = `purok-history-fill-${useId().replace(/:/g, "")}`;
   const latest = data.at(-1);
   const previous = data.at(-2);
 
@@ -110,11 +111,11 @@ function PurokGraph({ color, data, purok }) {
         <div aria-label={`${purok} historical consumption graph`} className="mt-4 h-60">
           <ResponsiveContainer height="100%" width="100%">
             <AreaChart data={data} margin={{ bottom: 0, left: 0, right: 12, top: 8 }}>
-              <defs><linearGradient id="purokHistoryFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.35} /><stop offset="100%" stopColor={color} stopOpacity={0.02} /></linearGradient></defs>
+              <defs><linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.35} /><stop offset="100%" stopColor={color} stopOpacity={0.02} /></linearGradient></defs>
               <XAxis dataKey="period" tick={{ fill: "#64748b", fontSize: 11 }} tickLine={false} />
               <YAxis axisLine={false} tick={{ fill: "#64748b", fontSize: 11 }} tickFormatter={(value) => Number(value).toLocaleString("en-PH", { maximumFractionDigits: 0 })} tickLine={false} width={44} />
               <Tooltip content={<ChartTooltip unit="" valueFormatter={(entry) => `${Number(entry ?? 0).toLocaleString("en-PH", { maximumFractionDigits: 2 })} m³`} />} cursor={{ stroke: "#bae6fd" }} />
-              <Area activeDot={{ fill: color, r: 4, strokeWidth: 0 }} dataKey="consumption" dot={{ fill: color, r: 3, stroke: "#ffffff", strokeWidth: 2 }} fill="url(#purokHistoryFill)" name="Historical Consumption" stroke={color} strokeWidth={2.5} type="monotone" />
+              <Area activeDot={{ fill: color, r: 4, strokeWidth: 0 }} dataKey="consumption" dot={{ fill: color, r: 3, stroke: "#ffffff", strokeWidth: 2 }} fill={`url(#${gradientId})`} name="Historical Consumption" stroke={color} strokeWidth={2.5} type="monotone" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
