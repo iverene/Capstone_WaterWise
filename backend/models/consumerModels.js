@@ -76,6 +76,9 @@ const resolveNameParts = (firstName, middleName, lastName, legacyFullName) => {
   return splitLegacyFullName(legacyFullName ?? "");
 };
 
+const isValidNamePart = (value) =>
+  value === "" || /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(value.trim());
+
 const validateConsumer = (username, password, nameParts, email, contactNumber, purokNo) => {
   const { firstName, middleName, lastName } = nameParts ?? {};
   if (
@@ -102,6 +105,10 @@ const validateConsumer = (username, password, nameParts, email, contactNumber, p
 
   if (middleName !== undefined && middleName !== null && typeof middleName !== "string") {
     throw createError("Middle name must be a text value.");
+  }
+
+  if (![firstName, middleName ?? "", lastName].every(isValidNamePart)) {
+    throw createError("Names may contain letters, spaces, hyphens, and apostrophes only.");
   }
 
   if (!validator.isEmail(email.trim())) {
@@ -286,10 +293,25 @@ export const updateConsumer = async (id, updates = {}) => {
     if (resolved.firstName.trim() === "" || resolved.lastName.trim() === "") {
       throw createError("First name and last name cannot be empty.");
     }
-    updateData.first_name = normalizeNamePart(resolved.firstName);
-    const normalizedMiddle = normalizeNamePart(resolved.middleName);
+    const normalizedNames = {
+      firstName: normalizeNamePart(resolved.firstName),
+      middleName: normalizeNamePart(resolved.middleName),
+      lastName: normalizeNamePart(resolved.lastName),
+    };
+    const currentNames = {
+      firstName: normalizeNamePart(current.first_name ?? ""),
+      middleName: normalizeNamePart(current.middle_name ?? ""),
+      lastName: normalizeNamePart(current.last_name ?? ""),
+    };
+    for (const field of ["firstName", "middleName", "lastName"]) {
+      if (normalizedNames[field] !== currentNames[field] && !isValidNamePart(normalizedNames[field])) {
+        throw createError("Names may contain letters, spaces, hyphens, and apostrophes only.");
+      }
+    }
+    updateData.first_name = normalizedNames.firstName;
+    const normalizedMiddle = normalizedNames.middleName;
     updateData.middle_name = normalizedMiddle === "" ? null : normalizedMiddle;
-    updateData.last_name = normalizeNamePart(resolved.lastName);
+    updateData.last_name = normalizedNames.lastName;
   }
 
   if (updates.email !== undefined) {
