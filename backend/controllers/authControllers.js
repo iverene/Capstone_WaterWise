@@ -138,17 +138,23 @@ function passwordResetRequestKey(email, purpose = "password-reset") {
 function clearTrustedDeviceCookie(res, role, req) {
   const options = trustedDeviceCookieOptions(role, req);
   delete options.maxAge;
-  // Clear the current cookie shape plus the legacy pre-fix shape
-  // (Path=/api/auth, no Partitioned) so old cookies don't linger.
+  // Clear the current first-party cookie and legacy path variant.
   res.clearCookie(getTrustedDeviceCookieName(), options);
   res.clearCookie(getTrustedDeviceCookieName(), { ...options, path: "/api/auth" });
-  // The secure determination is request-dependent (direct HTTP vs proxied
-  // HTTPS), so clear the opposite variant too or Chrome keeps the cookie.
+  // Clear the opposite Secure variant left by local/direct deployments.
   const flipped = { ...options, secure: !options.secure, sameSite: options.secure ? "lax" : "none" };
   if (flipped.secure) flipped.partitioned = true;
   else delete flipped.partitioned;
   res.clearCookie(getTrustedDeviceCookieName(), flipped);
   res.clearCookie(getTrustedDeviceCookieName(), { ...flipped, path: "/api/auth" });
+  // Clear the former cross-site CHIPS cookie shape on the same host. Cookies
+  // created on the old Render host cannot be cleared by Vercel, but they are
+  // no longer sent through the same-origin /api route and are harmless.
+  if (options.secure) {
+    const legacyPartitioned = { ...options, sameSite: "none", partitioned: true };
+    res.clearCookie(getTrustedDeviceCookieName(), legacyPartitioned);
+    res.clearCookie(getTrustedDeviceCookieName(), { ...legacyPartitioned, path: "/api/auth" });
+  }
 }
 
 function getSessionCookieMaxAgeMs(role) {

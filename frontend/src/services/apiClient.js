@@ -3,32 +3,9 @@ import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
 import { clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 
-const configuredBaseUrl =
-  import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL;
-
-function resolveApiBaseUrl(value) {
-  const baseUrl = (value || "/api").trim().replace(/\/+$/, "");
-
-  // Use Vite's same-origin proxy for local backends. Mixing localhost and
-  // 127.0.0.1 makes the HTTP trust cookie cross-site and the browser drops it.
-  if (import.meta.env.DEV) {
-    try {
-      const target = new URL(baseUrl);
-      if (["localhost", "127.0.0.1", "[::1]"].includes(target.hostname)) return "/api";
-    } catch {
-      // Relative URLs already use the current origin.
-    }
-  }
-
-  // Accept either the Render service root or its complete /api URL.
-  if (baseUrl === "/api" || /\/api$/i.test(baseUrl)) {
-    return baseUrl;
-  }
-
-  return `${baseUrl}/api`;
-}
-
-export const API_BASE_URL = resolveApiBaseUrl(configuredBaseUrl);
+// Both Vercel and the Vite development server proxy this first-party path to
+// the backend. The deployment origin therefore never enters browser code.
+export const API_BASE_URL = "/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
