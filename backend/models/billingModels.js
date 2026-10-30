@@ -185,16 +185,30 @@ export const createMonthlyBilling = async ({
 };
 
 export const getBillings = async () => {
-  const { data, error } = await supabase
-    .from("billing")
-    .select(BILLING_FIELDS)
-    .order("billing_date", { ascending: false });
+  // Supabase/PostgREST applies a maximum row count to each response. Fetch
+  // smaller ordered pages so dashboard totals and billing lists include every
+  // billing record, even when the table exceeds that configured limit.
+  const pageSize = 500;
+  const records = [];
 
-  if (error) {
-    throw createError(`Failed to retrieve billing records: ${error.message}`, 500);
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("billing")
+      .select(BILLING_FIELDS)
+      .order("billing_date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw createError(`Failed to retrieve billing records: ${error.message}`, 500);
+    }
+
+    const page = data ?? [];
+    records.push(...page);
+    if (page.length < pageSize) break;
   }
 
-  return (data ?? []).map(attachConsumerFullName);
+  return records.map(attachConsumerFullName);
 };
 
 export const getBillingById = async (id) => {
