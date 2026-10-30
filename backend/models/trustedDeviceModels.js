@@ -29,12 +29,8 @@ export function readCookie(req, name) {
   return "";
 }
 
-// Primary trust signal is the HttpOnly cookie; the X-Trusted-Device header
-// is a fallback for browsers that refuse to persist cookies (blocked
-// third-party/first-party cookies, aggressive extensions). Both carry the
-// same opaque random token verified against the same hash column.
 export function readDeviceToken(req) {
-  return readCookie(req, getTrustedDeviceCookieName()) || req.get("x-trusted-device") || "";
+  return readCookie(req, getTrustedDeviceCookieName());
 }
 
 export function isSecureRequest(req) {
@@ -50,14 +46,10 @@ export function trustedDeviceCookieOptions(role, req) {
   const options = {
     httpOnly: true,
     secure,
-    sameSite: secure ? "none" : "lax",
+    sameSite: "lax",
     maxAge: getTrustedDeviceLifetimeMs(role),
     path: "/",
   };
-  // CHIPS: allow the cross-site (Vercel frontend -> hosted backend) trust
-  // cookie to persist when third-party cookies are partitioned (Chrome).
-  // Plain HTTP localhost ignores it; HTTPS browsers enforce Secure + SameSite=None with it.
-  if (secure) options.partitioned = true;
   return options;
 }
 

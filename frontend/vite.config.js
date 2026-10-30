@@ -7,7 +7,7 @@ import process from 'node:process'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const configuredApi = env.VITE_API_URL ?? env.VITE_API_BASE_URL;
+  const configuredApi = env.WATERWISE_BACKEND_ORIGIN;
   let localTarget = 'http://127.0.0.1:5000';
   try {
     const target = new URL(configuredApi);
@@ -70,7 +70,7 @@ export default defineConfig(({ mode }) => {
   server: {
     proxy: {
       '/api': {
-        target: process.env.WATERWISE_API_TARGET ?? env.WATERWISE_API_TARGET ?? localTarget,
+        target: configuredApi ?? localTarget,
         changeOrigin: true,
       },
     },

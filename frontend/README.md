@@ -19,11 +19,16 @@ Frontend runs on `http://localhost:5173` by default. Vite proxies `/api` to the 
 To use a custom backend address:
 
 ```powershell
-$env:WATERWISE_API_TARGET="http://192.168.1.100:5000"
+$env:WATERWISE_BACKEND_ORIGIN="http://192.168.1.100:5000"
 npm run dev
 ```
 
 ## Production
+
+Set the server-side `WATERWISE_BACKEND_ORIGIN` environment variable in the
+Vercel project to the backend origin (without a trailing `/api`). Vercel uses
+it for the same-origin `/api/*` proxy; do not prefix this variable with
+`VITE_`, because its value must not be embedded in the browser bundle.
 
 ```bash
 npm run build
