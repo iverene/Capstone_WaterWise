@@ -9,6 +9,7 @@ import {
 } from "./consumptionServices.js";
 import {
   getConsumptionSourceVersion,
+  getLatestStoredPrediction,
   getStoredPrediction,
   storePrediction,
 } from "../models/predictionModels.js";
@@ -123,7 +124,7 @@ const getOrGeneratePrediction = async (
   { cacheKey, scope, period, purok = null },
   generator,
 ) => {
-  const sourceVersion = await getConsumptionSourceVersion();
+  const sourceVersion = await getConsumptionSourceVersion({ includeEvents: false });
   const storedPrediction = await getStoredPrediction(
     cacheKey,
     sourceVersion.signature,
@@ -246,13 +247,31 @@ export const generateAllPuroksYearlyPrediction = async () =>
   );
 
 export const generateAllPredictionsService = async () => {
-  const [overallMonthly, overallYearly, allPuroksMonthly, allPuroksYearly] =
-    await Promise.all([
-      generateOverallMonthlyPrediction(),
-      generateOverallYearlyPrediction(),
-      generateAllPuroksMonthlyPrediction(),
-      generateAllPuroksYearlyPrediction(),
-    ]);
+  // Keep scheduled Gemini work sequential to stay friendly to free-tier rate
+  // limits. Each generator still skips Gemini when its source signature is
+  // already cached.
+  const overallMonthly = await generateOverallMonthlyPrediction();
+  const overallYearly = await generateOverallYearlyPrediction();
+  const allPuroksMonthly = await generateAllPuroksMonthlyPrediction();
+  const allPuroksYearly = await generateAllPuroksYearlyPrediction();
 
   return { overallMonthly, overallYearly, allPuroksMonthly, allPuroksYearly };
 };
+
+export const readOverallMonthlyPrediction = () =>
+  getLatestStoredPrediction("overall:monthly");
+
+export const readOverallYearlyPrediction = () =>
+  getLatestStoredPrediction("overall:yearly");
+
+export const readPerPurokMonthlyPrediction = (purok) =>
+  getLatestStoredPrediction(`purok:monthly:${purok}`);
+
+export const readPerPurokYearlyPrediction = (purok) =>
+  getLatestStoredPrediction(`purok:yearly:${purok}`);
+
+export const readAllPuroksMonthlyPrediction = () =>
+  getLatestStoredPrediction("all-puroks:monthly");
+
+export const readAllPuroksYearlyPrediction = () =>
+  getLatestStoredPrediction("all-puroks:yearly");

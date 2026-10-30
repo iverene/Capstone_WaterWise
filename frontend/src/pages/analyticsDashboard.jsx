@@ -165,7 +165,7 @@ export default function AnalyticsDashboard() {
             <div>
               <p className="font-bold">Use forecasts as planning estimates</p>
               <p className="mt-1 leading-6 text-sky-800">
-                Predictions are based on recorded consumption history. Confirm unusual results against recent readings and field conditions before allocating resources.
+                Predictions are based on recorded consumption history and update automatically every day at 12:00 AM, 12:00 PM, and 4:00 PM. New readings wait for the next scheduled analysis. Confirm unusual results against recent readings and field conditions before allocating resources.
               </p>
             </div>
           </div>

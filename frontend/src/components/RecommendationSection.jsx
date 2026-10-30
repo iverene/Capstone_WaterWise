@@ -3,7 +3,6 @@ import {
   BrainCircuit,
   ChevronDown,
   Lightbulb,
-  RefreshCw,
 } from "lucide-react";
 
 import { isCanceledRequest } from "../services/apiClient";
@@ -341,7 +340,7 @@ export default function RecommendationSection() {
         <div>
           <p className="font-bold">Human review required</p>
           <p className="mt-1 leading-6 text-emerald-800">
-            Recommendations support official decisions; they do not automatically change service operations.
+            Recommendations update automatically every day at 12:00 AM, 12:00 PM, and 4:00 PM. New readings wait for the next scheduled analysis, and recommendations never automatically change service operations.
           </p>
         </div>
       </div>
@@ -369,16 +368,6 @@ export default function RecommendationSection() {
               </button>
             ))}
           </div>
-          <button
-            aria-label="Refresh analysis"
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:border-water-300 hover:bg-water-50 hover:text-water-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-water-600 disabled:opacity-60"
-            disabled={loading}
-            onClick={() => loadRecommendations()}
-            title="Refresh analysis"
-            type="button"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
         </div>
       </div>
 

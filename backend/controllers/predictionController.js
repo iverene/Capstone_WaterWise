@@ -1,11 +1,10 @@
 import {
-  generateAllPredictionsService,
-  generateAllPuroksMonthlyPrediction,
-  generateAllPuroksYearlyPrediction,
-  generateOverallMonthlyPrediction,
-  generateOverallYearlyPrediction,
-  generatePerPurokMonthlyPrediction,
-  generatePerPurokYearlyPrediction,
+  readAllPuroksMonthlyPrediction,
+  readAllPuroksYearlyPrediction,
+  readOverallMonthlyPrediction,
+  readOverallYearlyPrediction,
+  readPerPurokMonthlyPrediction,
+  readPerPurokYearlyPrediction,
 } from "../services/predictionServices.js";
 
 const sendPrediction = async (res, service, errorLabel, fallbackMessage) => {
@@ -35,17 +34,17 @@ const requirePurok = (req, res) => {
 export const getOverallMonthlyPrediction = async (req, res) =>
   sendPrediction(
     res,
-    generateOverallMonthlyPrediction,
-    "Overall monthly AI prediction error",
-    "Failed to generate overall monthly consumption prediction."
+    readOverallMonthlyPrediction,
+    "Overall monthly prediction retrieval error",
+    "Failed to retrieve the stored overall monthly consumption prediction."
   );
 
 export const getOverallYearlyPrediction = async (req, res) =>
   sendPrediction(
     res,
-    generateOverallYearlyPrediction,
-    "Overall yearly AI prediction error",
-    "Failed to generate overall yearly consumption prediction."
+    readOverallYearlyPrediction,
+    "Overall yearly prediction retrieval error",
+    "Failed to retrieve the stored overall yearly consumption prediction."
   );
 
 export const getPerPurokMonthlyPrediction = async (req, res) => {
@@ -54,9 +53,9 @@ export const getPerPurokMonthlyPrediction = async (req, res) => {
 
   return sendPrediction(
     res,
-    () => generatePerPurokMonthlyPrediction(purok),
-    "Per purok monthly AI prediction error",
-    "Failed to generate purok monthly consumption prediction."
+    () => readPerPurokMonthlyPrediction(purok),
+    "Per purok monthly prediction retrieval error",
+    "Failed to retrieve the stored purok monthly consumption prediction."
   );
 };
 
@@ -66,32 +65,24 @@ export const getPerPurokYearlyPrediction = async (req, res) => {
 
   return sendPrediction(
     res,
-    () => generatePerPurokYearlyPrediction(purok),
-    "Per purok yearly AI prediction error",
-    "Failed to generate purok yearly consumption prediction."
+    () => readPerPurokYearlyPrediction(purok),
+    "Per purok yearly prediction retrieval error",
+    "Failed to retrieve the stored purok yearly consumption prediction."
   );
 };
 
 export const getAllPuroksMonthlyPrediction = async (req, res) =>
   sendPrediction(
     res,
-    generateAllPuroksMonthlyPrediction,
-    "All puroks monthly AI prediction error",
-    "Failed to generate all puroks monthly consumption predictions."
+    readAllPuroksMonthlyPrediction,
+    "All puroks monthly prediction retrieval error",
+    "Failed to retrieve the stored all-puroks monthly predictions."
   );
 
 export const getAllPuroksYearlyPrediction = async (req, res) =>
   sendPrediction(
     res,
-    generateAllPuroksYearlyPrediction,
-    "All puroks yearly AI prediction error",
-    "Failed to generate all puroks yearly consumption predictions."
-  );
-
-export const generateAllPredictions = async (req, res) =>
-  sendPrediction(
-    res,
-    generateAllPredictionsService,
-    "Generate all AI predictions error",
-    "Failed to generate all AI consumption predictions."
+    readAllPuroksYearlyPrediction,
+    "All puroks yearly prediction retrieval error",
+    "Failed to retrieve the stored all-puroks yearly predictions."
   );

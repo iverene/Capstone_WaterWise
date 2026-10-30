@@ -150,8 +150,8 @@ Supported actions: `manage-staff`, `create-admin`, `create-meter-reader`, `updat
 | `/api/payments` | Payment processing |
 | `/api/notifications` | Notifications |
 | `/api/events` | Community events |
-| `/api/consumption/prediction` | AI predictions |
-| `/api/recommendation` | AI recommendations |
+| `/api/consumption/prediction` | Latest stored AI predictions (read-only) |
+| `/api/recommendation` | Latest stored AI recommendations (read-only) |
 | `/api/reports` | Report generation |
 | `/api/system-settings` | System-wide settings (Super Admin only) |
 
@@ -213,6 +213,7 @@ Run migrations from `db/` folder in Supabase SQL Editor:
 | `BREVO_TEMPLATE_EMAIL_CHANGE` | No | Brevo hosted template ID for email-change OTP (falls back to inline HTML when unset) |
 | `UPSTASH_REDIS_REST_URL` | No | Redis cache URL |
 | `UPSTASH_REDIS_REST_TOKEN` | No | Redis cache token |
+| `AI_ANALYSIS_SCHEDULER_ENABLED` | No | Set to `false` to disable scheduled Gemini analysis; enabled by default at 12 AM, 12 PM, and 4 PM Asia/Manila daily |
 | `VAPID_PUBLIC_KEY` | No | Web push public key |
 | `VAPID_PRIVATE_KEY` | No | Web push private key |
 | `VAPID_SUBJECT` | No | Web push contact email |

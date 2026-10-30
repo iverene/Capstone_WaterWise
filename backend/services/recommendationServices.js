@@ -17,6 +17,7 @@ import { getRecommendationEventContext } from "../models/eventModels.js";
 import { eventAppliesToPurok } from "../utils/eventPolicy.js";
 import { getConsumptionSourceVersion } from "../models/predictionModels.js";
 import {
+  getLatestStoredRecommendation,
   getStoredRecommendation,
   storeRecommendation,
 } from "../models/recommendationModels.js";
@@ -952,17 +953,12 @@ export const generateAllPuroksYearlyRecommendations = async () =>
 
 export const generateAllRecommendationsService =
   async () => {
-    const [
-      overallMonthly,
-      overallYearly,
-      allPuroksMonthly,
-      allPuroksYearly,
-    ] = await Promise.all([
-      generateOverallMonthlyRecommendations(),
-      generateOverallYearlyRecommendations(),
-      generateAllPuroksMonthlyRecommendations(),
-      generateAllPuroksYearlyRecommendations(),
-    ]);
+    // Run scheduled Gemini work sequentially to avoid bursts against the
+    // free-tier API quota. Cache hits do not call Gemini.
+    const overallMonthly = await generateOverallMonthlyRecommendations();
+    const overallYearly = await generateOverallYearlyRecommendations();
+    const allPuroksMonthly = await generateAllPuroksMonthlyRecommendations();
+    const allPuroksYearly = await generateAllPuroksYearlyRecommendations();
 
     return {
       overallMonthly,
@@ -971,3 +967,38 @@ export const generateAllRecommendationsService =
       allPuroksYearly,
     };
   };
+
+export const readOverallMonthlyRecommendations = () =>
+  getLatestStoredRecommendation("overall:monthly");
+
+export const readOverallYearlyRecommendations = () =>
+  getLatestStoredRecommendation("overall:yearly");
+
+export const readPerPurokMonthlyRecommendations = (purok) =>
+  getLatestStoredRecommendation(`purok:monthly:${encodeURIComponent(purok)}`);
+
+export const readPerPurokYearlyRecommendations = (purok) =>
+  getLatestStoredRecommendation(`purok:yearly:${encodeURIComponent(purok)}`);
+
+export const readAllPuroksMonthlyRecommendations = () =>
+  getLatestStoredRecommendation("all-puroks:monthly");
+
+export const readAllPuroksYearlyRecommendations = () =>
+  getLatestStoredRecommendation("all-puroks:yearly");
+
+export const readAllRecommendationsService = async () => {
+  const [overallMonthly, overallYearly, allPuroksMonthly, allPuroksYearly] =
+    await Promise.all([
+      readOverallMonthlyRecommendations(),
+      readOverallYearlyRecommendations(),
+      readAllPuroksMonthlyRecommendations(),
+      readAllPuroksYearlyRecommendations(),
+    ]);
+
+  return {
+    overallMonthly,
+    overallYearly,
+    allPuroksMonthly: Array.isArray(allPuroksMonthly) ? allPuroksMonthly : [],
+    allPuroksYearly: Array.isArray(allPuroksYearly) ? allPuroksYearly : [],
+  };
+};

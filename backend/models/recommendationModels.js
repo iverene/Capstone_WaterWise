@@ -24,6 +24,23 @@ export async function getStoredRecommendation(cacheKey, sourceSignature) {
   return data?.result_payload ?? null;
 }
 
+export async function getLatestStoredRecommendation(cacheKey) {
+  const { data, error } = await supabase
+    .from("ai_consumption_cache")
+    .select("result_payload")
+    .eq("result_type", "recommendation")
+    .eq("cache_key", cacheKey)
+    .maybeSingle();
+
+  if (error) {
+    throw recommendationCacheError(
+      `Failed to retrieve the latest stored AI recommendations: ${error.message}`,
+    );
+  }
+
+  return data?.result_payload ?? null;
+}
+
 export async function storeRecommendation({
   cacheKey,
   period,
