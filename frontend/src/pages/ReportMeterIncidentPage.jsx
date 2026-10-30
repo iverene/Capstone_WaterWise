@@ -51,8 +51,6 @@ const formatDate = (value) => {
   }).format(date);
 };
 
-const MAX_VISIBLE_RESIDENTS = 200;
-
 const METER_FILTER_OPTIONS = [
   { label: "All residents", value: "all" },
   { label: "Meter changed", value: "changed" },
@@ -197,11 +195,6 @@ export default function ReportMeterIncidentPage() {
       return matchesSearch && matchesPurok && matchesMeter;
     });
   }, [consumers, meterChangedConsumerIds, meterFilter, purok, query]);
-
-  const visibleConsumers = useMemo(
-    () => matchingConsumers.slice(0, MAX_VISIBLE_RESIDENTS),
-    [matchingConsumers],
-  );
 
   const loadDirectory = useCallback(async (isActive = () => true) => {
     if (!isActive()) return;
@@ -567,16 +560,10 @@ export default function ReportMeterIncidentPage() {
         <LoadingSkeleton label="Loading residents" variant="list" />
       ) : (
         <ResidentIncidentList
-          consumers={visibleConsumers}
+          consumers={matchingConsumers}
           meterChangedConsumerIds={meterChangedConsumerIds}
           onSelect={selectResident}
         />
-      )}
-
-      {!loading && matchingConsumers.length > MAX_VISIBLE_RESIDENTS && (
-        <p className="px-1 text-xs font-semibold text-slate-500">
-          Showing the first {MAX_VISIBLE_RESIDENTS} residents — use search or the purok filter to narrow the list.
-        </p>
       )}
 
       <Modal
