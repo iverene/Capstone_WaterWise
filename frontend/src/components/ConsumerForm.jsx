@@ -116,7 +116,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
       const existingValue = String(baseline[field] ?? "").trim();
       // Keep legacy names containing digits editable when left unchanged.
       if (value && !isValidName(value) && (!initialData || value !== existingValue)) {
-        validationErrors[field] = "Use letters only; spaces, hyphens, and apostrophes are allowed.";
+        validationErrors[field] = "Use letters only";
       }
     }
     if (!String(consumer.accountName ?? "").trim()) {
@@ -187,7 +187,7 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
     extraClasses,
   ].join(" ");
   const labelClass = "text-sm font-bold text-slate-700";
-  const errorClass = "mt-1.5 text-sm font-semibold leading-5 text-red-600";
+  const errorClass = "mt-1.5 text-xs font-semibold leading-4 text-red-600";
   const describedBy = (field, helperId) => [errors[field] ? `${field}-error` : "", helperId].filter(Boolean).join(" ") || undefined;
 
   return (
