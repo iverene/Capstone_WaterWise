@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { supabase } from "../config/supabase.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 import { verifyEmailDomain } from "../services/emailDomainService.js";
 import {
   duplicateAccountIdentityMessage,
@@ -210,10 +211,11 @@ const parseId = (id) => {
 };
 
 export const getConsumers = async () => {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("consumers")
     .select(CONSUMER_FIELDS)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false }));
 
   if (error) {
     throw createError(`Failed to retrieve consumers: ${error.message}`, 500);

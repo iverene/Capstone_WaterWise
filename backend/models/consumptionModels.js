@@ -1,6 +1,7 @@
 // backend/models/consumption.model.js
 
 import { supabase } from "../config/supabase.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 import { composeFullName } from "./consumerModels.js";
 import {
   getAverageWindowMonths,
@@ -46,43 +47,40 @@ const formatPurok = (purokNo) => {
 };
 
 // Common consumption query
-const fetchConsumptionRecords =
-  async () => {
-    const { data, error } =
-      await supabase
-        .from("consumption")
-        .select(`
+const fetchConsumptionRecords = async () => {
+  const { data, error } = await fetchAllPages(() =>
+    supabase
+      .from("consumption")
+      .select(`
+        id,
+        consumer_id,
+        reading_date,
+        previous_reading,
+        present_reading,
+        consumption,
+        reading_source,
+        carried_consumption,
+        prior_usage_basis,
+        new_baseline,
+        meter_incident_id,
+        consumers!consumption_consumer_id_fkey (
           id,
-          consumer_id,
-          reading_date,
-          previous_reading,
-          present_reading,
-          consumption,
-          reading_source,
-          carried_consumption,
-          prior_usage_basis,
-          new_baseline,
-          meter_incident_id,
-          consumers!consumption_consumer_id_fkey (
-            id,
-            first_name,
-            middle_name,
-            last_name,
-            purok_no
-          )
-        `)
-        .order("reading_date", {
-          ascending: true,
-        });
+          first_name,
+          middle_name,
+          last_name,
+          purok_no
+        )
+      `)
+      .order("reading_date", { ascending: true })
+      .order("id", { ascending: true }),
+  );
 
-    if (error) {
-      throw new Error(
-        `Failed to retrieve consumption records: ${error.message}`
-      );
-    }
+  if (error) {
+    throw new Error(`Failed to retrieve consumption records: ${error.message}`);
+  }
 
-    return data ?? [];
-  };
+  return data ?? [];
+};
 
 // Used by:
 // getOverallMonthlyHistory
@@ -435,19 +433,21 @@ export const getConsumptionRecordingContexts = async () => {
     averageWindow,
   ] =
     await Promise.all([
-      supabase
+      fetchAllPages(() => supabase
         .from("consumers")
         .select("id, first_name, middle_name, last_name, purok_no, status")
         .order("last_name", { ascending: true })
-        .order("first_name", { ascending: true }),
-      supabase
+        .order("first_name", { ascending: true })
+        .order("id", { ascending: true })),
+      fetchAllPages(() => supabase
         .from("consumption")
         .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, reading_source, carried_consumption, prior_usage_basis, new_baseline, meter_incident_id, created_at")
         .order("reading_date", { ascending: false })
-        .order("id", { ascending: false }),
-      supabase
+        .order("id", { ascending: false })),
+      fetchAllPages(() => supabase
         .from("billing")
-        .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at"),
+        .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at")
+        .order("id", { ascending: true })),
       listOpenIncidents(),
       getAverageWindowMonths(),
     ]);
@@ -511,16 +511,17 @@ export const getConsumptionRecordingContext = async (consumerId) => {
         .select("id, first_name, middle_name, last_name, purok_no, status")
         .eq("id", parsedConsumerId)
         .maybeSingle(),
-      supabase
+      fetchAllPages(() => supabase
         .from("consumption")
         .select("id, consumer_id, reading_date, previous_reading, present_reading, consumption, reading_source, carried_consumption, prior_usage_basis, new_baseline, meter_incident_id, created_at")
         .eq("consumer_id", parsedConsumerId)
         .order("reading_date", { ascending: false })
-        .order("id", { ascending: false }),
-      supabase
+        .order("id", { ascending: false })),
+      fetchAllPages(() => supabase
         .from("billing")
         .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at")
-        .eq("user_id", parsedConsumerId),
+        .eq("user_id", parsedConsumerId)
+        .order("id", { ascending: true })),
       listOpenIncidents(),
       getAverageWindowMonths(),
     ]);

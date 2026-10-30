@@ -1,5 +1,6 @@
 import { supabase } from "../config/supabase.js";
 import { randomUUID } from "node:crypto";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 
 const PAYMENT_FIELDS =
   "id, billing_id, total_paid, amount_tendered, change_given, remaining_balance, payment_date, payment_method, reference_number, created_at, updated_at";
@@ -168,11 +169,11 @@ export async function createPayment({
 }
 
 export async function getPayments() {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("payments")
     .select(PAYMENT_FIELDS)
     .order("created_at", { ascending: false })
-    .order("id", { ascending: false });
+    .order("id", { ascending: false }));
 
   if (error) {
     throw createError(`Failed to retrieve payments: ${error.message}`, 500);

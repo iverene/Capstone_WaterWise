@@ -7,6 +7,7 @@ import { composeFullName } from "../models/consumerModels.js";
 import { insertGeneratedReport } from "../models/reportModels.js";
 import { currentManilaDate } from "../utils/billingPolicy.js";
 import { reportDateRangeError } from "../utils/reportPolicy.js";
+import { fetchAllPages } from "../utils/supabasePagination.js";
 
 const serviceDir = dirname(fileURLToPath(import.meta.url));
 const LOGO_PATH = join(serviceDir, "..", "assets", "Sucol_logo.png");
@@ -122,7 +123,7 @@ const consumerDisplayName = (consumer, fallback = "Unknown resident") => {
 };
 
 async function consumptionRecords(startDate, endDate) {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("consumption")
     .select(`
       id, consumer_id, reading_date, previous_reading, present_reading, consumption,
@@ -131,7 +132,8 @@ async function consumptionRecords(startDate, endDate) {
     `)
     .gte("reading_date", startDate)
     .lte("reading_date", endDate)
-    .order("reading_date", { ascending: true });
+    .order("reading_date", { ascending: true })
+    .order("id", { ascending: true }));
   if (error) throw serviceError(`Failed to retrieve consumption data: ${error.message}`, 500);
   return (data ?? []).map((record) => ({
     id: record.id,
@@ -150,7 +152,7 @@ async function consumptionRecords(startDate, endDate) {
 }
 
 async function meterChangeRecords(startDate, endDate) {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("meter_incidents")
     .select(`
       id, consumer_id, incident_type, effective_date, old_meter_serial,
@@ -161,7 +163,8 @@ async function meterChangeRecords(startDate, endDate) {
     .eq("incident_type", "replacement")
     .gte("effective_date", startDate)
     .lte("effective_date", endDate)
-    .order("effective_date", { ascending: true });
+    .order("effective_date", { ascending: true })
+    .order("id", { ascending: true }));
   if (error) throw serviceError(`Failed to retrieve meter change incidents: ${error.message}`, 500);
   return (data ?? []).map((record) => ({
     id: record.id,
@@ -182,7 +185,7 @@ async function meterChangeRecords(startDate, endDate) {
 }
 
 async function billingRecords(startDate, endDate) {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("billing")
     .select(`
       id, billing_date, due_date, total_bill, remaining_balance, status,
@@ -190,7 +193,8 @@ async function billingRecords(startDate, endDate) {
     `)
     .gte("billing_date", startDate)
     .lte("billing_date", endDate)
-    .order("billing_date", { ascending: true });
+    .order("billing_date", { ascending: true })
+    .order("id", { ascending: true }));
   if (error) throw serviceError(`Failed to retrieve billing data: ${error.message}`, 500);
   return (data ?? []).map((record) => ({
     id: record.id,
@@ -206,12 +210,13 @@ async function billingRecords(startDate, endDate) {
 }
 
 async function residentRecords(startDate, endDate) {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("consumers")
     .select("id, username, first_name, middle_name, last_name, email, purok_no, status, created_at")
     .gte("created_at", `${startDate}T00:00:00Z`)
     .lte("created_at", `${endDate}T23:59:59.999Z`)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true }));
   if (error) throw serviceError(`Failed to retrieve resident data: ${error.message}`, 500);
   return (data ?? []).map((record) => ({
     id: record.id,
