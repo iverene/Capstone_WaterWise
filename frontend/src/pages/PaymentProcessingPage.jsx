@@ -391,18 +391,18 @@ export default function PaymentProcessingPage() {
                   : paymentRows.length ? "No matching residents" : "No residents need payment"
             }
             getRowKey={(resident) => resident.id}
-            rowClassName="grid grid-cols-2 gap-x-3 gap-y-3 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+            rowClassName="grid grid-cols-2 gap-x-3 gap-y-2 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
             tableClassName="block w-full text-left text-sm md:table"
             renderRow={(resident) => (
               <>
-                <td className="px-4 py-4">
-                  <p className="font-bold text-slate-900">{resident.consumerName}</p>
-                  <p className="mt-1 text-xs text-slate-500">{resident.purok}</p>
+                <td className="col-span-2 md:col-span-1 md:px-4 md:py-4">
+                  <p className="font-extrabold leading-5 text-navy-900">{resident.consumerName}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{resident.purok}</p>
                 </td>
-                <td className={`px-4 py-4 font-mono font-extrabold ${resident.outstandingBillCount >= 2 ? "text-red-700" : "text-navy-900"}`}>
+                <td className={`font-mono font-extrabold md:px-4 md:py-4 ${resident.outstandingBillCount >= 2 ? "text-red-700" : "text-navy-900"}`}>
                   {resident.outstandingBillCount}
                 </td>
-                <td className="px-4 py-4">
+                <td className="md:px-4 md:py-4">
                   <p className="font-semibold text-slate-700">
                     {resident.oldestBilling?.billingPeriod ?? "No outstanding bills"}
                   </p>
@@ -412,19 +412,19 @@ export default function PaymentProcessingPage() {
                     </p>
                   )}
                 </td>
-                <td className="px-4 py-4 text-right font-mono font-extrabold tabular-nums text-navy-900">
+                <td className="font-mono font-extrabold tabular-nums text-navy-900 md:px-4 md:py-4 md:text-right">
                   ₱{resident.totalOutstanding.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </td>
-                <td className="px-4 py-4">
+                <td className="md:px-4 md:py-4">
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold ${resident.paymentStatus === "paid" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
                     {resident.paymentStatus === "paid" ? <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" /> : <Clock3 aria-hidden="true" className="h-3.5 w-3.5" />}
                     {resident.paymentStatus === "paid" ? "Paid" : `${resident.outstandingBillCount} outstanding`}
                   </span>
                 </td>
-                <td className="col-span-2 pt-1 md:px-4 md:py-4 md:text-right">
+                <td className="col-span-2 pt-1 md:col-span-1 md:px-4 md:py-4 md:text-right">
                   {resident.oldestBilling ? (
                     <button
-                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-water-600 px-4 font-bold text-white transition-colors hover:bg-water-700 md:w-auto"
                       onClick={() => openPaymentModal(resident.oldestBilling)}
                       type="button"
                     >

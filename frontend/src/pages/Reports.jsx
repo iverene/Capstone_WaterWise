@@ -110,7 +110,7 @@ export default function Reports() {
             <h2 className="mt-1 text-2xl font-extrabold text-navy-900" id="report-archive-title">Generated reports</h2>
             <p className="mt-1 text-sm text-slate-500">Saved report snapshots remain available after signing out or refreshing.</p>
           </div>
-          <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 font-bold text-slate-700 hover:bg-slate-50 disabled:text-slate-400" disabled={loading} onClick={loadReports} type="button">
+          <button className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 font-bold text-slate-700 hover:bg-slate-50 disabled:text-slate-400 sm:w-auto" disabled={loading} onClick={loadReports} type="button">
             <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </button>
@@ -126,23 +126,24 @@ export default function Reports() {
               { key: "report", label: "Report" },
               { key: "period", label: "Period" },
               { key: "records", label: "Records" },
-              { key: "created", label: "Generated" },
-              { key: "status", label: "Status" },
+              { key: "created", label: "Generated", className: "hidden md:table-cell" },
+              { key: "status", label: "Status", className: "hidden md:table-cell" },
               { key: "actions", label: "Actions", className: "text-right" },
             ]}
             data={reports}
             emptyDescription="Generate a report after previewing a reporting period."
             emptyTitle="No generated reports"
             getRowKey={(report) => report.id}
-            tableClassName="block w-full min-w-[920px] text-left text-sm md:table"
+            rowClassName="grid grid-cols-2 gap-x-4 gap-y-3 p-4 transition-colors hover:bg-slate-50 md:table-row md:p-0"
+            tableClassName="block w-full text-left text-sm md:table md:min-w-[920px]"
             renderRow={(report) => (
               <>
-                <td className="px-4 py-4"><button className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity" onClick={() => setSelectedReportId(report.id)} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><FileText aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0"><p className="max-w-72 truncate font-bold text-navy-900">{report.title}</p><p className="mt-0.5 text-xs text-slate-500">{typeLabels[report.report_type] ?? report.report_type}</p></div></button></td>
-                <td className="px-4 py-4 font-mono text-xs tabular-nums text-slate-600">{report.start_date}<br />{report.end_date}</td>
-                <td className="px-4 py-4 font-mono font-bold tabular-nums text-navy-900">{report.record_count.toLocaleString()}</td>
-                <td className="px-4 py-4 text-xs text-slate-600">{dateTime(report.created_at)}</td>
-                <td className="px-4 py-4"><span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"><CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />{report.status}</span></td>
-                <td className="px-4 py-4"><div className="flex justify-end gap-1"><button aria-label={`View ${report.title}`} className="flex h-11 w-11 items-center justify-center rounded-xl text-water-700 hover:bg-water-50" onClick={() => setSelectedReportId(report.id)} type="button"><Eye aria-hidden="true" className="h-4 w-4" /></button><button aria-label={`Download ${report.title}`} className="flex h-11 w-11 items-center justify-center rounded-xl text-water-700 hover:bg-water-50 disabled:text-slate-300" disabled={Boolean(busyReport)} onClick={() => download(report)} type="button">{busyReport === `download-${report.id}` ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Download aria-hidden="true" className="h-4 w-4" />}</button><button aria-label={`Open ${report.title} for printing`} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100" onClick={() => print(report)} type="button"><Printer aria-hidden="true" className="h-4 w-4" /></button></div></td>
+                <td className="col-span-2 px-0 py-0 md:px-4 md:py-4"><button className="flex w-full min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80" onClick={() => setSelectedReportId(report.id)} type="button"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-water-50 text-water-700"><FileText aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate font-bold text-navy-900 md:max-w-72">{report.title}</p><p className="mt-0.5 text-xs text-slate-500">{typeLabels[report.report_type] ?? report.report_type}</p></div></button></td>
+                <td className="px-0 py-0 font-mono text-xs tabular-nums text-slate-600 md:px-4 md:py-4">{report.start_date}<br />{report.end_date}</td>
+                <td className="px-0 py-0 font-mono font-bold tabular-nums text-navy-900 md:px-4 md:py-4">{report.record_count.toLocaleString()}</td>
+                <td className="hidden px-4 py-4 text-xs text-slate-600 md:table-cell">{dateTime(report.created_at)}</td>
+                <td className="hidden px-4 py-4 md:table-cell"><span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700"><CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />{report.status}</span></td>
+                <td className="col-span-2 px-0 py-0 md:px-4 md:py-4"><div className="grid grid-cols-3 gap-2 md:flex md:justify-end md:gap-1"><button aria-label={`View ${report.title}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-water-100 bg-water-50 px-1 text-xs font-bold text-water-700 hover:bg-water-100 sm:min-h-11 sm:flex-row sm:gap-2 sm:px-3 md:h-11 md:w-11 md:border-0 md:bg-transparent md:px-0" onClick={() => setSelectedReportId(report.id)} type="button"><Eye aria-hidden="true" className="h-4 w-4" /><span className="md:hidden">View</span></button><button aria-label={`Download ${report.title}`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-water-100 bg-water-50 px-1 text-xs font-bold text-water-700 hover:bg-water-100 disabled:text-slate-300 sm:min-h-11 sm:flex-row sm:gap-2 sm:px-3 md:h-11 md:w-11 md:border-0 md:bg-transparent md:px-0" disabled={Boolean(busyReport)} onClick={() => download(report)} type="button">{busyReport === `download-${report.id}` ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Download aria-hidden="true" className="h-4 w-4" />}<span className="md:hidden">Download</span></button><button aria-label={`Open ${report.title} for printing`} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-1 text-xs font-bold text-slate-600 hover:bg-slate-100 sm:min-h-11 sm:flex-row sm:gap-2 sm:px-3 md:h-11 md:w-11 md:border-0 md:px-0" onClick={() => print(report)} type="button"><Printer aria-hidden="true" className="h-4 w-4" /><span className="md:hidden">Print</span></button></div></td>
               </>
             )}
           />
