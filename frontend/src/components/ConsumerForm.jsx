@@ -58,6 +58,10 @@ function isValidContactNumber(contactNumber) {
   return /^09\d{9}$/.test(digitsOnly);
 }
 
+function isValidName(value) {
+  return /^[\p{L}\p{M}]+(?:[ '\u2019-][\p{L}\p{M}]+)*$/u.test(String(value ?? "").trim());
+}
+
 function ConsumerForm({ allowPasswordChange = false, embedded = false, registrationDesign = false, onSubmit = () => {}, requirePassword = false, initialData = null, onDirtyChange, onCancel }) {
   const formRef = useRef(null);
   const submittingRef = useRef(false);
@@ -106,6 +110,14 @@ function ConsumerForm({ allowPasswordChange = false, embedded = false, registrat
     }
     if (!String(consumer.lastName ?? "").trim()) {
       validationErrors.lastName = "Enter the resident's last name.";
+    }
+    for (const field of ["firstName", "middleName", "lastName"]) {
+      const value = String(consumer[field] ?? "").trim();
+      const existingValue = String(baseline[field] ?? "").trim();
+      // Keep legacy names containing digits editable when left unchanged.
+      if (value && !isValidName(value) && (!initialData || value !== existingValue)) {
+        validationErrors[field] = "Use letters only; spaces, hyphens, and apostrophes are allowed.";
+      }
     }
     if (!String(consumer.accountName ?? "").trim()) {
       validationErrors.accountName = "Enter a username.";
