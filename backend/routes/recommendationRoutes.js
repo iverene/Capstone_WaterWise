@@ -42,7 +42,7 @@ router.get("/puroks/monthly", getAllPuroksMonthlyRecommendations);
 // Get Yearly Recommendations
 router.get("/puroks/yearly", getAllPuroksYearlyRecommendations);
 
-// Generate All Recommendations
+// Get all stored recommendations. Gemini generation is scheduler-only.
 router.get("/", getAllRecommendations);
 
 export default router;

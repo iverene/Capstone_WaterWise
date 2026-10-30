@@ -140,13 +140,4 @@ export const fetchAllPuroksYearlyPrediction = async () => {
   return response.data;
 };
 
-//Generate All Predictions
-export const generateAllPredictions = async () => {
-  const response = await consumptionAPI.get(
-    "/prediction/generate-all"
-  );
-
-  return response.data;
-};
-
 export default consumptionAPI;

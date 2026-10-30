@@ -6,10 +6,11 @@ const predictionError = (message) => {
   return error;
 };
 
-export async function getConsumptionSourceVersion() {
+export async function getConsumptionSourceVersion({ includeEvents = true } = {}) {
   const { data, error, count } = await supabase
     .from("consumption")
     .select("id, updated_at", { count: "exact" })
+    .order("updated_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(1);
 
@@ -22,27 +23,47 @@ export async function getConsumptionSourceVersion() {
   const latestRecord = data?.[0] ?? null;
   const recordCount = count ?? 0;
 
-  let eventFingerprint = "no-events";
-  try {
-    const { data: eventData, count: eventCount, error: eventError } = await supabase
-      .from("events")
-      .select("id, updated_at", { count: "exact" })
-      .order("updated_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(1);
-    if (!eventError) {
-      const latestEvent = eventData?.[0] ?? null;
-      eventFingerprint = `${eventCount ?? 0}:${latestEvent?.id ?? 0}:${latestEvent?.updated_at ?? "empty"}`;
+  let eventFingerprint = "excluded";
+  if (includeEvents) {
+    eventFingerprint = "no-events";
+    try {
+      const { data: eventData, count: eventCount, error: eventError } = await supabase
+        .from("events")
+        .select("id, updated_at", { count: "exact" })
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(1);
+      if (!eventError) {
+        const latestEvent = eventData?.[0] ?? null;
+        eventFingerprint = `${eventCount ?? 0}:${latestEvent?.id ?? 0}:${latestEvent?.updated_at ?? "empty"}`;
+      }
+    } catch {
+      eventFingerprint = "events-unknown";
     }
-  } catch {
-    eventFingerprint = "events-unknown";
   }
 
   return {
-    signature: `history-v3:${recordCount}:${latestRecord?.id ?? 0}:${latestRecord?.updated_at ?? "empty"}:events:${eventFingerprint}`,
+    signature: `history-v4:${recordCount}:${latestRecord?.id ?? 0}:${latestRecord?.updated_at ?? "empty"}:events:${eventFingerprint}`,
     recordCount,
     latestConsumptionId: latestRecord?.id ?? null,
   };
+}
+
+export async function getLatestStoredPrediction(cacheKey) {
+  const { data, error } = await supabase
+    .from("ai_consumption_cache")
+    .select("result_payload")
+    .eq("result_type", "prediction")
+    .eq("cache_key", cacheKey)
+    .maybeSingle();
+
+  if (error) {
+    throw predictionError(
+      `Failed to retrieve the latest stored AI prediction: ${error.message}`,
+    );
+  }
+
+  return data?.result_payload ?? null;
 }
 
 export async function getStoredPrediction(cacheKey, sourceSignature) {

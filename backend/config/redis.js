@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { Redis } from "@upstash/redis";
+import { randomUUID } from "node:crypto";
 
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -78,5 +79,30 @@ export const deleteCacheByPrefix = async (prefix) => {
   } catch (error) {
     reportRedisError("prefix-invalidation", error);
     return false;
+  }
+};
+
+export const acquireRedisLock = async (key, ttlSeconds) => {
+  if (!redis) return null;
+
+  const token = randomUUID();
+  try {
+    const acquired = await redis.set(key, token, { nx: true, ex: ttlSeconds });
+    if (acquired !== "OK") return null;
+
+    return async () => {
+      try {
+        await redis.eval(
+          "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+          [key],
+          [token],
+        );
+      } catch (error) {
+        reportRedisError("lock-release", error);
+      }
+    };
+  } catch (error) {
+    reportRedisError("lock-acquire", error);
+    return null;
   }
 };

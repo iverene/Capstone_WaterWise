@@ -232,6 +232,8 @@ BREVO_FROM_EMAIL=your-verified-sender@example.com
 BREVO_FROM_NAME=Sucol Water System
 UPSTASH_REDIS_REST_URL=https://your-database.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your-upstash-rest-token
+# Optional; set to false to disable the daily 12 AM/12 PM/4 PM Manila AI schedule.
+AI_ANALYSIS_SCHEDULER_ENABLED=true
 # Optional; minimum 60000 ms. Defaults to six hours.
 NOTIFICATION_REMINDER_INTERVAL_MS=21600000
 ```
@@ -426,8 +428,8 @@ The backend independently restricts `POST /api/admins` and `POST /api/meter-read
 | `/api/payments` | Payment processing and history |
 | `/api/notifications` | Announcements and notification state |
 | `/api/events` | Admin-only persistent community-event CRUD and automatic consumer-notification synchronization |
-| `/api/consumption/prediction` | AI consumption predictions |
-| `/api/recommendation` | AI recommendations |
+| `/api/consumption/prediction` | Latest stored AI consumption predictions (read-only) |
+| `/api/recommendation` | Latest stored AI recommendations (read-only) |
 | `/api/reports` | Report previews, snapshots, and PDF downloads |
 | `/api/system-settings` | System-wide settings management (Super Admin only, OTP-gated) |
 
@@ -444,8 +446,14 @@ Consumption = present reading - previous reading
              ↓
 Billing row and consumer notification are created
              ↓
-Dashboards and AI cache detect the updated data
+Dashboards detect the updated data immediately; scheduled AI analysis processes it at 12 AM, 12 PM, or 4 PM Asia/Manila
 ```
+
+Gemini generation runs every day at 12:00 AM, 12:00 PM, and 4:00 PM Asia/Manila. Each
+scheduled run compares the current source signature with the stored AI cache
+and skips Gemini when consumption and recommendation context have not changed.
+Opening or refreshing Analytics only reads stored results and never initiates
+Gemini generation.
 
 - A consumer can have only one accepted reading for a given month.
 - Payment-backed consumption records are protected from silent mutation.

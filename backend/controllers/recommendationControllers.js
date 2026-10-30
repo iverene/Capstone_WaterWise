@@ -1,11 +1,11 @@
 import {
-  generateOverallMonthlyRecommendations,
-  generateOverallYearlyRecommendations,
-  generatePerPurokMonthlyRecommendations,
-  generatePerPurokYearlyRecommendations,
-  generateAllPuroksMonthlyRecommendations,
-  generateAllPuroksYearlyRecommendations,
-  generateAllRecommendationsService,
+  readOverallMonthlyRecommendations,
+  readOverallYearlyRecommendations,
+  readPerPurokMonthlyRecommendations,
+  readPerPurokYearlyRecommendations,
+  readAllPuroksMonthlyRecommendations,
+  readAllPuroksYearlyRecommendations,
+  readAllRecommendationsService,
 } from "../services/recommendationServices.js";
 
 // ==========================================
@@ -69,7 +69,7 @@ export const getOverallMonthlyRecommendations =
   async (req, res) => {
     try {
       const data =
-        await generateOverallMonthlyRecommendations();
+        await readOverallMonthlyRecommendations();
 
       return sendSuccess(
         res,
@@ -88,7 +88,7 @@ export const getOverallYearlyRecommendations =
   async (req, res) => {
     try {
       const data =
-        await generateOverallYearlyRecommendations();
+        await readOverallYearlyRecommendations();
 
       return sendSuccess(
         res,
@@ -114,7 +114,7 @@ export const getPerPurokMonthlyRecommendations =
         getValidatedPurok(req);
 
       const data =
-        await generatePerPurokMonthlyRecommendations(
+        await readPerPurokMonthlyRecommendations(
           purok
         );
 
@@ -145,7 +145,7 @@ export const getPerPurokYearlyRecommendations =
         getValidatedPurok(req);
 
       const data =
-        await generatePerPurokYearlyRecommendations(
+        await readPerPurokYearlyRecommendations(
           purok
         );
 
@@ -177,7 +177,7 @@ export const getAllPuroksMonthlyRecommendations =
   async (req, res) => {
     try {
       const data =
-        await generateAllPuroksMonthlyRecommendations();
+        await readAllPuroksMonthlyRecommendations();
 
       return sendSuccess(
         res,
@@ -196,7 +196,7 @@ export const getAllPuroksYearlyRecommendations =
   async (req, res) => {
     try {
       const data =
-        await generateAllPuroksYearlyRecommendations();
+        await readAllPuroksYearlyRecommendations();
 
       return sendSuccess(
         res,
@@ -218,7 +218,7 @@ export const getAllRecommendations =
   async (req, res) => {
     try {
       const data =
-        await generateAllRecommendationsService();
+        await readAllRecommendationsService();
 
       return sendSuccess(
         res,
