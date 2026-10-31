@@ -80,7 +80,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
     (Number(consumption ?? presentReading - previousReading) || 0).toFixed(2),
   );
   const totalArrears = arrears30Days + arrears60Days + arrears90Days;
-  const finalTotalBill = baselineBill + totalArrears;
+  const totalOverallBill = baselineBill + totalArrears;
 
   const handleDownload = () => {
     downloadReceiptImage({
@@ -102,11 +102,11 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         ...(Array.isArray(billBreakdown)
           ? billBreakdown.map((line) => [line.label, `₱${Number(line.amount).toFixed(2)}`])
           : []),
-        ["Baseline Water Bill", `₱${baselineBill.toFixed(2)}`],
+        ["Current Consumption Bill", `₱${baselineBill.toFixed(2)}`],
         ["Over 30 Days", `₱${arrears30Days.toFixed(2)}`],
         ["Over 60 Days", `₱${arrears60Days.toFixed(2)}`],
         ["Over 90 Days", `₱${arrears90Days.toFixed(2)}`],
-        ["Total Bill Sum", `₱${finalTotalBill.toFixed(2)}`],
+        ["Total Overall Bill", `₱${totalOverallBill.toFixed(2)}`],
       ],
     });
     toast.success("Receipt downloaded", `${meterName}-consumption-receipt.png was saved.`);
@@ -154,12 +154,12 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         </p>
         <p
           className="mt-1.5 font-mono text-2xl font-extrabold tabular-nums text-white sm:mt-2 sm:text-3xl"
-          data-testid="receipt-final-total"
+          data-testid="receipt-current-bill"
         >
-          {currency(finalTotalBill)}
+          {currency(baselineBill)}
         </p>
         <p className="mt-1.5 text-xs text-slate-300 sm:mt-2 sm:text-sm">
-          {cubicMetersUsed.toLocaleString("en-US")} m³ used · Baseline {currency(baselineBill)}
+          {cubicMetersUsed.toLocaleString("en-US")} m³ used · Current consumption bill
         </p>
       </section>
 
@@ -206,7 +206,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
               />
             )}
             <ReceiptLine label="Used" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
-            <ReceiptLine label="Baseline bill" testId="telemetry-baseline" value={currency(baselineBill)} />
+            <ReceiptLine label="Current consumption bill" testId="telemetry-baseline" value={currency(baselineBill)} />
             {Array.isArray(billBreakdown) && billBreakdown.length > 0 && (
               <div className="mt-2 rounded-xl bg-slate-50 p-2.5 sm:p-3">
                 {billBreakdown.map((line) => (
@@ -234,6 +234,18 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           <ArrearsStat label="Over 30 days" testId="arrears-30" value={arrears30Days} />
           <ArrearsStat label="Over 60 days" testId="arrears-60" value={arrears60Days} />
           <ArrearsStat label="Over 90 days" testId="arrears-90" value={arrears90Days} />
+        </div>
+      </section>
+
+      <section aria-label="Total overall bill" className="mt-3 rounded-2xl border border-water-200 bg-water-50 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-water-800">Total overall bill</h3>
+            <p className="mt-1 text-xs text-slate-600">Current consumption plus overdue balances</p>
+          </div>
+          <p className="font-mono text-lg font-extrabold tabular-nums text-navy-900 sm:text-xl" data-testid="receipt-final-total">
+            {currency(totalOverallBill)}
+          </p>
         </div>
       </section>
 
