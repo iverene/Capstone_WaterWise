@@ -5,8 +5,24 @@
 // backend restart/redeploy by design; each window also auto-expires.
 const enabled = process.env.RATE_LIMIT_ENABLED !== "false";
 
-const GLOBAL_MAX = Number(process.env.RATE_LIMIT_GLOBAL_MAX ?? 3000);
-const AUTH_MAX = Number(process.env.RATE_LIMIT_AUTH_MAX ?? 10);
+const positiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const GLOBAL_MAX = positiveNumber(process.env.RATE_LIMIT_GLOBAL_MAX, 3000);
+const AUTH_MAX = positiveNumber(process.env.RATE_LIMIT_AUTH_MAX, 10);
+const CONSUMER_ACCOUNT_MAX = positiveNumber(
+  process.env.RATE_LIMIT_CONSUMER_MAX,
+  300,
+);
+const STAFF_ACCOUNT_MAX = positiveNumber(
+  process.env.RATE_LIMIT_STAFF_MAX,
+  1000,
+);
+const ALERT_BLOCKED_THRESHOLD = Math.floor(
+  positiveNumber(process.env.RATE_LIMIT_ALERT_BLOCKED_THRESHOLD, 10),
+);
 const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
 
 // Shared override: one env for both limiters. A limiter-specific env still
@@ -24,7 +40,9 @@ const resolveWindowMs = (specific) => {
 const GLOBAL_WINDOW_MS = resolveWindowMs(process.env.RATE_LIMIT_GLOBAL_WINDOW_MS);
 const AUTH_WINDOW_MS = resolveWindowMs(process.env.RATE_LIMIT_AUTH_WINDOW_MS);
 
-const MAX_KEYS = Number(process.env.RATE_LIMIT_MAX_KEYS ?? 5000);
+const MAX_KEYS = Math.floor(
+  positiveNumber(process.env.RATE_LIMIT_MAX_KEYS, 5000),
+);
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 const memoryStore = new Map();
@@ -33,10 +51,15 @@ const memoryStore = new Map();
 const totals = {
   global: { hits: 0, blocked: 0 },
   auth: { hits: 0, blocked: 0 },
+  account: { hits: 0, blocked: 0 },
 };
 
 function maskKey(prefix, key) {
   const body = key.startsWith(`${prefix}:`) ? key.slice(prefix.length + 1) : key;
+  if (prefix === "rl:account") {
+    const [role, id] = body.split(":");
+    return `${role ?? "account"}:${id ?? "***"}`;
+  }
   if (prefix === "rl:auth") {
     const separator = body.lastIndexOf(":");
     const ip = separator >= 0 ? body.slice(0, separator) : body;
@@ -86,13 +109,32 @@ export function getRateLimitStats() {
       max: GLOBAL_MAX,
       windowSeconds: Math.max(1, Math.ceil(GLOBAL_WINDOW_MS / 1000)),
       ...totals.global,
+      alert: {
+        threshold: ALERT_BLOCKED_THRESHOLD,
+        active: totals.global.blocked >= ALERT_BLOCKED_THRESHOLD,
+      },
       ...collect("rl:global"),
     },
     auth: {
       max: AUTH_MAX,
       windowSeconds: Math.max(1, Math.ceil(AUTH_WINDOW_MS / 1000)),
       ...totals.auth,
+      alert: {
+        threshold: ALERT_BLOCKED_THRESHOLD,
+        active: totals.auth.blocked >= ALERT_BLOCKED_THRESHOLD,
+      },
       ...collect("rl:auth"),
+    },
+    account: {
+      consumerMax: CONSUMER_ACCOUNT_MAX,
+      staffMax: STAFF_ACCOUNT_MAX,
+      windowSeconds: Math.max(1, Math.ceil(AUTH_WINDOW_MS / 1000)),
+      ...totals.account,
+      alert: {
+        threshold: ALERT_BLOCKED_THRESHOLD,
+        active: totals.account.blocked >= ALERT_BLOCKED_THRESHOLD,
+      },
+      ...collect("rl:account"),
     },
   };
 }
@@ -129,11 +171,24 @@ function hitMemory(key, windowMs) {
   };
 }
 
-function clientIp(req) {
-  const forwarded = req.headers?.["x-forwarded-for"];
-  if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
+function readMemory(key, windowMs) {
+  const now = Date.now();
+  const entry = memoryStore.get(key);
+  if (!entry || now >= entry.resetAt) {
+    return {
+      count: 0,
+      retryAfterSeconds: Math.ceil(windowMs / 1000),
+    };
   }
+  return {
+    count: entry.count,
+    retryAfterSeconds: Math.max(1, Math.ceil((entry.resetAt - now) / 1000)),
+  };
+}
+
+function clientIp(req) {
+  // Express derives req.ip using the app's configured trust-proxy policy.
+  // Do not trust a client-supplied X-Forwarded-For value directly.
   return req.ip ?? req.socket?.remoteAddress ?? "unknown";
 }
 
@@ -145,24 +200,33 @@ function sanitizeIdentifier(value) {
     .slice(0, 120) || "anonymous";
 }
 
-function createLimiter({ name, prefix, windowMs, max, keyGenerator, skip, message }) {
+function createLimiter({
+  name,
+  prefix,
+  windowMs,
+  max,
+  keyGenerator,
+  skip,
+  message,
+  countFailures = false,
+}) {
   return async (req, res, next) => {
     if (!enabled) return next();
     if (skip?.(req)) return next();
 
     const key = `${prefix}:${keyGenerator(req)}`;
-    const result = hitMemory(key, windowMs);
-    if (totals[name]) {
-      totals[name].hits += 1;
-      if (result.count > max) totals[name].blocked += 1;
-    }
+    const result = countFailures
+      ? readMemory(key, windowMs)
+      : hitMemory(key, windowMs);
+    const blocked = countFailures ? result.count >= max : result.count > max;
 
     const remaining = Math.max(0, max - result.count);
     res.setHeader("RateLimit-Limit", String(max));
     res.setHeader("RateLimit-Remaining", String(remaining));
     res.setHeader("RateLimit-Reset", String(result.retryAfterSeconds));
 
-    if (result.count > max) {
+    if (blocked) {
+      if (totals[name]) totals[name].blocked += 1;
       res.setHeader("Retry-After", String(result.retryAfterSeconds));
       return res.status(429).json({
         success: false,
@@ -170,8 +234,51 @@ function createLimiter({ name, prefix, windowMs, max, keyGenerator, skip, messag
         retryAfterSeconds: result.retryAfterSeconds,
       });
     }
+
+    if (countFailures) {
+      res.once("finish", () => {
+        // Only client-side auth failures consume the auth quota. Successful
+        // login/OTP requests and server errors do not reduce the allowance.
+        if (res.statusCode >= 400 && res.statusCode < 500 && res.statusCode !== 429) {
+          hitMemory(key, windowMs);
+          if (totals[name]) totals[name].hits += 1;
+        }
+      });
+    } else if (totals[name]) {
+      totals[name].hits += 1;
+    }
+
     return next();
   };
+}
+
+const accountLimitForRole = (role) =>
+  role === "consumer" ? CONSUMER_ACCOUNT_MAX : STAFF_ACCOUNT_MAX;
+
+export async function accountRateLimiter(req, res, next) {
+  if (!enabled || !req.user) return next();
+
+  const max = accountLimitForRole(req.user.role);
+  const key = `rl:account:${req.user.role}:${req.user.id}`;
+  const result = hitMemory(key, AUTH_WINDOW_MS);
+  const remaining = Math.max(0, max - result.count);
+
+  res.setHeader("RateLimit-Account-Limit", String(max));
+  res.setHeader("RateLimit-Account-Remaining", String(remaining));
+  res.setHeader("RateLimit-Account-Reset", String(result.retryAfterSeconds));
+
+  if (result.count > max) {
+    totals.account.blocked += 1;
+    res.setHeader("Retry-After", String(result.retryAfterSeconds));
+    return res.status(429).json({
+      success: false,
+      message: "Too many requests for this account. Please try again shortly.",
+      retryAfterSeconds: result.retryAfterSeconds,
+    });
+  }
+
+  totals.account.hits += 1;
+  return next();
 }
 
 // Generous guard for every /api/* request. Skips health + CORS preflight so
@@ -206,6 +313,7 @@ export const authStrictLimiter = createLimiter({
     return `${sanitizeIdentifier(clientIp(req))}:${sanitizeIdentifier(identifier)}`;
   },
   skip: (req) => req.method === "OPTIONS",
+  countFailures: true,
   message: "Too many login attempts. Try again shortly.",
 });
 

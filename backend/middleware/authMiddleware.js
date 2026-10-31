@@ -13,6 +13,7 @@ import {
   isSessionIdle,
   touchSessionActivity,
 } from "../services/sessionActivityService.js";
+import { accountRateLimiter } from "./rateLimit.js";
 
 const ACTIVITY_PING_PATH = "/api/auth/activity";
 
@@ -142,7 +143,7 @@ export async function authenticate(req, res, next) {
         await touchSessionActivity(payload.role, userId, now);
       }
     }
-    return next();
+    return accountRateLimiter(req, res, next);
   } catch (error) {
     if (error.statusCode === 500) {
       return res.status(500).json({ success: false, message: error.message });

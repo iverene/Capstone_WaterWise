@@ -55,13 +55,30 @@ function formatReset(seconds) {
 
 function Section({ title, bucket }) {
   if (!bucket) return null;
+  const countLabel = title.startsWith("Auth") ? "failed attempts" : "hits";
   return (
     <div style={card}>
       <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>{title}</h2>
       <p style={{ margin: "0 0 12px", color: "#475569", fontSize: 13 }}>
         Limit {bucket.max} / {formatReset(bucket.windowSeconds)} window
-        {" · "}hits {bucket.hits} · blocked {bucket.blocked} · active keys {bucket.activeKeys}
+        {" · "}{countLabel} {bucket.hits} · blocked {bucket.blocked} · active keys {bucket.activeKeys}
       </p>
+      {bucket.alert?.active && (
+        <p
+          role="alert"
+          style={{
+            margin: "0 0 12px",
+            padding: "8px 10px",
+            borderRadius: 8,
+            background: "#fef2f2",
+            color: "#b91c1c",
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          Alert: blocked attempts reached {bucket.alert.threshold} since the last backend restart.
+        </p>
+      )}
       {bucket.top?.length > 0 ? (
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -83,6 +100,57 @@ function Section({ title, bucket }) {
         </table>
       ) : (
         <p style={{ color: "#64748b", fontSize: 13 }}>No active keys in this window.</p>
+      )}
+    </div>
+  );
+}
+
+function AccountSection({ bucket }) {
+  if (!bucket) return null;
+  return (
+    <div style={card}>
+      <h2 style={{ margin: "0 0 4px", fontSize: 18 }}>Account — per user</h2>
+      <p style={{ margin: "0 0 12px", color: "#475569", fontSize: 13 }}>
+        Residents {bucket.consumerMax} · staff {bucket.staffMax} / {formatReset(bucket.windowSeconds)} window
+        {" · "}hits {bucket.hits} · blocked {bucket.blocked} · active accounts {bucket.activeKeys}
+      </p>
+      {bucket.alert?.active && (
+        <p
+          role="alert"
+          style={{
+            margin: "0 0 12px",
+            padding: "8px 10px",
+            borderRadius: 8,
+            background: "#fef2f2",
+            color: "#b91c1c",
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          Alert: account blocks reached {bucket.alert.threshold} since the last backend restart.
+        </p>
+      )}
+      {bucket.top?.length > 0 ? (
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={thtd}>Account key</th>
+              <th style={thtd}>Count</th>
+              <th style={thtd}>Resets in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bucket.top.map((row) => (
+              <tr key={row.key}>
+                <td style={{ ...thtd, fontFamily: "monospace" }}>{row.key}</td>
+                <td style={thtd}>{row.count}</td>
+                <td style={thtd}>{formatReset(row.resetInSeconds)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p style={{ color: "#64748b", fontSize: 13 }}>No active account keys in this window.</p>
       )}
     </div>
   );
@@ -303,6 +371,7 @@ export default function App() {
           )}
           <Section title="Global — all /api/* per IP" bucket={stats?.global} />
           <Section title="Auth — login/OTP per IP+email" bucket={stats?.auth} />
+          <AccountSection bucket={stats?.account} />
         </>
       )}
     </div>
