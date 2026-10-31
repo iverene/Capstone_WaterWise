@@ -524,7 +524,12 @@ export async function updateMeterIncident(id, payload, actor) {
       approved_by_id: incident.approvedById ?? (isAdminActor(actor) ? actor.id : null),
       approved_at: incident.approvedAt ?? (isAdminActor(actor) ? now : null),
       expires_at: null,
-      notes: payload.notes ?? incident.notes,
+      notes: [
+        payload.notes ?? incident.notes ?? null,
+        oldFinalReading == null
+          ? "Old meter closing reading unknown; latest recorded reading used as fallback."
+          : null,
+      ].filter(Boolean).join("\n") || null,
       updated_at: now,
     })
     .eq("id", incident.id)

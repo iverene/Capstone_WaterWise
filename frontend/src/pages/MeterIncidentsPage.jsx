@@ -221,10 +221,6 @@ export default function MeterIncidentsPage() {
       correctionForm.oldFinalReading === ""
         ? null
         : Number(correctionForm.oldFinalReading);
-    if (closingReading == null) {
-      setCorrectionError("Enter the old meter closing reading.");
-      return;
-    }
     if (
       closingReading != null &&
       (!Number.isFinite(closingReading) || closingReading < 0)
@@ -452,13 +448,12 @@ export default function MeterIncidentsPage() {
                   className="ww-field mt-2 p-3 font-mono tabular-nums"
                   inputMode="decimal"
                   onChange={updateCorrectionDecimalField("oldFinalReading")}
-                  placeholder="Required"
-                  required
+                  placeholder="Optional"
                   type="text"
                   value={correctionForm.oldFinalReading}
                 />
                 <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
-                  A higher value uses the difference from the latest reading. An equal or lower value uses the previous consumption.
+                  Optional. If blank, the latest recorded reading is used as the fallback and the correction is audited as an unknown old closing reading.
                 </span>
               </label>
             </div>
