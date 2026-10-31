@@ -1,10 +1,13 @@
 import { getPersistentMeterReaderUser, getStoredAccount } from "./authToken";
 import { createMeterReading } from "./meterReadingAPI";
+import { createMeterIncidentRequestKey, logMeterIncident } from "./meterIncidentAPI";
 
 const DATABASE_NAME = "waterwise-meter-reader";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const CONTEXT_STORE = "contexts";
+const INCIDENT_CONTEXT_STORE = "incident-contexts";
 const OUTBOX_STORE = "reading-outbox";
+const INCIDENT_OUTBOX_STORE = "incident-outbox";
 
 const accountScope = () => {
   // getStoredAccount() already restores the persistent meter-reader identity
@@ -20,7 +23,13 @@ function openDatabase() {
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(CONTEXT_STORE)) database.createObjectStore(CONTEXT_STORE);
+      if (!database.objectStoreNames.contains(INCIDENT_CONTEXT_STORE)) {
+        database.createObjectStore(INCIDENT_CONTEXT_STORE);
+      }
       if (!database.objectStoreNames.contains(OUTBOX_STORE)) database.createObjectStore(OUTBOX_STORE, { keyPath: "idempotencyKey" });
+      if (!database.objectStoreNames.contains(INCIDENT_OUTBOX_STORE)) {
+        database.createObjectStore(INCIDENT_OUTBOX_STORE, { keyPath: "idempotencyKey" });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -59,6 +68,24 @@ export async function getCachedRecordingContexts() {
   return cached ?? null;
 }
 
+export async function cacheIncidentContexts(contexts) {
+  return withStore(
+    INCIDENT_CONTEXT_STORE,
+    "readwrite",
+    (store) => requestResult(store.put({ contexts, cachedAt: Date.now() }, accountScope())),
+  );
+}
+
+export async function getCachedIncidentContexts() {
+  const cached = await withStore(
+    INCIDENT_CONTEXT_STORE,
+    "readonly",
+    (store) => requestResult(store.get(accountScope())),
+  );
+  if (cached?.contexts?.length) return cached;
+  return getCachedRecordingContexts();
+}
+
 export async function queueMeterReading(payload) {
   const record = { ...payload, accountScope: accountScope(), queuedAt: Date.now() };
   await withStore(OUTBOX_STORE, "readwrite", (store) => requestResult(store.put(record)));
@@ -89,4 +116,63 @@ export async function syncPendingMeterReadings() {
     }
   }
   return { synced, remaining: (await getPendingMeterReadings()).length };
+}
+
+export async function queueMeterIncident(payload) {
+  const record = {
+    ...payload,
+    idempotencyKey: payload.idempotencyKey || createMeterIncidentRequestKey(),
+    accountScope: accountScope(),
+    queuedAt: Date.now(),
+    status: "pending",
+    syncError: null,
+  };
+  await withStore(INCIDENT_OUTBOX_STORE, "readwrite", (store) => requestResult(store.put(record)));
+  return record;
+}
+
+export async function getPendingMeterIncidents() {
+  const records = await withStore(
+    INCIDENT_OUTBOX_STORE,
+    "readonly",
+    (store) => requestResult(store.getAll()),
+  );
+  return records.filter((record) => record.accountScope === accountScope());
+}
+
+export async function syncPendingMeterIncidents() {
+  if (!navigator.onLine) {
+    return { synced: 0, remaining: (await getPendingMeterIncidents()).length, failed: 0 };
+  }
+  const pending = await getPendingMeterIncidents();
+  let synced = 0;
+  let failed = 0;
+  for (const record of pending) {
+    try {
+      await logMeterIncident(record);
+      await withStore(
+        INCIDENT_OUTBOX_STORE,
+        "readwrite",
+        (store) => requestResult(store.delete(record.idempotencyKey)),
+      );
+      synced += 1;
+    } catch (error) {
+      failed += 1;
+      await withStore(
+        INCIDENT_OUTBOX_STORE,
+        "readwrite",
+        (store) => requestResult(store.put({
+          ...record,
+          syncError: error?.response?.data?.message ?? error?.message ?? "Unable to sync meter incident.",
+          failedAt: Date.now(),
+        })),
+      );
+      if (!error.response) break;
+    }
+  }
+  return {
+    synced,
+    failed,
+    remaining: (await getPendingMeterIncidents()).length,
+  };
 }

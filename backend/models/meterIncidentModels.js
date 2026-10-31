@@ -373,6 +373,29 @@ export async function createMeterIncident(payload, actor) {
   await assertConsumer(consumerId);
 
   const incidentType = normalizeIncidentType(payload.incidentType);
+  const idempotencyKey = payload.idempotencyKey == null
+    ? null
+    : String(payload.idempotencyKey).trim();
+  if (idempotencyKey && idempotencyKey.length > 200) {
+    throw createError("The incident request key is too long.");
+  }
+
+  if (idempotencyKey) {
+    const { data: existing, error: existingError } = await supabase
+      .from("meter_incidents")
+      .select(INCIDENT_FIELDS)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    if (existingError) {
+      throw createError(`Failed to verify the incident request: ${existingError.message}`, 500);
+    }
+    if (existing) {
+      if (Number(existing.consumer_id) !== consumerId) {
+        throw createError("This incident request key is already associated with another consumer.", 409);
+      }
+      return normalizeIncident(existing);
+    }
+  }
 
   const newBaseline = toNumberOrNull(payload.newBaseline);
   if (newBaseline == null || newBaseline < 0) {
@@ -423,7 +446,7 @@ export async function createMeterIncident(payload, actor) {
         payload.notes || null,
         resolved.fallbackNote,
       ].filter(Boolean).join("\n") || null,
-      idempotency_key: payload.idempotencyKey || null,
+      idempotency_key: idempotencyKey,
     })
     .select(INCIDENT_FIELDS)
     .single();

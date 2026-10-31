@@ -17,7 +17,12 @@ import { useLocation, useNavigate } from "react-router";
 import { getCurrentAccount, logout } from "../services/auth.service";
 import { enableConsumerPushSessionPersistence, getStoredAccount } from "../services/authToken";
 import { isCanceledRequest } from "../services/apiClient";
-import { getPendingMeterReadings } from "../services/offlineMeterReadings";
+import {
+  getPendingMeterIncidents,
+  getPendingMeterReadings,
+  syncPendingMeterIncidents,
+  syncPendingMeterReadings,
+} from "../services/offlineMeterReadings";
 import { getNotificationPresentation } from "../utils/notificationPresentation";
 import {
   deleteNotifications,
@@ -131,7 +136,8 @@ export default function AppLayout({ children }) {
   const [notifications, setNotifications] = useState([]);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingOffline, setPendingOffline] = useState({ readings: 0, incidents: 0 });
+  const meterSyncInProgressRef = useRef(false);
   const pushToastIdRef = useRef(null);
   const isEnablingPushRef = useRef(false);
   const handleEnablePushFnRef = useRef(null);
@@ -162,16 +168,71 @@ export default function AppLayout({ children }) {
     if (activeRole !== "meter-reader") return;
     const fetchPending = async () => {
       try {
-        const pending = await getPendingMeterReadings();
-        setPendingCount(pending.length);
+        const [readings, incidents] = await Promise.all([
+          getPendingMeterReadings(),
+          getPendingMeterIncidents(),
+        ]);
+        setPendingOffline({
+          readings: readings.length,
+          incidents: incidents.length,
+        });
       } catch {
         // silent
       }
     };
+    const handlePendingQueueChanged = () => {
+      void fetchPending();
+    };
     fetchPending();
     const interval = setInterval(fetchPending, 15000);
-    return () => clearInterval(interval);
+    window.addEventListener("waterwise:offline-queue-changed", handlePendingQueueChanged);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("waterwise:offline-queue-changed", handlePendingQueueChanged);
+    };
   }, [activeRole]);
+
+  useEffect(() => {
+    if (activeRole !== "meter-reader") return;
+    const synchronizeOfflineQueues = async () => {
+      if (!navigator.onLine || meterSyncInProgressRef.current) return;
+      meterSyncInProgressRef.current = true;
+      try {
+        const readings = await syncPendingMeterReadings();
+        const incidents = await syncPendingMeterIncidents();
+        window.dispatchEvent(new Event("waterwise:offline-queue-changed"));
+        if (readings.synced) {
+          toast.success(
+            "Offline readings synced",
+            `${readings.synced} saved reading${readings.synced === 1 ? "" : "s"} uploaded successfully.`,
+          );
+        }
+        if (incidents.synced) {
+          toast.success(
+            "Offline incidents synced",
+            `${incidents.synced} meter incident${incidents.synced === 1 ? "" : "s"} uploaded successfully.`,
+          );
+        }
+        if (readings.remaining > 0 && !readings.synced) {
+          toast.warning("Reading sync incomplete", `${readings.remaining} reading${readings.remaining === 1 ? "" : "s"} remain pending.`);
+        }
+        if (incidents.failed) {
+          toast.warning(
+            "Incident sync incomplete",
+            `${incidents.failed} incident${incidents.failed === 1 ? "" : "s"} remain pending and will retry later.`,
+          );
+        }
+      } finally {
+        meterSyncInProgressRef.current = false;
+      }
+    };
+    const handleOnline = () => {
+      void synchronizeOfflineQueues();
+    };
+    window.addEventListener("online", handleOnline);
+    void synchronizeOfflineQueues();
+    return () => window.removeEventListener("online", handleOnline);
+  }, [activeRole, toast]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -551,7 +612,9 @@ export default function AppLayout({ children }) {
           role="status"
         >
           <FiWifiOff aria-hidden="true" className="h-4 w-4 shrink-0" />
-          Offline mode · {activeRole === "meter-reader" ? `${pendingCount} reading${pendingCount === 1 ? "" : "s"} safely stored on this device. Changes will be submitted after you reconnect.` : "Changes will be submitted after you reconnect."}
+          Offline mode · {activeRole === "meter-reader"
+            ? `${pendingOffline.readings} reading${pendingOffline.readings === 1 ? "" : "s"} and ${pendingOffline.incidents} meter incident${pendingOffline.incidents === 1 ? "" : "s"} safely stored on this device. Changes will be submitted after you reconnect.`
+            : "Changes will be submitted after you reconnect."}
         </div>
       )}
 

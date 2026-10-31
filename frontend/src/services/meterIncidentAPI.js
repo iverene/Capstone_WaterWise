@@ -7,6 +7,10 @@ const client = {
   patch: (path, payload, options) => apiClient.patch(`/meter-incidents${path}`, payload, options),
 };
 
+export const createMeterIncidentRequestKey = () =>
+  globalThis.crypto?.randomUUID?.()
+  ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 function normalizeIncident(incident) {
   if (!incident) return null;
   return {
