@@ -135,7 +135,8 @@ export default function PurokHistoricalConsumptionGraphs() {
   const [selectedYear, setSelectedYear] = useState("");
   const [availableYears, setAvailableYears] = useState([]);
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
     try {
       const [monthlyResponse, yearlyResponse] = await Promise.all([
         fetchAllPuroksMonthlyHistory(selectedYear || undefined),
@@ -157,16 +158,23 @@ export default function PurokHistoricalConsumptionGraphs() {
     } catch (requestError) {
       setError(requestError?.response?.data?.message ?? requestError?.message ?? "Unable to load purok history.");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [selectedYear]);
 
   useEffect(() => {
     const initialLoadId = window.setTimeout(loadHistory, 0);
     const intervalId = window.setInterval(loadHistory, 15000);
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/analytics") {
+        void loadHistory({ showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
     return () => {
       window.clearTimeout(initialLoadId);
       window.clearInterval(intervalId);
+      window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
     };
   }, [loadHistory]);
 

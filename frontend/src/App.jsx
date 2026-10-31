@@ -76,6 +76,8 @@ const roleAccess = {
       "/admin/events",
       "/admin/announcements",
       "/admin/analytics",
+      "/admin/profile",
+      "/admin/account-information",
       "/admin/reports",
     ],
   },
@@ -599,15 +601,46 @@ export function AppRoutes() {
 export default function App() {
   const [dataRevision, setDataRevision] = useState(0);
   const [sessionRevision, setSessionRevision] = useState(0);
-  // A data change normally remounts the whole route tree so every screen
-  // refetches. A remount while a dialog is open would tear the dialog down
-  // and destroy its state, so it is deferred until the last dialog closes.
+  // Most data changes remount the route tree so every screen refetches. Data
+  // pages use targeted refreshes to preserve their layout and local state.
+  // A remount while a dialog is open would tear the dialog down and destroy
+  // its state, so it is deferred until the last dialog closes.
   const pendingRevisionRef = useRef(false);
   const remountTimerRef = useRef(null);
 
   const applyRevision = useCallback(() => {
     setDataRevision((revision) => revision + 1);
   }, []);
+
+  const refreshForCurrentRoute = useCallback(() => {
+    const targetedRoutes = new Set([
+      "/admin/dashboard",
+      "/admin/readings",
+      "/admin/meter-incidents",
+      "/admin/billings",
+      "/admin/payments",
+      "/admin/analytics",
+      "/consumer/home",
+      "/consumer/announcements",
+      "/consumer/profile-details",
+      "/consumer/account-information",
+      "/consumer/billing-ledger",
+      "/consumer/payments",
+      "/consumer/analytics",
+      "/meter-reader/readings-entry",
+      "/meter-reader/meter-incidents",
+      "/meter-reader/profile",
+      "/meter-reader/account-information",
+    ]);
+    const path = window.location.pathname;
+    if (targetedRoutes.has(path)) {
+      window.dispatchEvent(new CustomEvent("waterwise:targeted-refresh", {
+        detail: { path },
+      }));
+      return;
+    }
+    applyRevision();
+  }, [applyRevision]);
 
   useEffect(() => subscribeToDataChanges(() => {
     clearApiCache();
@@ -634,17 +667,17 @@ export default function App() {
         pendingRevisionRef.current = true;
         return;
       }
-      applyRevision();
+      refreshForCurrentRoute();
     }, 3000);
-  }), [sessionRevision, applyRevision]);
+  }), [sessionRevision, refreshForCurrentRoute]);
 
   useEffect(() => subscribeToModalStack((open) => {
     if (open || !pendingRevisionRef.current) return;
     pendingRevisionRef.current = false;
     window.clearTimeout(remountTimerRef.current);
     remountTimerRef.current = null;
-    applyRevision();
-  }), [applyRevision]);
+    refreshForCurrentRoute();
+  }), [refreshForCurrentRoute]);
 
   useEffect(() => () => window.clearTimeout(remountTimerRef.current), []);
 

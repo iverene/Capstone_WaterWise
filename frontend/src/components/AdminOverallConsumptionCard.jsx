@@ -18,9 +18,9 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadOverallConsumption = useCallback(async () => {
+  const loadOverallConsumption = useCallback(async ({ showLoading = true } = {}) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError("");
       const [overallResponse, monthlyResponse] = await Promise.all([
         fetchOverallConsumptionHistory(),
@@ -93,12 +93,19 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
       setRecordCount(0);
       setMonthlyCount(0);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     queueMicrotask(loadOverallConsumption);
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/analytics") {
+        void loadOverallConsumption({ showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
   }, [loadOverallConsumption]);
 
   const description = (() => {

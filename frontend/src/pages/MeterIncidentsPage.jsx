@@ -104,10 +104,10 @@ export default function MeterIncidentsPage() {
     [consumers],
   );
 
-  const loadData = useCallback(async (isActive = () => true) => {
+  const loadData = useCallback(async (isActive = () => true, { showLoading = true } = {}) => {
     if (!isActive()) return;
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError("");
       const [incidentList, directory] = await Promise.all([
         fetchMeterIncidents(),
@@ -124,15 +124,22 @@ export default function MeterIncidentsPage() {
           "Unable to load meter incidents.",
       );
     } finally {
-      if (isActive()) setLoading(false);
+      if (showLoading && isActive()) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
     queueMicrotask(() => loadData(() => active));
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/meter-incidents") {
+        void loadData(() => active, { showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
     return () => {
       active = false;
+      window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
     };
   }, [loadData]);
 

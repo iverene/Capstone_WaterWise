@@ -1,5 +1,5 @@
 import { Info } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import AnalyticsDescriptivePanel from "../components/AnalyticsDescriptivePanel";
 import AdminOverallConsumptionCard from "../components/AdminOverallConsumptionCard";
@@ -39,7 +39,18 @@ export default function AnalyticsDashboard() {
     : "descriptive";
   const toast = useToast();
   const predictiveToastId = useRef(null);
+  const [refreshRevision, setRefreshRevision] = useState(0);
 
+  useEffect(() => {
+    if (activeTab === "descriptive") return undefined;
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/analytics") {
+        setRefreshRevision((revision) => revision + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [activeTab]);
   useEffect(() => {
     if (activeTab !== "prediction") return undefined;
     let active = true;
@@ -157,6 +168,7 @@ export default function AnalyticsDashboard() {
           aria-labelledby="analytics-tab-prediction"
           className="space-y-6 outline-none"
           id="analytics-panel-prediction"
+          key={`prediction-${refreshRevision}`}
           role="tabpanel"
           tabIndex={0}
         >
@@ -194,6 +206,7 @@ export default function AnalyticsDashboard() {
           aria-labelledby="analytics-tab-decision-support"
           className="space-y-6 outline-none"
           id="analytics-panel-decision-support"
+          key={`decision-support-${refreshRevision}`}
           role="tabpanel"
           tabIndex={0}
         >

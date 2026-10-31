@@ -200,10 +200,10 @@ export default function ReportMeterIncidentPage() {
     });
   }, [consumers, meterChangedConsumerIds, meterFilter, purok, query]);
 
-  const loadDirectory = useCallback(async (isActive = () => true) => {
+  const loadDirectory = useCallback(async (isActive = () => true, { showLoading = true } = {}) => {
     if (!isActive()) return;
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setLoadError("");
       setMeterFilterError("");
       const loadIncidents = (status) =>
@@ -254,9 +254,19 @@ export default function ReportMeterIncidentPage() {
         setLoadError(requestMessage(requestError, "Unable to load the resident directory."));
       }
     } finally {
-      if (isActive()) setLoading(false);
+      if (showLoading && isActive()) setLoading(false);
     }
   }, [setSearchParams]);
+
+  useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/meter-reader/meter-incidents" && !hasUnsavedEntry && !saving) {
+        void loadDirectory(() => true, { showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [hasUnsavedEntry, loadDirectory, saving]);
 
   useEffect(() => {
     let active = true;

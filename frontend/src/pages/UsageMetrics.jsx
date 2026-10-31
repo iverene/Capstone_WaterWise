@@ -44,6 +44,17 @@ export default function UsageMetrics({ usageHistory }) {
     return () => controller.abort();
   }, [requestVersion, usesApi]);
 
+  useEffect(() => {
+    if (!usesApi) return undefined;
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/consumer/analytics") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [usesApi]);
+
   const displayedHistory = usesApi ? history : usageHistory;
   const yearOptions = [...new Set(displayedHistory.map((record) => String(record.year)).filter(Boolean))]
     .sort((left, right) => right.localeCompare(left));

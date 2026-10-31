@@ -27,6 +27,21 @@ export default function AdminAccountInformation() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path !== "/admin/account-information") return;
+      const controller = new AbortController();
+      getCurrentAccount({ signal: controller.signal })
+        .then(({ user }) => setAccount(user))
+        .catch((requestError) => {
+          if (!isCanceledRequest(requestError)) setError(requestError.message || "Unable to load administrator account information.");
+        });
+      return () => controller.abort();
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, []);
+
   const roleLabel = account?.role === "super-admin" ? "Super Administrator" : "Administrator";
 
   return <div className="space-y-5 sm:space-y-6">

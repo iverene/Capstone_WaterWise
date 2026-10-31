@@ -48,6 +48,16 @@ export default function ConsumerAccountInformation() {
     return () => controller.abort();
   }, [requestVersion]);
 
+  useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/consumer/account-information") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, []);
+
   const accountItems = consumer ? [
     { Icon: Hash, label: "Account ID", value: consumer.accountId },
     { Icon: AtSign, label: "Username", value: consumer.username },

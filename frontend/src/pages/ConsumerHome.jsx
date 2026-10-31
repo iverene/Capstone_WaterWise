@@ -70,6 +70,16 @@ export default function ConsumerHome() {
     return () => controller.abort();
   }, [requestVersion]);
 
+  useEffect(() => {
+      const handleTargetedRefresh = (event) => {
+        if (event.detail?.path === "/consumer/home") {
+          setRequestVersion((version) => version + 1);
+        }
+      };
+      window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+      return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, []);
+
   const pageHeader = <PageHeader title="Home" />;
 
   if (error) {

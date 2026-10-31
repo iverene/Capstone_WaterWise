@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchMonthlyHistory, fetchYearlyHistory } from "../services/consumptionAPI";
 import { fillMonthlyBuckets, fillYearlyBuckets, manilaCalendar, monthBuckets } from "../utils/chartPeriod";
@@ -38,10 +38,9 @@ export default function HistoricalConsumptionGraphs() {
   const [selectedYear, setSelectedYear] = useState("");
   const [availableYears, setAvailableYears] = useState([]);
 
-  useEffect(() => {
-    let active = true;
-    const run = async () => {
-      setLoading(true);
+  const loadHistory = useCallback(async ({ showLoading = true } = {}) => {
+      let active = true;
+      if (showLoading) setLoading(true);
       try {
         const [monthlyResponse, yearlyResponse] = await Promise.all([
           fetchMonthlyHistory(selectedYear || undefined),
@@ -87,12 +86,20 @@ export default function HistoricalConsumptionGraphs() {
       } catch {
         if (active) { setMonthly([]); setYearly([]); }
       } finally {
-        if (active) setLoading(false);
+        if (showLoading && active) setLoading(false);
+      }
+  }, [selectedYear]);
+
+  useEffect(() => {
+    void loadHistory();
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/analytics") {
+        void loadHistory({ showLoading: false });
       }
     };
-    run();
-    return () => { active = false; };
-  }, [selectedYear]);
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [loadHistory]);
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
