@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Minus, MoreHorizontal, TrendingDown, TrendingUp } from "lucide-react";
 
 const supportingToneStyles = {
@@ -21,6 +22,37 @@ const descriptionHighlightPattern = new RegExp(
 );
 const positiveTrendPattern = /\b(increase(?:d|s)?|increasing|higher|more|above|grew|growth|gained|up)\b/i;
 const negativeTrendPattern = /\b(decrease(?:d|s)?|decreasing|lower|less|below|declined?|dropped?|down)\b/i;
+export function AnimatedKPIValue({ value }) {
+  const valueKey = String(value ?? "");
+  const [frame, setFrame] = useState(() => ({ current: value, previous: null, key: valueKey, animating: false }));
+  const frameRef = useRef(frame);
+
+  useEffect(() => {
+    const previous = frameRef.current;
+    if (previous.key === valueKey) return undefined;
+    const next = { current: value, previous: previous.current, key: valueKey, animating: true };
+    frameRef.current = next;
+    setFrame(next);
+    const timeout = window.setTimeout(() => {
+      setFrame((current) => {
+        if (current.key !== valueKey) return current;
+        const settled = { ...current, previous: null, animating: false };
+        frameRef.current = settled;
+        return settled;
+      });
+    }, 420);
+    return () => window.clearTimeout(timeout);
+  }, [value, valueKey]);
+
+  return (
+    <span aria-atomic="true" aria-live="polite" className="kpi-value-viewport">
+      <span className={frame.animating ? "kpi-value-current is-entering" : "kpi-value-current"}>{frame.current}</span>
+      {frame.animating && frame.previous != null ? (
+        <span aria-hidden="true" className="kpi-value-previous is-exiting">{frame.previous}</span>
+      ) : null}
+    </span>
+  );
+}
 
 function descriptionTone(description, match, index) {
   const context = description.slice(Math.max(0, index - 28), index + match.length + 28);
@@ -67,6 +99,7 @@ export default function KPI({
   descriptionTone = "water",
   headerAction,
   icon: Icon,
+  animateValue = false,
   menuLabel,
   onMenu,
   size = "md",
@@ -133,8 +166,8 @@ export default function KPI({
       </div>
 
       <p className={`min-w-0 overflow-hidden font-sans font-extrabold leading-tight tracking-tight text-navy-900 [overflow-wrap:anywhere] tabular-nums ${isSmall ? "mt-1.5 text-lg sm:text-xl" : compact ? "mt-2.5 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl" : "mt-2 text-[clamp(1.05rem,4.5vw,1.25rem)] sm:mt-3 sm:text-2xl"}`} data-testid={valueTestId}>
-        {value}
-        {unit ? <span className={`ml-1 font-bold text-slate-500 ${isSmall ? "text-[10px]" : "text-[10px] sm:text-[13px]"}`}>{unit}</span> : null}
+        {animateValue ? <AnimatedKPIValue value={value} /> : value}
+        {unit ? <span className={`ml-1 ${animateValue ? "relative -top-1 align-middle" : ""} font-bold text-slate-500 ${isSmall ? "text-[10px]" : "text-[10px] sm:text-[13px]"}`}>{unit}</span> : null}
       </p>
 
       {(supportingValue || description || (trendBelow && trendBadge)) ? (

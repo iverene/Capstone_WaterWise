@@ -190,6 +190,7 @@ export default function FlaggedAccountsPage() {
 
       <section aria-label="Flagged account summary" className="grid gap-2 sm:grid-cols-2 sm:gap-3">
         <KPI
+          animateValue
           compact
           description="Residents with at least 3 overdue bills"
           icon={AlertTriangle}
@@ -197,6 +198,7 @@ export default function FlaggedAccountsPage() {
           value={flaggedAccounts.length}
         />
         <KPI
+          animateValue
           compact
           description="Combined overdue balance of flagged accounts"
           icon={WalletCards}

@@ -686,8 +686,9 @@ export default function EventManagementPage() {
             </div>
           </aside>
           <div aria-label="Event summary" className="order-1 grid grid-cols-2 gap-2 sm:gap-3 lg:flex lg:flex-col lg:gap-3">
-            <KPI size="sm" description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
+            <KPI animateValue size="sm" description="Selected Month" icon={CalendarDays} title="Events This Month" value={monthEventCount} />
             <KPI
+              animateValue
               size="sm"
               description={nextEvent ? `${nextEvent.title} · ${formatTime(nextEvent.time)}` : "Add an event to the community calendar"}
               icon={Clock3}

@@ -1,4 +1,5 @@
 import { CalendarDays, CheckCircle2, Clock3, ReceiptText } from "lucide-react";
+import { AnimatedKPIValue } from "./KPI";
 
 const currency = (value) =>
   new Intl.NumberFormat("en-PH", {
@@ -31,7 +32,7 @@ export default function CurrentBillingCard({ outstandingBalance = 0, dueDate = "
             className="mt-4 font-sans text-2xl font-extrabold tracking-tight text-navy-900 tabular-nums sm:mt-5 sm:text-3xl"
             data-testid="outstanding-balance"
           >
-            {currency(outstandingBalance)}
+            <AnimatedKPIValue value={currency(outstandingBalance)} />
           </p>
         </div>
 

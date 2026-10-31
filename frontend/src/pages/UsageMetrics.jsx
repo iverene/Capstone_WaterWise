@@ -95,9 +95,7 @@ export default function UsageMetrics({ usageHistory }) {
     <div className="space-y-5 sm:space-y-6">
       {pageHeader}
 
-      {filteredHistory.length > 0 && (
-        <AnalyticsSummaryGrid consumptionHistory={filteredHistory} />
-      )}
+      <AnalyticsSummaryGrid consumptionHistory={filteredHistory} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <ConsumerMonthlyConsumptionChart

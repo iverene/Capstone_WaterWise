@@ -12,8 +12,9 @@ export default function AnalyticsDescriptivePanel() {
     <div className="space-y-5 sm:space-y-6">
       <section aria-label="Consumption summary" className="space-y-3">
         <div className="grid gap-2 sm:gap-3 xl:grid-cols-3">
-          <AdminOverallConsumptionCard compact />
+          <AdminOverallConsumptionCard animateValue compact />
           <HistoricalConsumptionSummary
+            animateValue
             className="grid grid-cols-2 gap-2 sm:gap-3 xl:col-span-2"
             compact
           />

@@ -11,7 +11,7 @@ const extractMonthlyCount = (monthlyResponse) => {
   return Array.isArray(monthlyList) ? monthlyList.length : null;
 };
 
-export default function AdminOverallConsumptionCard({ compact = false }) {
+export default function AdminOverallConsumptionCard({ animateValue = false, compact = false }) {
   const [consumption, setConsumption] = useState(null);
   const [recordCount, setRecordCount] = useState(0);
   const [monthlyCount, setMonthlyCount] = useState(null);
@@ -124,6 +124,7 @@ export default function AdminOverallConsumptionCard({ compact = false }) {
 
   return (
     <AnalyticsMetricCard
+      animateValue={animateValue}
       compact={compact}
       description={description}
       error={error}

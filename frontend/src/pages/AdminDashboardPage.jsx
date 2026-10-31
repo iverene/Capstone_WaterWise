@@ -150,6 +150,7 @@ export default function AdminDashboardPage() {
         <>
           <section aria-label="Key indicators" className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4">
             <KPI
+              animateValue
               compact
               description="Unpaid Bills"
               descriptionHighlight={metrics.debtorCount > 0 ? `${metrics.debtorCount} Debtors` : "All Clear"}
@@ -160,6 +161,7 @@ export default function AdminDashboardPage() {
               value={currency(metrics.outstandingTotal)}
             />
             <KPI
+              animateValue
               compact
               descriptionHighlight={collectedChange === null ? "No Prior Data" : `${collectedChange >= 0 ? "+" : ""}${collectedChange.toFixed(1)}% vs ${metrics.previousMonthLabel}`}
               descriptionIcon={collectedChange === null ? undefined : collectedChange > 0 ? TrendingUp : collectedChange < 0 ? TrendingDown : undefined}
@@ -169,6 +171,7 @@ export default function AdminDashboardPage() {
               value={currency(metrics.collectedMonth)}
             />
             <KPI
+              animateValue
               compact
               descriptionHighlight={`${coverage}% Coverage`}
               descriptionIcon={CalendarClock}
@@ -178,6 +181,7 @@ export default function AdminDashboardPage() {
               value={`${metrics.readingsDone} of ${metrics.residentsActive}`}
             />
             <KPI
+              animateValue
               compact
               description="3+ Overdue Bills"
               descriptionHighlight={metrics.flaggedCount > 0 ? "Needs Review" : "None Flagged"}

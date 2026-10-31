@@ -26,6 +26,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
       data-testid={consumptionHistory.length ? "analytics-grid" : "analytics-empty"}
     >
       <KPI
+        animateValue
         description="Recorded Month"
         descriptionHighlight={latestRecord?.month ?? "No Recorded Month"}
         descriptionIcon={CalendarDays}
@@ -36,6 +37,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         valueTestId="stat-latest"
       />
       <KPI
+        animateValue
         description="Averaged"
         descriptionHighlight={`${consumptionHistory.length} Recorded Month${consumptionHistory.length === 1 ? "" : "s"}`}
         icon={Gauge}
@@ -45,6 +47,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         valueTestId="stat-avg"
       />
       <KPI
+        animateValue
         description="This Period"
         descriptionHighlight={`${consumptionHistory.length} Recorded Month${consumptionHistory.length === 1 ? "" : "s"}`}
         icon={Sigma}
@@ -54,6 +57,7 @@ export default function AnalyticsSummaryGrid({ consumptionHistory = [] }) {
         valueTestId="stat-total"
       />
       <KPI
+        animateValue
         description="Water Used"
         descriptionHighlight={`${number(highestRecord?.volume)} m³`}
         descriptionIcon={Droplets}

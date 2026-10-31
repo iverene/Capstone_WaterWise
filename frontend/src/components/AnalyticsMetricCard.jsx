@@ -18,6 +18,7 @@ function RefreshButton({ label, loading, onRefresh }) {
 }
 
 export default function AnalyticsMetricCard({
+  animateValue = false,
   compact = false,
   description,
   error,
@@ -39,6 +40,7 @@ export default function AnalyticsMetricCard({
   if (!loading && !error) {
     return (
       <KPI
+        animateValue={animateValue}
         cardTestId={testId}
         className={heightClass}
         compact={compact}
@@ -55,6 +57,7 @@ export default function AnalyticsMetricCard({
   if (loading && !skeleton) {
     return (
       <KPI
+        animateValue={animateValue}
         cardTestId={testId}
         className={heightClass}
         compact={compact}
