@@ -622,9 +622,9 @@ export default function App() {
       pendingRevisionRef.current = true;
       return;
     }
-    // Coalesce a burst of mutations into a single remount. One write often
-    // produces several change events, and remounting for each of them makes
-    // the screen look frozen.
+    // Debounce a burst of mutations into one remount. This gives offline
+    // meter-reading sync time to finish several sequential writes before
+    // every open screen refetches its data.
     window.clearTimeout(remountTimerRef.current);
     remountTimerRef.current = window.setTimeout(() => {
       remountTimerRef.current = null;
@@ -635,7 +635,7 @@ export default function App() {
         return;
       }
       applyRevision();
-    }, 150);
+    }, 3000);
   }), [sessionRevision, applyRevision]);
 
   useEffect(() => subscribeToModalStack((open) => {
