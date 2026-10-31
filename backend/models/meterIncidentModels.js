@@ -270,8 +270,9 @@ const getThreeMonthAverage = async (consumerId, effectiveDate) => {
 /**
  * Resolve the old-meter usage carried into the next reading.
  *
- * Positive movement uses the closing-reading difference. An unchanged or lower
- * closing value carries the consumer's latest completed consumption.
+ * Positive movement uses the closing-reading difference. A blank or lower
+ * closing value falls back to the latest recorded reading, then the
+ * date-based carry rule is applied.
  */
 export async function resolveIncidentPriorUsage(
   consumerId,
@@ -291,7 +292,13 @@ export async function resolveIncidentPriorUsage(
     };
   }
 
-  const usedFallbackReading = oldFinalReading == null;
+  const usedFallbackReading =
+    oldFinalReading == null || oldFinalReading < latest.presentReading;
+  const fallbackNote = oldFinalReading == null
+    ? "Old meter closing reading unknown; latest recorded reading used as fallback."
+    : oldFinalReading < latest.presentReading
+      ? "Old meter closing reading was lower than the latest recorded reading; latest recorded reading used as fallback."
+      : null;
   const closingReading = usedFallbackReading ? latest.presentReading : oldFinalReading;
   const derived = round2(closingReading - latest.presentReading);
   if (derived <= 0) {
@@ -305,6 +312,7 @@ export async function resolveIncidentPriorUsage(
         averageValue: null,
         window: null,
         lastRecordedReading: latest.presentReading,
+        fallbackNote,
       };
     }
     if (elapsedDays != null && elapsedDays >= 1 && elapsedDays <= 15) {
@@ -315,6 +323,7 @@ export async function resolveIncidentPriorUsage(
           averageValue: null,
           window: null,
           lastRecordedReading: latest.presentReading,
+          fallbackNote,
         };
       }
       return {
@@ -323,6 +332,7 @@ export async function resolveIncidentPriorUsage(
         averageValue: null,
         window: null,
         lastRecordedReading: latest.presentReading,
+        fallbackNote,
       };
     }
     const averageValue = await getThreeMonthAverage(consumerId, incidentDate);
@@ -332,6 +342,7 @@ export async function resolveIncidentPriorUsage(
       averageValue,
       window: averageValue == null ? null : 3,
       lastRecordedReading: latest.presentReading,
+      fallbackNote,
     };
   }
   return {
@@ -340,6 +351,7 @@ export async function resolveIncidentPriorUsage(
     averageValue: null,
     window: null,
     lastRecordedReading: latest.presentReading,
+    fallbackNote,
   };
 }
 
@@ -409,9 +421,7 @@ export async function createMeterIncident(payload, actor) {
       expires_at: null,
       notes: [
         payload.notes || null,
-        oldFinalReading == null
-          ? "Old meter closing reading unknown; latest recorded reading used as fallback."
-          : null,
+        resolved.fallbackNote,
       ].filter(Boolean).join("\n") || null,
       idempotency_key: payload.idempotencyKey || null,
     })
@@ -526,9 +536,7 @@ export async function updateMeterIncident(id, payload, actor) {
       expires_at: null,
       notes: [
         payload.notes ?? incident.notes ?? null,
-        oldFinalReading == null
-          ? "Old meter closing reading unknown; latest recorded reading used as fallback."
-          : null,
+        resolved.fallbackNote,
       ].filter(Boolean).join("\n") || null,
       updated_at: now,
     })
