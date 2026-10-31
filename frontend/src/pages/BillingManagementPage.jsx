@@ -95,9 +95,14 @@ export default function BillingManagementPage() {
 
     refresh();
     const intervalId = window.setInterval(refresh, 15000);
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/billings") void refresh();
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
     return () => {
       active = false;
       window.clearInterval(intervalId);
+      window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
     };
   }, []);
 

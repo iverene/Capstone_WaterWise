@@ -137,6 +137,16 @@ export default function ConsumerPaymentsPage() {
     return () => controller.abort();
   }, [requestVersion]);
 
+  useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/consumer/payments") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, []);
+
   const payments = useMemo(() => ledger?.payments ?? [], [ledger?.payments]);
   const requestedPaymentId = Number(searchParams.get("paymentId"));
   const requestedPayment = useMemo(() => {

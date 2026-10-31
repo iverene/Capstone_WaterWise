@@ -29,6 +29,16 @@ export default function MeterReaderProfile() {
   }, [requestVersion]);
 
   useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/meter-reader/profile") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, []);
+
+  useEffect(() => {
     const handleEmailChange = (event) => {
       setReader((current) => current ? { ...current, email: event.detail?.email ?? current.email } : current);
     };

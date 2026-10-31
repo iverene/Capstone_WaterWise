@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AnnouncementPage from "../components/AnnouncementPage";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import PageHeader from "../components/PageHeader";
@@ -10,18 +10,32 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const loadAnnouncements = useCallback(async ({ showLoading = true, signal } = {}) => {
+    if (showLoading) setLoading(true);
+    try {
+      setAnnouncements(await fetchConsumerAnnouncements({ signal }));
+      setError("");
+    } catch (requestError) {
+      if (!isCanceledRequest(requestError)) setError(requestError.message);
+    } finally {
+      if (showLoading && !signal?.aborted) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
-    fetchConsumerAnnouncements({ signal: controller.signal })
-      .then(setAnnouncements)
-      .catch((requestError) => {
-        if (!isCanceledRequest(requestError)) setError(requestError.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
+    void loadAnnouncements({ signal: controller.signal });
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/consumer/announcements") {
+        void loadAnnouncements({ showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => {
+      controller.abort();
+      window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    };
+  }, [loadAnnouncements]);
 
   return (
     <div className="space-y-5 sm:space-y-6">

@@ -78,21 +78,32 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadMetrics = useCallback(async () => {
+  const loadMetrics = useCallback(async ({ showLoading = true } = {}) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError("");
       setMetrics(await fetchAdminDashboardMetrics());
     } catch (requestError) {
       setError(requestError?.message ?? "Unable to load dashboard metrics.");
-      setMetrics(null);
+      if (showLoading) setMetrics(null);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     queueMicrotask(loadMetrics);
+  }, [loadMetrics]);
+
+  useEffect(() => {
+    const refreshDashboard = () => {
+      void loadMetrics({ showLoading: false });
+    };
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/dashboard") refreshDashboard();
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
   }, [loadMetrics]);
 
   const coverage = metrics && metrics.residentsActive > 0

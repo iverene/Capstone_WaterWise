@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CalendarDays, Droplets } from "lucide-react";
 import { fetchMonthlyHistory, fetchYearlyHistory } from "../services/consumptionAPI";
 import KPI from "./KPI";
@@ -85,30 +85,40 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([fetchMonthlyHistory(selectedYear || undefined), fetchYearlyHistory()])
-      .then(([monthlyResponse, yearlyResponse]) => {
-        if (!active) return;
-        let monthlyData = unwrap(monthlyResponse);
-        const yearlyData = unwrap(yearlyResponse);
-        monthlyData = Array.isArray(monthlyData) ? monthlyData : [];
-        if (selectedMonth && selectedMonth !== "all") {
-          monthlyData = monthlyData.filter(
-            (record) => String(record?.month ?? "").toLowerCase() === String(selectedMonth).toLowerCase(),
-          );
-        }
-        setMonthly(monthlyData);
-        setYearly(Array.isArray(yearlyData) ? yearlyData : []);
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError?.message ?? "Unable to load historical consumption.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => { active = false; };
+  const loadHistory = useCallback(async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true);
+    try {
+      const [monthlyResponse, yearlyResponse] = await Promise.all([fetchMonthlyHistory(selectedYear || undefined), fetchYearlyHistory()]);
+      let monthlyData = unwrap(monthlyResponse);
+      const yearlyData = unwrap(yearlyResponse);
+      monthlyData = Array.isArray(monthlyData) ? monthlyData : [];
+      if (selectedMonth && selectedMonth !== "all") {
+        monthlyData = monthlyData.filter(
+          (record) => String(record?.month ?? "").toLowerCase() === String(selectedMonth).toLowerCase(),
+        );
+      }
+      setMonthly(monthlyData);
+      setYearly(Array.isArray(yearlyData) ? yearlyData : []);
+      setError("");
+    } catch (requestError) {
+      setError(requestError?.message ?? "Unable to load historical consumption.");
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    void loadHistory();
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/admin/analytics") {
+        void loadHistory({ showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => {
+      window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    };
+  }, [loadHistory]);
 
   if (loading) {
     return (

@@ -212,6 +212,22 @@ export default function AdminProfile() {
   }, []);
 
   useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path !== "/admin/profile") return;
+      const controller = new AbortController();
+      getCurrentAccount({ signal: controller.signal })
+        .then(({ user }) => {
+          if (!controller.signal.aborted) setAccount(user);
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted) toast.error("Profile unavailable", error.message || "Unable to refresh account details.");
+        });
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [toast]);
+
+  useEffect(() => {
     if (account?.role !== "super-admin" || !isStaffManagementPage || !staffManagementPermission?.token) return undefined;
     let active = true;
     queueMicrotask(() => {

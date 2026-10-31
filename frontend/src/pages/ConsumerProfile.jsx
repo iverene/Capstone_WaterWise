@@ -128,6 +128,17 @@ export default function ConsumerProfile({ consumer: consumerProp }) {
     return () => window.removeEventListener("waterwise:email-changed", handleEmailChange);
   }, []);
 
+  useEffect(() => {
+    if (!usesApi) return undefined;
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/consumer/profile-details") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [usesApi]);
+
   const consumer = usesApi ? loadedConsumer : consumerProp;
 
   if (error) {

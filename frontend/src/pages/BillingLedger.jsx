@@ -89,6 +89,17 @@ export default function BillingLedger({
     return () => controller.abort();
   }, [usesApi, requestVersion]);
 
+  useEffect(() => {
+    if (!usesApi) return undefined;
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/consumer/billing-ledger") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [usesApi]);
+
   const historyData = usesApi ? ledger?.historyData ?? [] : historyDataProp;
   const ledgerAccount = usesApi ? ledger?.ledgerAccount : ledgerAccountProp;
   const requestedBillingId = Number(searchParams.get("billingId"));

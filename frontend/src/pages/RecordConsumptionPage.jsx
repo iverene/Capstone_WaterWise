@@ -133,9 +133,9 @@ export default function RecordConsumptionPage() {
     } : consumer);
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async ({ showLoading = true } = {}) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setLoadError("");
       const contexts = await fetchRecordingContexts();
       await cacheRecordingContexts(contexts);
@@ -143,9 +143,19 @@ export default function RecordConsumptionPage() {
     } catch (requestError) {
       setLoadError(requestMessage(requestError, "Unable to load residents and reading status."));
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [applyPendingState]);
+
+  useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/meter-reader/readings-entry" && !isEntryDirty && !saving) {
+        void loadData({ showLoading: false });
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, [isEntryDirty, loadData, saving]);
 
   useEffect(() => {
     const controller = new AbortController();

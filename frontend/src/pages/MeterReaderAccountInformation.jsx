@@ -48,6 +48,16 @@ export default function MeterReaderAccountInformation() {
     return () => controller.abort();
   }, [requestVersion]);
 
+  useEffect(() => {
+    const handleTargetedRefresh = (event) => {
+      if (event.detail?.path === "/meter-reader/account-information") {
+        setRequestVersion((version) => version + 1);
+      }
+    };
+    window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+  }, []);
+
   const accountItems = reader ? [
     { Icon: Hash, label: "Account ID", value: reader.accountId },
     { Icon: AtSign, label: "Username", value: reader.username },
