@@ -57,7 +57,7 @@ const toOptionalNumber = (value) =>
 
 const buildIncidentPayload = (payload) => ({
   consumerId: payload.consumerId == null ? undefined : Number(payload.consumerId),
-  incidentType: payload.incidentType ?? "replacement",
+  incidentType: "replacement",
   effectiveDate: payload.effectiveDate || undefined,
   oldMeterSerial: payload.oldMeterSerial || undefined,
   oldFinalReading: toOptionalNumber(payload.oldFinalReading),
