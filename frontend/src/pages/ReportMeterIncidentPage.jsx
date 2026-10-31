@@ -353,11 +353,18 @@ export default function ReportMeterIncidentPage() {
   }, [form.oldFinalReading, lastRecorded]);
   const baselineValue = form.newBaseline === "" ? 0 : Number(form.newBaseline);
   const previousConsumption = context?.latestConsumption ?? null;
+  const usesLatestReadingFallback =
+    lastRecorded != null &&
+    (form.oldFinalReading === "" ||
+      (Number.isFinite(Number(form.oldFinalReading)) &&
+        Number(form.oldFinalReading) < Number(lastRecorded)));
   const usesPreviousConsumption =
-    closingDerived != null && closingDerived <= 0 && lastRecorded != null;
+    closingDerived === 0 && lastRecorded != null;
   const carried = usesPreviousConsumption
     ? Number(previousConsumption ?? 0)
-    : closingDerived;
+    : usesLatestReadingFallback
+      ? null
+      : closingDerived;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -706,9 +713,14 @@ export default function ReportMeterIncidentPage() {
                   <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
                     {lastRecorded == null
                       ? "Optional. Enter the final value shown by the old meter."
-                      : `Optional. Latest recorded reading: ${Number(lastRecorded).toLocaleString()} m³. If left blank, the latest reading is used as the fallback and the audit note records this.`}
+                      : `Optional. Latest recorded reading: ${Number(lastRecorded).toLocaleString()} m³. A blank or lower value uses the latest reading as the fallback and records this in the audit note.`}
                   </span>
-                  {closingDerived != null && (
+                  {usesLatestReadingFallback && form.oldFinalReading !== "" && (
+                    <span className="mt-1.5 block text-xs font-bold text-amber-700" role="status">
+                      Lower old closing detected. The latest recorded reading will be used as the fallback.
+                    </span>
+                  )}
+                  {closingDerived != null && !usesLatestReadingFallback && (
                     <span className="mt-1.5 block text-xs font-semibold text-water-800">
                       {usesPreviousConsumption
                         ? `Carried usage: ${Number(carried).toLocaleString()} m³ from the previous consumption.`
@@ -731,7 +743,7 @@ export default function ReportMeterIncidentPage() {
             </div>
 
             <div className="rounded-xl border border-water-200 bg-water-50 p-3 text-xs leading-5 text-slate-700">
-              {carried == null && form.oldFinalReading === "" && lastRecorded != null ? (
+              {usesLatestReadingFallback ? (
                 <>The latest recorded reading of <strong>{Number(lastRecorded).toLocaleString()} m³</strong> will be used automatically as the old closing-reading fallback.</>
               ) : carried == null ? (
                 <>A previous reading is required before the system can apply the fallback.</>
