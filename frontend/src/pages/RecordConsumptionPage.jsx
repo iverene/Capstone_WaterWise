@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, X } from "lucide-react";
 import ConsumerSelectionList from "../components/ConsumerSelectionList";
 import ConsumptionEntryPanel from "../components/ConsumptionEntryPanel";
@@ -12,7 +12,7 @@ import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { createMeterReading, fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
-import { cacheRecordingContexts, getCachedRecordingContexts, getPendingMeterReadings, queueMeterReading, syncPendingMeterReadings } from "../services/offlineMeterReadings";
+import { cacheRecordingContexts, getCachedRecordingContexts, getPendingMeterReadings, queueMeterReading } from "../services/offlineMeterReadings";
 import { fetchSystemSetting } from "../services/systemSettingsService";
 import { TIER_DEFAULTS, breakdownTieredBill, computeTieredBill } from "../utils/waterBill";
 
@@ -79,12 +79,8 @@ export default function RecordConsumptionPage() {
   const [receiptData, setReceiptData] = useState(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
   const [receiptResidentName, setReceiptResidentName] = useState("");
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
-  const [syncing, setSyncing] = useState(false);
-  const [showSynced, setShowSynced] = useState(false);
   const [rates, setRates] = useState(TIER_DEFAULTS);
-  const prevPendingRef = useRef(pendingCount);
 
   useEffect(() => {
     const loadTier = async (key, field) => {
@@ -107,16 +103,6 @@ export default function RecordConsumptionPage() {
   }, []);
 
   useEffect(() => {
-    const prev = prevPendingRef.current;
-    prevPendingRef.current = pendingCount;
-    if (isOnline && !syncing && prev > 0 && pendingCount === 0) {
-      setShowSynced(true);
-      const timer = setTimeout(() => setShowSynced(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isOnline, syncing, pendingCount]);
-
-  useEffect(() => {
     if (!mobileSearchOpen) return;
     document.getElementById("mobile-resident-search")?.focus();
   }, [mobileSearchOpen]);
@@ -131,6 +117,15 @@ export default function RecordConsumptionPage() {
       hasPendingReading: true,
       recordingBlockReason: "Reading saved on this device and waiting to sync.",
     } : consumer);
+  }, []);
+
+  useEffect(() => {
+    const refreshPendingCount = async () => {
+      const pending = await getPendingMeterReadings();
+      setPendingCount(pending.length);
+    };
+    window.addEventListener("waterwise:offline-queue-changed", refreshPendingCount);
+    return () => window.removeEventListener("waterwise:offline-queue-changed", refreshPendingCount);
   }, []);
 
   const loadData = useCallback(async ({ showLoading = true } = {}) => {
@@ -173,27 +168,6 @@ export default function RecordConsumptionPage() {
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [applyPendingState]);
-
-  useEffect(() => {
-    const synchronize = async () => {
-      setIsOnline(navigator.onLine);
-      if (!navigator.onLine) return;
-      setSyncing(true);
-      const result = await syncPendingMeterReadings();
-      setPendingCount(result.remaining);
-      if (result.synced) {
-        toast.success("Offline readings synced", `${result.synced} saved reading${result.synced === 1 ? "" : "s"} uploaded successfully.`);
-        await loadData();
-      } else if (result.remaining > 0) {
-        toast.warning("Sync incomplete", `${result.remaining} reading${result.remaining === 1 ? "" : "s"} could not be uploaded. They will retry when connectivity improves.`);
-      }
-      setSyncing(false);
-    };
-    window.addEventListener("online", synchronize);
-    window.addEventListener("offline", synchronize);
-    synchronize();
-    return () => { window.removeEventListener("online", synchronize); window.removeEventListener("offline", synchronize); };
-  }, [loadData, toast]);
 
   const visibleConsumers = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -275,6 +249,7 @@ export default function RecordConsumptionPage() {
       setSaveError("");
       if (!navigator.onLine) {
         await queueMeterReading(payload);
+        window.dispatchEvent(new Event("waterwise:offline-queue-changed"));
         setPendingCount((count) => count + 1);
         setConsumers((current) => current.map((consumer) => consumer.id === payload.consumerId ? { ...consumer, canRecord: false, hasPendingReading: true, recordingBlockReason: "Reading saved on this device and waiting to sync." } : consumer));
         setIsEntryDirty(false);
@@ -352,9 +327,9 @@ export default function RecordConsumptionPage() {
   return (
     <main className="space-y-4 sm:space-y-6">
       <PageHeader description="Select a resident and type the cumulative meter value." mobileCompact title="Record a Meter Reading" />
-      {(syncing || pendingCount > 0 || showSynced) && (
+      {pendingCount > 0 && (
         <div className="rounded-xl border p-3 text-[13px] font-semibold sm:p-4 sm:text-sm border-water-200 bg-water-50 text-water-800" role="status">
-          {syncing ? "Online · Syncing saved readings…" : pendingCount > 0 ? `${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync` : "All readings synced"}
+          {`${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync`}
         </div>
       )}
       {loadError && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{loadError}</span><button className="font-bold underline" onClick={loadData} type="button">Try again</button></div>}

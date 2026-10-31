@@ -15,8 +15,15 @@ import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { fetchConsumerDirectory } from "../services/consumerDirectoryAPI";
-import { fetchRecordingContext } from "../services/meterReadingAPI";
+import { fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
 import {
+  cacheIncidentContexts,
+  getCachedIncidentContexts,
+  getPendingMeterIncidents,
+  queueMeterIncident,
+} from "../services/offlineMeterReadings";
+import {
+  createMeterIncidentRequestKey,
   fetchConsumerMeterIncidents,
   fetchMeterIncidents,
   logMeterIncident,
@@ -161,7 +168,6 @@ export default function ReportMeterIncidentPage() {
   const [form, setForm] = useState(emptyForm);
   const [context, setContext] = useState(null);
   const [openIncident, setOpenIncident] = useState(null);
-  const [lookupLoading, setLookupLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
 
@@ -202,10 +208,35 @@ export default function ReportMeterIncidentPage() {
 
   const loadDirectory = useCallback(async (isActive = () => true, { showLoading = true } = {}) => {
     if (!isActive()) return;
+    const applyCachedDirectory = async () => {
+      const cached = await getCachedIncidentContexts();
+      const pendingOffline = await getPendingMeterIncidents();
+      if (!isActive()) return false;
+      if (!cached?.contexts?.length) return false;
+      const pendingByConsumer = new Map(
+        pendingOffline.map((incident) => [String(incident.consumerId), incident]),
+      );
+      setConsumers(cached.contexts.map((consumer) => {
+        const pending = pendingByConsumer.get(String(consumer.id));
+        return pending
+          ? { ...consumer, hasPendingIncident: true, openIncident: pending }
+          : consumer;
+      }));
+      setMeterChangedConsumerIds(new Set(pendingOffline.map((incident) => String(incident.consumerId))));
+      setLoadError("");
+      return true;
+    };
     try {
       if (showLoading) setLoading(true);
       setLoadError("");
       setMeterFilterError("");
+      if (!navigator.onLine) {
+        const loadedFromCache = await applyCachedDirectory();
+        if (!loadedFromCache) {
+          setLoadError("Connect once to download the resident directory for offline use.");
+        }
+        return;
+      }
       const loadIncidents = (status) =>
         fetchMeterIncidents({ status, limit: 500 }).catch((error) => {
           if (isActive()) {
@@ -215,17 +246,37 @@ export default function ReportMeterIncidentPage() {
           }
           return [];
         });
-      const [directory, pendingIncidents, authorizedIncidents] = await Promise.all([
+      const [directory, recordingContexts, pendingIncidents, authorizedIncidents] = await Promise.all([
         fetchConsumerDirectory(),
+        fetchRecordingContexts().catch(() => []),
         loadIncidents("pending"),
         loadIncidents("authorized"),
       ]);
       if (!isActive()) return;
-      setConsumers(directory);
+      const contextByConsumerId = new Map(
+        recordingContexts.map((record) => [String(record.id), record]),
+      );
+      const cachedDirectory = directory.map((consumer) => ({
+        ...consumer,
+        ...(contextByConsumerId.get(String(consumer.id)) ?? {}),
+      }));
+      if (recordingContexts.length) {
+        await cacheIncidentContexts(recordingContexts);
+      }
+      const pendingOffline = await getPendingMeterIncidents();
+      const pendingByConsumer = new Map(
+        pendingOffline.map((incident) => [String(incident.consumerId), incident]),
+      );
+      setConsumers(cachedDirectory.map((consumer) => {
+        const pending = pendingByConsumer.get(String(consumer.id));
+        return pending
+          ? { ...consumer, hasPendingIncident: true, openIncident: pending }
+          : consumer;
+      }));
       const prefillConsumerId = requestedConsumerIdRef.current;
       if (!prefillHandledRef.current && prefillConsumerId) {
         prefillHandledRef.current = true;
-        const requestedConsumer = directory.find(
+        const requestedConsumer = cachedDirectory.find(
           (consumer) => String(consumer.id) === prefillConsumerId && consumer.status === "active",
         );
         if (requestedConsumer) {
@@ -233,7 +284,6 @@ export default function ReportMeterIncidentPage() {
           setForm(emptyForm());
           setOpenIncident(null);
           setContext(null);
-          setLookupLoading(true);
         }
         setSearchParams((current) => {
           const next = new URLSearchParams(current);
@@ -243,7 +293,7 @@ export default function ReportMeterIncidentPage() {
       }
       setMeterChangedConsumerIds(
         new Set(
-          [...pendingIncidents, ...authorizedIncidents]
+          [...pendingIncidents, ...authorizedIncidents, ...pendingOffline]
             .filter(isOpenMeterChangeIncident)
             .map((incident) => String(incident.consumerId)),
         ),
@@ -251,7 +301,10 @@ export default function ReportMeterIncidentPage() {
 
     } catch (requestError) {
       if (isActive()) {
-        setLoadError(requestMessage(requestError, "Unable to load the resident directory."));
+        const loadedFromCache = await applyCachedDirectory();
+        if (!loadedFromCache) {
+          setLoadError(requestMessage(requestError, "Connect once to download the resident directory for offline use."));
+        }
       }
     } finally {
       if (showLoading && isActive()) setLoading(false);
@@ -280,6 +333,13 @@ export default function ReportMeterIncidentPage() {
     if (!consumerId) {
       return undefined;
     }
+    if (!navigator.onLine) {
+      queueMicrotask(() => {
+        setContext(selectedConsumer);
+        setOpenIncident(selectedConsumer?.openIncident ?? null);
+      });
+      return undefined;
+    }
     let active = true;
     fetchRecordingContext(consumerId)
       .then((result) => {
@@ -300,20 +360,23 @@ export default function ReportMeterIncidentPage() {
         if (active) setOpenIncident(null);
       })
       .finally(() => {
-        if (active) setLookupLoading(false);
       });
 
     return () => {
       active = false;
     };
-  }, [consumerId]);
+  }, [consumerId, selectedConsumer]);
 
   const selectResident = useCallback((consumer) => {
     setConsumerId(String(consumer.id));
     setForm(emptyForm());
     setOpenIncident(null);
-    setContext(null);
-    setLookupLoading(true);
+    if (navigator.onLine) {
+      setContext(null);
+    } else {
+      setContext(consumer);
+      setOpenIncident(consumer.openIncident ?? null);
+    }
   }, []);
 
   const closeEntry = () => {
@@ -352,7 +415,8 @@ export default function ReportMeterIncidentPage() {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
-  const lastRecorded = context?.latestPresentReading ?? null;
+  const activeContext = context ?? selectedConsumer;
+  const lastRecorded = activeContext?.latestPresentReading ?? null;
 
   const closingDerived = useMemo(() => {
     if (form.oldFinalReading === "") return null;
@@ -362,7 +426,7 @@ export default function ReportMeterIncidentPage() {
     return Math.round((entered - Number(lastRecorded)) * 100) / 100;
   }, [form.oldFinalReading, lastRecorded]);
   const baselineValue = form.newBaseline === "" ? 0 : Number(form.newBaseline);
-  const previousConsumption = context?.latestConsumption ?? null;
+  const previousConsumption = activeContext?.latestConsumption ?? null;
   const usesLatestReadingFallback =
     lastRecorded != null &&
     (form.oldFinalReading === "" ||
@@ -391,16 +455,38 @@ export default function ReportMeterIncidentPage() {
       return;
     }
 
-    const payload = {
-      consumerId: Number(consumerId),
-      incidentType: "replacement",
-      oldFinalReading: form.oldFinalReading,
-      newMeterSerial: form.newMeterSerial,
-      newBaseline: baselineValue,
-    };
-
     try {
       setSaving(true);
+      const payload = {
+        consumerId: Number(consumerId),
+        incidentType: "replacement",
+        idempotencyKey: createMeterIncidentRequestKey(),
+        oldFinalReading: form.oldFinalReading,
+        newMeterSerial: form.newMeterSerial,
+        newBaseline: baselineValue,
+      };
+      if (!navigator.onLine) {
+        await queueMeterIncident({
+          ...payload,
+          consumerName: selectedConsumer?.consumerName ?? "Resident",
+        });
+        window.dispatchEvent(new Event("waterwise:offline-queue-changed"));
+        setMeterChangedConsumerIds((current) => new Set(current).add(String(payload.consumerId)));
+        setConsumers((current) => current.map((consumer) => consumer.id === payload.consumerId ? {
+          ...consumer,
+          hasPendingIncident: true,
+          openIncident: { ...payload, status: "pending" },
+        } : consumer));
+        setConsumerId("");
+        setForm(emptyForm());
+        setOpenIncident(null);
+        setContext(null);
+        toast.success(
+          "Meter incident saved offline",
+          `${selectedConsumer?.consumerName ?? "The resident"}'s incident will upload automatically when the device reconnects.`,
+        );
+        return;
+      }
       const saved = await logMeterIncident(payload);
       if (saved?.warning) {
         toast.warning("Meter replacement saved", saved.warning);
@@ -539,7 +625,6 @@ export default function ReportMeterIncidentPage() {
           ? "Showing residents with a meter change waiting for their next reading."
           : "Showing all residents, including those with a meter change."}
       </p>
-
       {meterFilterError && (
         <div
           className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
@@ -596,22 +681,7 @@ export default function ReportMeterIncidentPage() {
         size="md"
         title={openIncident ? "Meter replacement details" : "Record meter replacement"}
       >
-        {!selectedConsumer ? null : lookupLoading ? (
-          <div className="space-y-4 p-5 sm:p-6">
-            <p className="text-sm font-semibold text-slate-500">
-              Checking the resident's meter history…
-            </p>
-            <div className="flex justify-end border-t border-slate-200 pt-4">
-              <button
-                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 hover:bg-slate-50"
-                onClick={requestCloseEntry}
-                type="button"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : openIncident ? (
+        {!selectedConsumer ? null : openIncident ? (
           <div className="space-y-4 p-5 sm:p-6">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
               <p className="font-bold text-navy-900">Resident</p>
@@ -700,9 +770,9 @@ export default function ReportMeterIncidentPage() {
                     Latest recorded reading
                   </span>
                   <span className="mt-0.5 block font-mono text-sm font-extrabold tabular-nums text-navy-900">
-                    {context?.latestPresentReading == null
+                    {activeContext?.latestPresentReading == null
                       ? "none"
-                      : `${Number(context.latestPresentReading).toLocaleString()} m³`}
+                      : `${Number(activeContext.latestPresentReading).toLocaleString()} m³`}
                   </span>
                 </span>
               </div>
@@ -777,7 +847,12 @@ export default function ReportMeterIncidentPage() {
               >
                 Cancel
               </button>
-              <button className="ww-primary-button min-h-11 px-5 text-sm" disabled={saving || lookupLoading} type="submit">
+              <button
+                className="ww-primary-button min-h-12 w-full touch-manipulation px-5 text-sm sm:min-h-11 sm:w-auto"
+                disabled={saving}
+                onClick={(event) => void submit(event)}
+                type="button"
+              >
                 {saving ? "Saving…" : "Save replacement"}
               </button>
             </div>
