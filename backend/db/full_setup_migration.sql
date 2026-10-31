@@ -65,6 +65,14 @@ CREATE TABLE IF NOT EXISTS consumers (
     updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Consumer first-login onboarding. Existing residents are grandfathered as
+-- already onboarded, while newly created accounts start with onboarding pending.
+ALTER TABLE consumers
+ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE consumers
+ALTER COLUMN onboarding_completed SET DEFAULT FALSE;
+
 -- 3. METER READERS TABLE
 CREATE TABLE IF NOT EXISTS meter_readers (
     id SERIAL PRIMARY KEY,

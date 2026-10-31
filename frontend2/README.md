@@ -3,6 +3,17 @@
 Tiny admin-only monitor for `RATE_LIMIT_GLOBAL_MAX` / `RATE_LIMIT_AUTH_MAX`.
 Zero coupling to `frontend/`: files were copied, never imported.
 
+The global limiter counts all API requests. The auth limiter counts only failed
+client auth responses, so successful login and OTP verification do not consume
+the auth allowance. The dashboard raises an alert after
+`RATE_LIMIT_ALERT_BLOCKED_THRESHOLD` blocked requests since backend restart
+(default: 10). Set that variable in the backend environment to change it.
+
+Authenticated requests also have a per-account window: consumers default to
+300 requests and staff accounts (admin, super-admin, and meter-reader) default
+to 1,000 requests per 10 minutes. Configure these with
+`RATE_LIMIT_CONSUMER_MAX` and `RATE_LIMIT_STAFF_MAX`.
+
 ## Run (local try-out)
 
 ```powershell
