@@ -184,7 +184,7 @@ export default function BillingManagementPage() {
         title="Billing Management"
       />
 
-      <BillingSummaryCard billingData={visibleResidents.flatMap((resident) => resident.billings)} />
+      <BillingSummaryCard animateValue billingData={visibleResidents.flatMap((resident) => resident.billings)} />
 
       <div
         aria-label="Billing table controls"

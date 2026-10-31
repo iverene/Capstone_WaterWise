@@ -169,6 +169,7 @@ export default function ConsumerHome() {
 
       <section className="grid grid-cols-2 gap-2 sm:gap-4 xl:grid-cols-4" aria-label="Account summary">
         <KPI
+          animateValue
           description={hasBalance ? "Awaiting Payment" : "Account Is Clear"}
           descriptionHighlight={hasBalance
             ? `${home.billing.pendingCount} Bill${home.billing.pendingCount === 1 ? "" : "s"}`
@@ -180,12 +181,14 @@ export default function ConsumerHome() {
           value={currency(home.billing.outstandingBalance)}
         />
         <KPI
+          animateValue
           description={home.billing.nextDueDate ? "Payment Deadline" : "Account Is Clear"}
           icon={CalendarClock}
           title="Next Due Date"
           value={compactDate(home.billing.nextDueDate)}
         />
         <KPI
+          animateValue
           description={usageDifference == null ? "No Previous Month" : usageDifference === 0 ? "From Last Month" : "Than Last Month"}
           descriptionHighlight={usageDifference == null ? "First Reading" : undefined}
           descriptionIcon={usageDifference == null ? Droplets : undefined}
@@ -203,6 +206,7 @@ export default function ConsumerHome() {
           value={home.reading.latestUsage.toFixed(1)}
         />
         <KPI
+          animateValue
           description={home.reading.latestDate ? "Recorded" : undefined}
           descriptionHighlight={home.reading.latestDate ? displayDate(home.reading.latestDate) : "No Reading Yet"}
           descriptionIcon={home.reading.latestDate ? CalendarClock : Gauge}

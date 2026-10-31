@@ -7,7 +7,7 @@ const currency = (value) =>
     minimumFractionDigits: 2,
   })}`;
 
-export default function BillingSummaryCard({ billingData = [] }) {
+export default function BillingSummaryCard({ animateValue = false, billingData = [] }) {
   const totalBills = billingData.length;
   const paidBills = billingData.filter((bill) => bill.status === "Paid").length;
   const partiallyPaidBills = billingData.filter(
@@ -27,6 +27,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
   return (
     <section aria-label="Billing summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
       <KPI
+        animateValue={animateValue}
         cardTestId="total-billing-card"
         compact
         description="In Total"
@@ -38,6 +39,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         valueTestId="total-billing-value"
       />
       <KPI
+        animateValue={animateValue}
         cardTestId="outstanding-billing-card"
         compact
         description={openBills ? "Uncollected" : "All Collected"}
@@ -50,6 +52,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         valueTestId="outstanding-billing-value"
       />
       <KPI
+        animateValue={animateValue}
         cardTestId="paid-bills-card"
         compact
         description="Fully Settled"
@@ -62,6 +65,7 @@ export default function BillingSummaryCard({ billingData = [] }) {
         valueTestId="paid-bills-value"
       />
       <KPI
+        animateValue={animateValue}
         cardTestId="open-bills-card"
         compact
         description={openBills ? `${partiallyPaidBills} Partially Paid` : "All Settled"}

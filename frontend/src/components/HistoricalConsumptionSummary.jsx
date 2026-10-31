@@ -7,7 +7,7 @@ import LoadingSkeleton from "./LoadingSkeleton";
 const unwrap = (response) => response?.data?.data ?? response?.data ?? response ?? [];
 const consumptionValue = (record) => Number(record?.consumption ?? record?.totalConsumption ?? record?.total_consumption ?? record?.value ?? 0);
 
-function HistoryKpi({ Icon, label, records, periodKey, compact, showPeriodMeta = true, captionTrend = false }) {
+function HistoryKpi({ Icon, label, records, periodKey, compact, animateValue = false, showPeriodMeta = true, captionTrend = false }) {
   const latest = records.at(-1);
   const previous = records.at(-2);
 
@@ -47,6 +47,7 @@ function HistoryKpi({ Icon, label, records, periodKey, compact, showPeriodMeta =
 
   return (
     <KPI
+      animateValue={animateValue}
       className={compact ? "min-h-28" : "min-h-40 sm:h-56"}
       compact={compact}
       description={trendCaption}
@@ -79,7 +80,7 @@ function HistoryKpiSkeleton({ Icon, label, compact }) {
   );
 }
 
-export default function HistoricalConsumptionSummary({ className = "grid gap-5 md:grid-cols-2", compact = false, selectedMonth = "all", selectedYear = "" }) {
+export default function HistoricalConsumptionSummary({ animateValue = false, className = "grid gap-5 md:grid-cols-2", compact = false, selectedMonth = "all", selectedYear = "" }) {
   const [monthly, setMonthly] = useState([]);
   const [yearly, setYearly] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,8 +137,8 @@ export default function HistoricalConsumptionSummary({ className = "grid gap-5 m
 
   return (
     <div className={className}>
-      <HistoryKpi compact={compact} Icon={Droplets} label="Monthly Consumption" periodKey="month" records={monthly} showPeriodMeta={false} />
-      <HistoryKpi compact={compact} Icon={CalendarDays} label="Yearly Consumption" periodKey="year" records={yearlyRecords.length > 0 ? yearlyRecords : yearly} captionTrend />
+      <HistoryKpi animateValue={animateValue} compact={compact} Icon={Droplets} label="Monthly Consumption" periodKey="month" records={monthly} showPeriodMeta={false} />
+      <HistoryKpi animateValue={animateValue} compact={compact} Icon={CalendarDays} label="Yearly Consumption" periodKey="year" records={yearlyRecords.length > 0 ? yearlyRecords : yearly} captionTrend />
     </div>
   );
 }

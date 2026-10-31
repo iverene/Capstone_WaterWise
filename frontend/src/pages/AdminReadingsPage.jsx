@@ -148,10 +148,10 @@ export default function AdminReadingsPage() {
       <PageHeader description={`Review all residents' meter readings for ${formatMonthLabel(activeMonth)}.`} title="Consumption Readings" />
 
       <section aria-label="Reading summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-        <KPI compact description="Current Filters" icon={Users} title="Visible Accounts" value={displayedRows.length} />
-        <KPI compact description={formatMonthLabel(activeMonth)} icon={Droplets} title="Total Consumption" unit="m³" value={total.toLocaleString()} />
-        <KPI compact description={`${recordedRows.length} recorded`} icon={Gauge} title="Average Usage" unit="m³" value={average.toFixed(1)} />
-        <KPI compact description="Top Record" icon={Gauge} title="Highest Usage" unit="m³" value={highest.toLocaleString()} />
+        <KPI animateValue compact description="Current Filters" icon={Users} title="Visible Accounts" value={displayedRows.length} />
+        <KPI animateValue compact description={formatMonthLabel(activeMonth)} icon={Droplets} title="Total Consumption" unit="m³" value={total.toLocaleString()} />
+        <KPI animateValue compact description={`${recordedRows.length} recorded`} icon={Gauge} title="Average Usage" unit="m³" value={average.toFixed(1)} />
+        <KPI animateValue compact description="Top Record" icon={Gauge} title="Highest Usage" unit="m³" value={highest.toLocaleString()} />
       </section>
 
       <div

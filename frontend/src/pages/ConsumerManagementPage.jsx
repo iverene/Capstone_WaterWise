@@ -383,9 +383,9 @@ function ConsumerManagementPage() {
       <PageHeader description="Manage resident accounts, service locations, and account status." title="Residents" />
 
       <section aria-label="Resident summary" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-3">
-        <KPI compact description={purok === "all" ? "Community accounts" : purok} icon={FiUsers} title="Total Residents" value={kpiConsumers.length} />
-        <KPI compact descriptionHighlight="Service-ready" descriptionTone="positive" icon={FiCheckCircle} title="Active Accounts" value={activeCount} />
-        <KPI compact description={inactiveCount ? "Account access disabled" : "All active"} descriptionHighlight={`${inactiveCount} disconnected`} descriptionIcon={inactiveCount ? FiAlertCircle : FiCheckCircle} descriptionTone={inactiveCount ? "warning" : "positive"} icon={FiAlertCircle} title="Disconnected Accounts" value={inactiveCount} />
+        <KPI animateValue compact description={purok === "all" ? "Community accounts" : purok} icon={FiUsers} title="Total Residents" value={kpiConsumers.length} />
+        <KPI animateValue compact descriptionHighlight="Service-ready" descriptionTone="positive" icon={FiCheckCircle} title="Active Accounts" value={activeCount} />
+        <KPI animateValue compact description={inactiveCount ? "Account access disabled" : "All active"} descriptionHighlight={`${inactiveCount} disconnected`} descriptionIcon={inactiveCount ? FiAlertCircle : FiCheckCircle} descriptionTone={inactiveCount ? "warning" : "positive"} icon={FiAlertCircle} title="Disconnected Accounts" value={inactiveCount} />
       </section>
 
       <Modal

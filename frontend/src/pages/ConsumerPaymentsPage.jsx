@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Banknote, CalendarDays, CheckCircle2, Clock3, Eye, ReceiptText } from "lucide-react";
+import { AnimatedKPIValue } from "../components/KPI";
 import { useSearchParams } from "react-router-dom";
 import Dropdown from "../components/Dropdown";
 import LoadingSkeleton from "../components/LoadingSkeleton";
@@ -40,7 +41,7 @@ function PaymentSummaryCard({ badge, badgeTone = "water", detailLabel, detailVal
               <h2 className="mt-0.5 text-sm font-bold text-navy-900">{title}</h2>
             </div>
           </div>
-          <p className="mt-4 font-sans text-2xl font-extrabold tracking-tight text-navy-900 tabular-nums sm:mt-5 sm:text-3xl">{value}</p>
+          <p className="mt-4 font-sans text-2xl font-extrabold tracking-tight text-navy-900 tabular-nums sm:mt-5 sm:text-3xl"><AnimatedKPIValue value={value} /></p>
         </div>
 
         <div className="hidden w-full shrink-0 flex-col items-start gap-3 sm:flex sm:w-auto sm:min-w-[15rem] sm:items-end">
