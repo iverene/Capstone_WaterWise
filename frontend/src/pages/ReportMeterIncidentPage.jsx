@@ -37,6 +37,10 @@ const INCIDENT_STATUS_LABELS = {
 const PRIOR_USAGE_BASIS_LABELS = {
   final_reading: "Old meter closing reading",
   previous_consumption: "Previous consumption",
+  previous_reading_fallback: "Latest reading fallback",
+  zero_carry: "No carried usage",
+  minimum_charge: "Minimum charge",
+  three_month_average: "Three-month average",
   reported: "Resident reported",
   average: "System average",
 };
@@ -56,13 +60,13 @@ const METER_FILTER_OPTIONS = [
   { label: "Meter changed", value: "changed" },
 ];
 
-// A replacement/reset stays open until the next reading consumes it. Once that
+// A replacement stays open until the next reading consumes it. Once that
 // happens the resident drops out of "Meter changed" but remains under "All
 // residents" with a normal consumption history.
 const isOpenMeterChangeIncident = (incident) =>
   Boolean(incident) &&
   ["pending", "authorized"].includes(incident.status) &&
-  ["replacement", "reset"].includes(incident.incidentType);
+  incident.incidentType === "replacement";
 
 const emptyForm = () => ({
   oldFinalReading: "",
@@ -362,13 +366,6 @@ export default function ReportMeterIncidentPage() {
       toast.error("Resident required", "Select the resident whose meter changed.");
       return;
     }
-    if (form.oldFinalReading === "") {
-      toast.error(
-        "Closing reading required",
-        "Enter the old meter's closing reading.",
-      );
-      return;
-    }
     if (carried != null && !Number.isFinite(carried)) {
       toast.error(
         "Invalid closing reading",
@@ -628,7 +625,7 @@ export default function ReportMeterIncidentPage() {
                   <dt className="font-semibold text-slate-500">Old meter closing reading</dt>
                   <dd className="mt-0.5 font-mono font-bold tabular-nums text-navy-900">
                     {openIncident.oldFinalReading == null
-                      ? "Not recorded"
+                      ? "Unknown — latest reading used"
                       : `${Number(openIncident.oldFinalReading).toLocaleString()} m³`}
                   </dd>
                 </div>
@@ -703,14 +700,13 @@ export default function ReportMeterIncidentPage() {
                     inputMode="decimal"
                     onChange={updateDecimalForm("oldFinalReading")}
                     placeholder="e.g. 470"
-                    required
                     type="text"
                     value={form.oldFinalReading}
                   />
                   <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
                     {lastRecorded == null
-                      ? "Enter the final value shown by the old meter."
-                      : `Latest recorded reading: ${Number(lastRecorded).toLocaleString()} m³. A higher closing value uses the difference; an equal or lower value uses the previous consumption.`}
+                      ? "Optional. Enter the final value shown by the old meter."
+                      : `Optional. Latest recorded reading: ${Number(lastRecorded).toLocaleString()} m³. If left blank, the latest reading is used as the fallback and the audit note records this.`}
                   </span>
                   {closingDerived != null && (
                     <span className="mt-1.5 block text-xs font-semibold text-water-800">
@@ -735,8 +731,10 @@ export default function ReportMeterIncidentPage() {
             </div>
 
             <div className="rounded-xl border border-water-200 bg-water-50 p-3 text-xs leading-5 text-slate-700">
-              {carried == null ? (
-                <>Enter the old meter&apos;s closing reading to calculate the carried usage.</>
+              {carried == null && form.oldFinalReading === "" && lastRecorded != null ? (
+                <>The latest recorded reading of <strong>{Number(lastRecorded).toLocaleString()} m³</strong> will be used automatically as the old closing-reading fallback.</>
+              ) : carried == null ? (
+                <>A previous reading is required before the system can apply the fallback.</>
               ) : usesPreviousConsumption ? (
                 <>The closing reading is equal to or below the latest reading, so the previous consumption of <strong>{Number(carried).toLocaleString()} m³</strong> will be carried.</>
               ) : (

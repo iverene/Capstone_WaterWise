@@ -26,6 +26,15 @@ const createIdempotencyKey = () =>
   globalThis.crypto?.randomUUID?.() ??
   `meter-reading-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+const incidentBasisLabel = {
+  previous_consumption: "Previous consumption",
+  zero_carry: "No carried usage",
+  minimum_charge: "Minimum charge",
+  three_month_average: "Three-month average",
+  final_reading: "Old meter closing reading",
+  average: "System average",
+};
+
 export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChange, onSave, rates = TIER_DEFAULTS, saving = false }) {
   const navigate = useNavigate();
   const [requestKey] = useState(createIdempotencyKey);
@@ -34,15 +43,15 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
   const [error, setError] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [anomalyAcknowledged, setAnomalyAcknowledged] = useState(false);
+  const [noUsageConfirmed, setNoUsageConfirmed] = useState(false);
 
   if (!consumer) return null;
 
-  // Meter replacements and resets are recorded on the Meter Incidents page. This
-  // panel only consumes an incident that is already open — it never creates one.
+  // Meter replacements are recorded on the Meter Incidents page. This panel
+  // only consumes an open replacement — it never creates one.
   const openIncident = consumer.openIncident ?? null;
-  // A defective-meter report carries no billable usage yet, so it cannot be
-  // applied. The reader updates it after the swap.
-  const appliesIncident = Boolean(openIncident) && openIncident.incidentType !== "defective";
+  const appliesIncident =
+    Boolean(openIncident) && openIncident.incidentType === "replacement";
 
   const previousReading = consumer.hasPreviousRecord ? consumer.latestPresentReading : initialPreviousReading;
   const previousValue = Number(previousReading);
@@ -53,7 +62,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
   const priorUsage = appliesIncident ? Number(openIncident.priorUsage ?? 0) : null;
   const baselineValue = Number(openIncident?.newBaseline ?? 0);
   const newMeterUsage = hasValues ? Number((currentValue - baselineValue).toFixed(2)) : 0;
-  const effectiveCarry = Number(priorUsage ?? 0);
+  const effectiveCarry = noUsageConfirmed ? 0 : Number(priorUsage ?? 0);
   const measuredConsumption = hasValues ? effectiveCarry + newMeterUsage : 0;
   const consumption = !hasValues
     ? 0
@@ -63,6 +72,9 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
   const safeConsumption = hasValues && Number.isFinite(consumption) ? Math.max(consumption, 0) : 0;
   const estimatedBill = computeTieredBill(safeConsumption, rates);
   const billBreakdown = breakdownTieredBill(safeConsumption, rates);
+  const incidentBasis = appliesIncident
+    ? incidentBasisLabel[openIncident.priorUsageBasis] ?? "Replacement calculation"
+    : null;
   const anomalyBaseline = consumer.averageRecentConsumption;
   // An incident reading carries the old meter's usage on purpose, so only the new
   // meter's own volume can be a typo.
@@ -78,6 +90,16 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
     const nextPreviousReading = setter === setInitialPreviousReading ? value : initialPreviousReading;
     const nextCurrentReading = setter === setCurrentReading ? value : currentReading;
     onDirtyChange?.(Boolean(nextPreviousReading || nextCurrentReading));
+    setAnomalyAcknowledged(false);
+    setError("");
+  };
+
+  const toggleNoUsage = (event) => {
+    const checked = event.target.checked;
+    setNoUsageConfirmed(checked);
+    if (checked && appliesIncident) {
+      setCurrentReading(String(baselineValue));
+    }
     setAnomalyAcknowledged(false);
     setError("");
   };
@@ -98,7 +120,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
         return;
       }
     } else if (currentValue < previousValue) {
-      setError("The current reading is lower than the previous reading. Record the meter replacement or reset in Meter Incidents first, then record the reading.");
+      setError("The current reading is lower than the previous reading. Record the meter replacement in Meter Incidents first, then record the reading.");
       return;
     }
     if (consumer.hasReadingInSelectedMonth) {
@@ -125,7 +147,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
       currentReading: Number(currentReading),
       idempotencyKey: requestKey,
       ...(!consumer.hasPreviousRecord ? { initialPreviousReading: Number(initialPreviousReading) } : {}),
-      ...(incident ? { incident } : {}),
+      ...(incident ? { incident: { ...incident, forceMinimumCharge: noUsageConfirmed } } : {}),
     });
   };
 
@@ -178,7 +200,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
             )}
             <div className="text-sm font-bold text-slate-700">
               <label htmlFor="meter-current-reading">{appliesIncident ? "New meter reading" : "Current reading"}</label>
-              <input autoComplete="off" autoFocus className="ww-field mt-2 p-3 font-mono text-lg tabular-nums" id="meter-current-reading" inputMode="decimal" onChange={changeDecimal(setCurrentReading)} placeholder="Type meter value" required type="text" value={currentReading} />
+              <input autoComplete="off" autoFocus className={`ww-field mt-2 p-3 font-mono text-lg tabular-nums ${noUsageConfirmed ? "cursor-not-allowed bg-slate-100" : ""}`} id="meter-current-reading" inputMode="decimal" onChange={changeDecimal(setCurrentReading)} placeholder="Type meter value" readOnly={noUsageConfirmed} required type="text" value={currentReading} />
               {appliesIncident && <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">Type the value on the new meter. The old meter&apos;s usage is carried automatically.</span>}
             </div>
           </div>
@@ -191,20 +213,36 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
                   <p className="text-sm font-bold text-navy-900">Open meter record</p>
                   <p className="mt-0.5 text-xs leading-5 text-slate-600">
                     Carried over <span className="font-mono font-bold text-navy-900">{Number(openIncident.priorUsage).toLocaleString()} m³</span>
-                    {openIncident.priorUsageBasis === "previous_consumption" ? " (previous consumption)" : ""}
+                    {" "}· Basis: <span className="font-semibold text-navy-900">{noUsageConfirmed ? "Minimum charge (no usage)" : incidentBasis}</span>
                     {" "}· New baseline <span className="font-mono font-bold text-navy-900">{Number(openIncident.newBaseline).toLocaleString()} m³</span>
                     {openIncident.newMeterSerial ? ` · Meter ${openIncident.newMeterSerial}` : ""}
                   </p>
                 </div>
               </div>
 
-              {openIncident.incidentType === "defective" ? (
-                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
-                  This only records a defective meter, so no usage is carried yet. Record the reading normally. Once the new meter is installed, update this record in Meter Incidents with the closing reading and baseline.
-                </p>
+              {appliesIncident ? (
+                <>
+                  <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                    <input
+                      checked={noUsageConfirmed}
+                      className="mt-0.5 h-4 w-4 accent-water-600"
+                      onChange={toggleNoUsage}
+                      type="checkbox"
+                    />
+                    <span>
+                      <span className="block font-bold">No water was used</span>
+                      <span className="block">Use the minimum charge instead of previous consumption or the average.</span>
+                    </span>
+                  </label>
+                  <p className="mt-3 rounded-xl border border-water-200 bg-water-50 p-3 text-xs font-semibold leading-5 text-water-800">
+                    {noUsageConfirmed
+                      ? "Water consumed will be 0 m³; the billing system will apply the minimum charge."
+                      : "This replacement is applied automatically. The old meter's usage is carried into this reading."}
+                  </p>
+                </>
               ) : (
-                <p className="mt-3 rounded-xl border border-water-200 bg-water-50 p-3 text-xs font-semibold leading-5 text-water-800">
-                  This replacement is applied automatically. The old meter&apos;s usage is carried into this reading.
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-800">
+                  This legacy incident type is not supported by the replacement workflow and cannot be applied to billing. Record the reading normally; keep this record for history.
                 </p>
               )}
             </div>
@@ -247,6 +285,11 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
                       {`${Number(effectiveCarry).toLocaleString()} m³ carried + ${Number(newMeterUsage).toLocaleString()} m³ on the new meter`}
                     </p>
                   )}
+                  {appliesIncident && (
+                    <p className="mt-1 text-[11px] font-bold leading-4 text-water-800">
+                      Carry basis: {noUsageConfirmed ? "Minimum charge (no usage)" : incidentBasis}
+                    </p>
+                  )}
                 </div>
                 <div className="min-w-0 rounded-xl bg-navy-950 px-4 py-2.5">
                   <p className="text-xs font-bold text-water-200">Estimated bill</p>
@@ -267,6 +310,12 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {reviewItems.map(([label, value]) => <SummaryItem key={label} label={label} value={value} />)}
           </dl>
+          {appliesIncident && (
+            <div className="mt-3 rounded-xl border border-water-200 bg-water-50 px-4 py-3 text-sm">
+              <span className="font-bold text-navy-900">Replacement carry basis:</span>{" "}
+              <span className="font-semibold text-water-800">{incidentBasis}</span>
+            </div>
+          )}
           <section aria-label="Estimated bill breakdown" className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-slate-500"><ReceiptText aria-hidden="true" className="h-4 w-4" /> Bill breakdown</h4>
             <dl className="mt-2">
@@ -289,7 +338,9 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
                 Meter replacement applied
               </p>
               <p className="mt-1 text-xs leading-5">
-                This reading carries the old meter&apos;s usage automatically.
+                {noUsageConfirmed
+                  ? "The reader confirmed no usage. Consumption is 0 m³, and only the minimum charge will be billed."
+                  : "This reading carries the old meter's usage automatically."}
               </p>
             </div>
           )}

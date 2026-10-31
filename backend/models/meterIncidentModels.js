@@ -25,6 +25,27 @@ const toNumberOrNull = (value) => {
 };
 
 const round2 = (value) => Number(Number(value).toFixed(2));
+const manilaDate = (value = new Date()) => {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${lookup.year}-${lookup.month}-${lookup.day}`;
+};
+
+const calendarDaysBetween = (from, to) => {
+  const start = Date.parse(`${manilaDate(from)}T00:00:00Z`);
+  const end = Date.parse(`${manilaDate(to)}T00:00:00Z`);
+  return Number.isFinite(start) && Number.isFinite(end)
+    ? Math.round((end - start) / 86_400_000)
+    : null;
+};
 
 export const normalizeIncident = (row) => {
   if (!row) return null;
@@ -91,13 +112,7 @@ const lateIncidentWarning =
   "A reading is already recorded for this month, so the old meter's usage will be added to the next reading instead.";
 
 export async function getAverageWindowMonths() {
-  try {
-    const setting = await getSystemSetting("average_window_months");
-    const months = Number(setting?.setting_value);
-    return Number.isInteger(months) && months > 0 ? months : 3;
-  } catch {
-    return 3;
-  }
+  return 3;
 }
 
 export async function listMeterIncidents({ status, consumerId, limit = 200 } = {}) {
@@ -186,7 +201,7 @@ const assertConsumer = async (consumerId) => {
 const latestRecordedReading = async (consumerId) => {
   const { data, error } = await supabase
     .from("consumption")
-    .select("present_reading, consumption")
+    .select("reading_date, present_reading, consumption")
     .eq("consumer_id", Number(consumerId))
     .order("reading_date", { ascending: false })
     .order("id", { ascending: false })
@@ -198,9 +213,57 @@ const latestRecordedReading = async (consumerId) => {
   }
   return data
     ? {
-        presentReading: Number(data.present_reading),
-        consumption: round2(Math.max(Number(data.consumption ?? 0), 0)),
-      }
+      readingDate: data.reading_date,
+      presentReading: Number(data.present_reading),
+      consumption: round2(Math.max(Number(data.consumption ?? 0), 0)),
+    }
+    : null;
+};
+
+const getMinimumChargeM3 = async () => {
+  try {
+    const setting = await getSystemSetting("minimum_m3");
+    const minimum = Number(setting?.setting_value);
+    return Number.isFinite(minimum) && minimum >= 0 ? Math.ceil(minimum) : 5;
+  } catch {
+    return 5;
+  }
+};
+
+const getThreeMonthAverage = async (consumerId, effectiveDate) => {
+  const { data, error } = await supabase
+    .from("consumption")
+    .select("reading_date, consumption, reading_source, carried_consumption")
+    .eq("consumer_id", Number(consumerId))
+    .order("reading_date", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(36);
+
+  if (error) {
+    throw createError(`Failed to load historical consumption: ${error.message}`, 500);
+  }
+
+  const currentMonth = manilaDate(effectiveDate).slice(0, 7);
+  const months = new Set();
+  const values = [];
+  for (const record of data ?? []) {
+    const month = manilaDate(record.reading_date).slice(0, 7);
+    const value = Number(record.consumption);
+    if (
+    month === currentMonth ||
+    months.has(month) ||
+    (record.reading_source ?? "actual") !== "actual" ||
+    Number(record.carried_consumption ?? 0) !== 0 ||
+    !Number.isFinite(value) ||
+    value <= 0
+    ) continue;
+    months.add(month);
+    values.push(value);
+    if (values.length === 3) break;
+  }
+
+  return values.length
+    ? Math.ceil(values.reduce((total, value) => total + value, 0) / values.length)
     : null;
 };
 
@@ -212,14 +275,13 @@ const latestRecordedReading = async (consumerId) => {
  */
 export async function resolveIncidentPriorUsage(
   consumerId,
-  { oldFinalReading = null } = {},
+  { oldFinalReading = null, effectiveDate = null, readingDate = null } = {},
 ) {
-  if (oldFinalReading == null) {
-    throw createError("Enter the old meter closing reading.");
-  }
-
   const latest = await latestRecordedReading(consumerId);
   if (latest == null) {
+    if (oldFinalReading == null) {
+      throw createError("Enter the old meter closing reading because this consumer has no previous reading.");
+    }
     return {
       priorUsage: round2(oldFinalReading),
       basis: "final_reading",
@@ -229,13 +291,46 @@ export async function resolveIncidentPriorUsage(
     };
   }
 
-  const derived = round2(oldFinalReading - latest.presentReading);
+  const usedFallbackReading = oldFinalReading == null;
+  const closingReading = usedFallbackReading ? latest.presentReading : oldFinalReading;
+  const derived = round2(closingReading - latest.presentReading);
   if (derived <= 0) {
+    const incidentDate = manilaDate(effectiveDate ?? new Date());
+    const currentReadingDate = manilaDate(readingDate ?? new Date());
+    const elapsedDays = calendarDaysBetween(latest.readingDate, incidentDate);
+    if (incidentDate === currentReadingDate || elapsedDays === 0) {
+      return {
+        priorUsage: latest.consumption,
+        basis: "previous_consumption",
+        averageValue: null,
+        window: null,
+        lastRecordedReading: latest.presentReading,
+      };
+    }
+    if (elapsedDays != null && elapsedDays >= 1 && elapsedDays <= 15) {
+      if (elapsedDays <= 7) {
+        return {
+          priorUsage: 0,
+          basis: "zero_carry",
+          averageValue: null,
+          window: null,
+          lastRecordedReading: latest.presentReading,
+        };
+      }
+      return {
+        priorUsage: await getMinimumChargeM3(),
+        basis: "minimum_charge",
+        averageValue: null,
+        window: null,
+        lastRecordedReading: latest.presentReading,
+      };
+    }
+    const averageValue = await getThreeMonthAverage(consumerId, incidentDate);
     return {
-      priorUsage: latest.consumption,
-      basis: "previous_consumption",
-      averageValue: null,
-      window: null,
+      priorUsage: averageValue ?? await getMinimumChargeM3(),
+      basis: averageValue == null ? "minimum_charge" : "three_month_average",
+      averageValue,
+      window: averageValue == null ? null : 3,
       lastRecordedReading: latest.presentReading,
     };
   }
@@ -279,11 +374,9 @@ export async function createMeterIncident(payload, actor) {
 
   const resolved = await resolveIncidentPriorUsage(consumerId, {
     oldFinalReading,
+    effectiveDate: payload.effectiveDate,
+    readingDate: manilaDate(),
   });
-
-  if (resolved.priorUsage == null || resolved.priorUsage < 0) {
-    throw createError("Prior usage is required. Enter the old meter closing reading.");
-  }
 
   const isField = !isAdminActor(actor);
   // A meter replacement is an inventory fact recorded by the office or the
@@ -295,7 +388,7 @@ export async function createMeterIncident(payload, actor) {
     .insert({
       consumer_id: consumerId,
       incident_type: incidentType,
-      effective_date: payload.effectiveDate || new Date().toISOString().slice(0, 10),
+      effective_date: payload.effectiveDate || manilaDate(),
       old_meter_serial: payload.oldMeterSerial || null,
       old_final_reading: oldFinalReading,
       prior_usage: round2(resolved.priorUsage),
@@ -314,7 +407,12 @@ export async function createMeterIncident(payload, actor) {
       // An authorized replacement stays usable until a reading consumes it,
       // no matter how late the next scheduled visit is.
       expires_at: null,
-      notes: payload.notes || null,
+      notes: [
+        payload.notes || null,
+        oldFinalReading == null
+          ? "Old meter closing reading unknown; latest recorded reading used as fallback."
+          : null,
+      ].filter(Boolean).join("\n") || null,
       idempotency_key: payload.idempotencyKey || null,
     })
     .select(INCIDENT_FIELDS)
@@ -396,6 +494,8 @@ export async function updateMeterIncident(id, payload, actor) {
 
   const resolved = await resolveIncidentPriorUsage(consumerId, {
     oldFinalReading,
+    effectiveDate: payload.effectiveDate || incident.effectiveDate,
+    readingDate: manilaDate(),
   });
 
   // This is an inventory correction, not a new approval request. The next

@@ -685,6 +685,7 @@ export const createConsumptionReading = async ({
     if (incident.id != null) {
       incidentPayload = {
         id: Number(incident.id),
+        forceMinimumCharge: incident.forceMinimumCharge === true,
       };
     } else if (incident.oldFinalReading != null) {
       const recorderId = recordedById ?? incident.recordedById;
@@ -708,6 +709,7 @@ export const createConsumptionReading = async ({
         averageValue: resolved.averageValue,
         newMeterSerial: incident.newMeterSerial ?? null,
         newBaseline: incident.newBaseline ?? 0,
+        forceMinimumCharge: incident.forceMinimumCharge === true,
         notes: incident.notes ?? null,
         idempotencyKey: incident.idempotencyKey ?? `${idempotencyKey.trim()}-incident`,
         recordedById: Number(recorderId),

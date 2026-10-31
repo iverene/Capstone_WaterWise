@@ -11,5 +11,9 @@ ALTER TABLE meter_incidents
     'final_reading',
     'reported',
     'average',
-    'previous_consumption'
+    'previous_consumption',
+    'previous_reading_fallback',
+    'zero_carry',
+    'minimum_charge',
+    'three_month_average'
   ));

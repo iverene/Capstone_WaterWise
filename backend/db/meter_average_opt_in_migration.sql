@@ -36,6 +36,7 @@ DECLARE
     v_incident_auto BOOLEAN := false;
     v_average NUMERIC(10,2);
     v_force_zero BOOLEAN := false;
+    v_force_minimum_charge BOOLEAN := false;
     v_estimated BOOLEAN := false;
     v_reading_date DATE := (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::DATE;
     v_previous_auto_billing_setting TEXT;
@@ -199,6 +200,7 @@ BEGIN
     IF p_incident IS NOT NULL THEN
         v_average := NULLIF(p_incident->>'averageFallback', '')::NUMERIC;
         v_force_zero := COALESCE((p_incident->>'forceZero')::BOOLEAN, false);
+        v_force_minimum_charge := COALESCE((p_incident->>'forceMinimumCharge')::BOOLEAN, false);
     END IF;
 
     v_present := p_present_reading;
@@ -238,7 +240,11 @@ BEGIN
         v_carried := v_incident.prior_usage;
         -- A carry from the system average is optional and follows the reader's
         -- explicit selection in the portal.
-        IF v_force_zero AND v_incident.prior_usage_basis = 'average' THEN
+        IF v_force_minimum_charge THEN
+            v_carried := 0;
+            p_present_reading := v_incident.new_baseline;
+            v_present := v_incident.new_baseline;
+        ELSIF v_force_zero AND v_incident.prior_usage_basis = 'average' THEN
             v_carried := 0;
         ELSIF NOT v_force_zero AND v_incident.prior_usage_basis = 'average' THEN
             -- The reader explicitly selected the average carry in the portal.
@@ -287,7 +293,11 @@ BEGIN
         v_consumption,
         CASE WHEN v_incident.id IS NOT NULL THEN 'incident' ELSE p_reading_source END,
         v_carried,
-        CASE WHEN v_estimated THEN 'average' ELSE v_incident.prior_usage_basis END,
+        CASE
+          WHEN v_force_minimum_charge THEN 'minimum_charge'
+          WHEN v_estimated THEN 'average'
+          ELSE v_incident.prior_usage_basis
+        END,
         v_incident.new_baseline,
         v_incident.id, p_idempotency_key
     )
@@ -305,6 +315,9 @@ BEGIN
                              E'\n', NULLIF(notes, ''),
                              'Billed ' || ROUND(v_consumption, 2)
                              || ' m3 with the system average carried from the old meter.')
+                         WHEN v_force_minimum_charge THEN CONCAT_WS(
+                             E'\n', NULLIF(notes, ''),
+                             'The reader confirmed no usage; the minimum charge volume was applied.')
                          WHEN v_force_zero THEN CONCAT_WS(
                              E'\n', NULLIF(notes, ''),
                              'The reader chose not to apply the system average.')

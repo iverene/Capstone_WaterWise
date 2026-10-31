@@ -46,9 +46,19 @@ const correctionFormFromIncident = (incident) => ({
 const isOpenIncident = (incident) =>
   ["pending", "authorized"].includes(incident?.status);
 
+const isReplacementIncident = (incident) =>
+  incident?.incidentType === "replacement";
+
+const isEditableReplacement = (incident) =>
+  isOpenIncident(incident) && isReplacementIncident(incident);
+
 const basisLabel = {
   final_reading: "Old meter closing reading",
+  previous_reading_fallback: "Latest reading fallback",
   previous_consumption: "Previous consumption",
+  zero_carry: "No carried usage",
+  minimum_charge: "Minimum charge",
+  three_month_average: "Three-month average",
   reported: "Resident reported",
   average: "System average",
 };
@@ -157,7 +167,7 @@ export default function MeterIncidentsPage() {
       correctionForm.newBaseline !== correctionInitial.newBaseline);
 
   const openCorrection = (incident) => {
-    if (!isOpenIncident(incident)) return;
+    if (!isEditableReplacement(incident)) return;
     setEditingIncident(incident);
     setCorrectionForm(correctionFormFromIncident(incident));
     setCorrectionError("");
@@ -367,7 +377,7 @@ export default function MeterIncidentsPage() {
                   {badge(statusLabel[incident.status] ?? incident.status, statusTone[incident.status] ?? statusTone.expired)}
                 </td>
                 <td className="md:px-4 md:py-4 md:text-right">
-                  {isOpenIncident(incident) ? (
+                  {isEditableReplacement(incident) ? (
                     <button
                       aria-label={`Edit replacement for ${name}`}
                       className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-navy-900 transition-colors hover:border-water-300 hover:bg-water-50"
@@ -378,7 +388,9 @@ export default function MeterIncidentsPage() {
                       Edit
                     </button>
                   ) : (
-                    <span className="text-xs font-semibold text-slate-400">Locked</span>
+                    <span className="text-xs font-semibold text-slate-400">
+                      {isOpenIncident(incident) ? "Legacy record" : "Locked"}
+                    </span>
                   )}
                 </td>
               </>
