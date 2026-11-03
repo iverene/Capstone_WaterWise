@@ -111,9 +111,6 @@ export default function BillingLedger({
     (periodFilter === "all" || record.billingPeriod === periodFilter) &&
     (statusFilter === "all" || record.status === statusFilter),
   );
-  const displayedHistoryData = selectedBill && filteredHistoryData.includes(selectedBill)
-    ? [selectedBill, ...filteredHistoryData.filter((record) => record.id !== selectedBill.id)]
-    : filteredHistoryData;
   const selectedConsumptionReceipt = consumptionReceipt(
     selectedBill,
     ledgerAccount?.name,
@@ -268,7 +265,7 @@ export default function BillingLedger({
         <BillingHistoryTable
           emptyDescription={hasActiveFilters ? "Adjust or clear the billing period and status filters to see other records." : "Your billing records will appear here after a meter reading is recorded."}
           emptyTitle={hasActiveFilters ? "No bills match these filters" : "No billing records"}
-          historyData={displayedHistoryData}
+          historyData={filteredHistoryData}
           highlightedBillingId={requestedBillingId}
           onViewReceipt={openReceipt}
           showConsumerDetails={false}
