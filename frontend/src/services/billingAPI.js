@@ -61,6 +61,9 @@ export function normalizeBillingRecord(record) {
       "Address not available",
     previousReading: Number(reading.previous_reading ?? 0),
     currentReading: Number(reading.present_reading ?? 0),
+    readingSource: reading.reading_source ?? "actual",
+    carriedConsumption: Number(reading.carried_consumption ?? 0),
+    newBaseline: reading.new_baseline == null ? null : Number(reading.new_baseline),
     dueDate: record.due_date,
     raw: record,
   };

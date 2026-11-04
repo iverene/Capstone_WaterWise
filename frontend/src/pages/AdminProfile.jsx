@@ -321,6 +321,27 @@ export default function AdminProfile() {
 
   const beginStaffOtpAuthorization = async (pendingAction) => {
     const scope = `staff-action:${pendingAction.action}:${pendingAction.targetId ?? "new"}`;
+    // A verified page permission takes precedence over any stale challenge
+    // left in sessionStorage by an earlier attempt or remount.
+    if (pendingAction.action === "manage-staff") {
+      const existingPermission = getStoredStaffPermission();
+      if (existingPermission?.token) {
+        window.sessionStorage.removeItem(STAFF_OTP_CHALLENGE_KEY);
+        clearOtpChallenge(scope);
+        setStaffManagementPermission(existingPermission);
+        navigate("/admin/staff-management");
+        return;
+      }
+    }
+    if (pendingAction.action === "manage-system-settings") {
+      const existingPermission = getStoredSettingsPermission();
+      if (existingPermission?.token) {
+        window.sessionStorage.removeItem(SETTINGS_OTP_CHALLENGE_KEY);
+        clearOtpChallenge(scope);
+        navigate("/admin/settings");
+        return;
+      }
+    }
     // Reuse the code that was already sent for this exact action. The
     // backend only allows one code per action every 5 minutes, so asking
     // again after the dialog was closed would cost a full wait. The
@@ -336,24 +357,6 @@ export default function AdminProfile() {
       );
       setIsStaffOtpOpen(true);
       return;
-    }
-    // Reuse: if a valid 15m page-view permission already exists, skip OTP and
-    // navigate straight back in. Per-write actions still need their own
-    // password/OTP each time.
-    if (pendingAction.action === "manage-staff") {
-      const existingPermission = getStoredStaffPermission();
-      if (existingPermission?.token) {
-        setStaffManagementPermission(existingPermission);
-        navigate("/admin/staff-management");
-        return;
-      }
-    }
-    if (pendingAction.action === "manage-system-settings") {
-      const existingPermission = getStoredSettingsPermission();
-      if (existingPermission?.token) {
-        navigate("/admin/settings");
-        return;
-      }
     }
     if (pendingAction.action === "manage-staff") {
       const existingChallenge = getStoredStaffOtpChallenge();

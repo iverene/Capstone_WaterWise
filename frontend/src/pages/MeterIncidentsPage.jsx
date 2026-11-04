@@ -79,6 +79,18 @@ const statusTone = {
   expired: "bg-slate-100 text-slate-600 ring-slate-200",
 };
 
+const carriedValue = (incident) =>
+  isOpenIncident(incident) && incident.currentPriorUsage != null
+    ? incident.currentPriorUsage
+    : incident.priorUsage;
+
+const carriedBasisLabel = (incident) =>
+  basisLabel[
+    isOpenIncident(incident) && incident.currentPriorUsageBasis
+      ? incident.currentPriorUsageBasis
+      : incident.priorUsageBasis
+  ] ?? incident.priorUsageBasis;
+
 const badge = (label, tone) => (
   <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset ${tone}`}>
     {label}
@@ -298,15 +310,15 @@ export default function MeterIncidentsPage() {
         <p className="font-bold">How a replacement is billed</p>
         <p className="mt-1 text-[13px] text-slate-600">
           The old meter&apos;s carried usage is added to the new meter&apos;s first reading. A closing value above the
-          latest reading uses their difference. An equal or lower closing value carries the resident&apos;s previous
-          consumption. No average is used.
+          latest reading uses their difference. An equal or lower closing value uses the date-based carry rule;
+          incidents more than 15 days from the latest reading may use the fixed three-reading average.
         </p>
       </div>
 
-      <div aria-label="Meter incidents table controls" className="hidden items-center gap-2 sm:flex" role="search">
+      <div aria-label="Meter incidents table controls" className="flex flex-col gap-2 sm:flex-row sm:items-center" role="search">
         <Search
           ariaLabel="Search meter incidents by resident name"
-          className="flex-1"
+          className="w-full flex-1"
           onValueChange={setQuery}
           placeholder="Search resident name"
           value={query}
@@ -317,8 +329,11 @@ export default function MeterIncidentsPage() {
           onValueChange={setStatusFilter}
           options={[
             { label: "All", value: "all" },
+            { label: "Pending", value: "pending" },
             { label: "Recorded", value: "authorized" },
             { label: "Applied", value: "consumed" },
+            { label: "Rejected", value: "rejected" },
+            { label: "Expired", value: "expired" },
           ]}
           value={statusFilter}
         />
@@ -367,10 +382,10 @@ export default function MeterIncidentsPage() {
                 </td>
                 <td className="md:px-4 md:py-4 md:text-center">
                   <span className="block font-mono font-bold tabular-nums text-navy-900">
-                    {number(incident.priorUsage).toLocaleString()} m³
+                    {number(carriedValue(incident)).toLocaleString()} m³
                   </span>
                   <span className="mt-0.5 block text-xs font-semibold text-slate-500">
-                    {basisLabel[incident.priorUsageBasis] ?? incident.priorUsageBasis}
+                    {isOpenIncident(incident) ? `Projected: ${carriedBasisLabel(incident)}` : carriedBasisLabel(incident)}
                   </span>
                 </td>
                 <td className="font-mono tabular-nums md:px-4 md:py-4 md:text-center">
@@ -429,13 +444,16 @@ export default function MeterIncidentsPage() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
-              <span className="font-semibold text-slate-500">Currently carried over</span>{" "}
+              <span className="font-semibold text-slate-500">Current projected carry</span>{" "}
               <span className="font-mono font-bold tabular-nums text-navy-900">
-                {number(editingIncident.priorUsage).toLocaleString()} m³
+                {number(carriedValue(editingIncident)).toLocaleString()} m³
               </span>{" "}
               <span className="font-semibold text-slate-500">
-                · {basisLabel[editingIncident.priorUsageBasis] ?? editingIncident.priorUsageBasis}
+                · Projected: {carriedBasisLabel(editingIncident)}
               </span>
+              <p className="mt-1 font-medium leading-5 text-slate-500">
+                This preview changes with the date and is finalized when the Reading Entry is recorded.
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

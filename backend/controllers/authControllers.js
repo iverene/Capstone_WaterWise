@@ -314,7 +314,7 @@ export async function verifyStaffActionPassword(req, res) {
 
     const { data: account, error: accountError } = await supabase
       .from("admins")
-      .select("id, username, email, password, status, failed_login_attempts, locked_until")
+      .select("id, username, email, password, status, staff_action_failed_attempts, staff_action_locked_until")
       .eq("id", req.user.id)
       .maybeSingle();
     if (accountError) return res.status(500).json({ success: false, message: "Unable to verify the password." });
@@ -322,20 +322,20 @@ export async function verifyStaffActionPassword(req, res) {
 
     const maxAttempts = getLoginMaxAttempts();
     const lockoutMinutes = getLoginLockoutMinutes();
-    if (account.locked_until && new Date(account.locked_until).getTime() > Date.now()) {
-      const retryAfterSeconds = Math.max(1, Math.ceil((new Date(account.locked_until).getTime() - Date.now()) / 1000));
+    if (account.staff_action_locked_until && new Date(account.staff_action_locked_until).getTime() > Date.now()) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((new Date(account.staff_action_locked_until).getTime() - Date.now()) / 1000));
       res.set("Retry-After", String(retryAfterSeconds));
       return res.status(429).json({ success: false, message: `Too many incorrect attempts. Try again in ${Math.ceil(retryAfterSeconds / 60)} minute(s).`, retryAfterSeconds });
     }
 
     const passwordMatches = await bcrypt.compare(password, String(account.password ?? ""));
     if (!passwordMatches) {
-      const previousLockExpired = account.locked_until && new Date(account.locked_until).getTime() <= Date.now();
-      const attempts = previousLockExpired ? 1 : Number(account.failed_login_attempts ?? 0) + 1;
+      const previousLockExpired = account.staff_action_locked_until && new Date(account.staff_action_locked_until).getTime() <= Date.now();
+      const attempts = previousLockExpired ? 1 : Number(account.staff_action_failed_attempts ?? 0) + 1;
       const lockedUntil = attempts >= maxAttempts ? new Date(Date.now() + lockoutMinutes * 60 * 1000).toISOString() : null;
       await supabase
         .from("admins")
-        .update({ failed_login_attempts: attempts, locked_until: lockedUntil, updated_at: new Date().toISOString() })
+        .update({ staff_action_failed_attempts: attempts, staff_action_locked_until: lockedUntil, updated_at: new Date().toISOString() })
         .eq("id", account.id);
       if (lockedUntil) {
         const retryAfterSeconds = lockoutMinutes * 60;
@@ -345,10 +345,10 @@ export async function verifyStaffActionPassword(req, res) {
       return res.status(401).json({ success: false, message: "Incorrect password.", field: "password", failedAttempts: attempts, remainingAttempts: Math.max(0, maxAttempts - attempts) });
     }
 
-    if (account.failed_login_attempts || account.locked_until) {
+    if (account.staff_action_failed_attempts || account.staff_action_locked_until) {
       await supabase
         .from("admins")
-        .update({ failed_login_attempts: 0, locked_until: null, updated_at: new Date().toISOString() })
+        .update({ staff_action_failed_attempts: 0, staff_action_locked_until: null, updated_at: new Date().toISOString() })
         .eq("id", account.id);
     }
 

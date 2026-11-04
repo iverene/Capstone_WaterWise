@@ -127,6 +127,11 @@ apiClient.interceptors.response.use(
     const isPublicAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(
       window.location.pathname,
     );
+    // Staff password/OTP verification uses 401 for invalid credentials. These
+    // are action-level failures and must stay in the verification modal rather
+    // than being mistaken for an expired authenticated session.
+    const isStaffAuthorizationRequest =
+      requestUrl.startsWith("/auth/admin/staff-action/");
     // Consumer/Admin/Super-admin silent refresh: a 15m access may expire
     // between the 5min timer ticks (closed laptop, throttled tab). Try one
     // refresh + retry before treating it as a logout. Terminal refresh
@@ -137,6 +142,7 @@ apiClient.interceptors.response.use(
       !isLoggingOut() &&
       !isPublicAuthPage &&
       !isPublicAuthRequest &&
+      !isStaffAuthorizationRequest &&
       !error.config?._refreshRetried &&
       ["consumer", "admin", "super-admin"].includes(getStoredAccount()?.role)
     ) {
@@ -148,7 +154,13 @@ apiClient.interceptors.response.use(
         // Refresh failed: fall through to the logout handling below.
       }
     }
-    if (status === 401 && !isLoggingOut() && !isPublicAuthPage && !isPublicAuthRequest) {
+    if (
+      status === 401 &&
+      !isLoggingOut() &&
+      !isPublicAuthPage &&
+      !isPublicAuthRequest &&
+      !isStaffAuthorizationRequest
+    ) {
       // Expired, idle-timed-out, revoked (password change), deactivated, or
       // device-mismatch sessions must end here instead of leaving the user
       // stuck: the stored session is no longer valid server-side. The reason

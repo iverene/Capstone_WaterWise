@@ -75,6 +75,10 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
     arrears60Days = 0,
     arrears90Days = 0,
   } = receiptData;
+  const isIncidentReading =
+    readingSource === "incident" ||
+    newBaseline != null ||
+    Number(carriedConsumption) > 0;
 
   const cubicMetersUsed = Number(
     (Number(consumption ?? presentReading - previousReading) || 0).toFixed(2),
@@ -90,11 +94,14 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         ["Meter Name", meterName],
         ["Run Date", runDate],
         [
-          readingSource === "incident" ? "Previous Reading (old meter)" : "Previous Reading",
+          isIncidentReading ? "Previous Reading (old meter)" : "Previous Reading",
           `${previousReading} m³`,
         ],
-        ["Present Reading", `${presentReading} m³`],
-        ...(readingSource === "incident"
+        [
+          isIncidentReading ? "New Meter Reading" : "Present Reading",
+          `${presentReading} m³`,
+        ],
+        ...(isIncidentReading
           ? [["New Meter Starts At", `${Number(newBaseline ?? 0)} m³`]]
           : []),
         ...(Number(carriedConsumption) > 0 ? [["Carried From Old Meter", `${Number(carriedConsumption)} m³`]] : []),
@@ -186,12 +193,16 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           </h3>
           <dl className="mt-1.5 sm:mt-2">
             <ReceiptLine
-              label={readingSource === "incident" ? "Previous (old meter)" : "Previous"}
+              label={isIncidentReading ? "Previous (old meter)" : "Previous"}
               testId="telemetry-prev"
               value={`${previousReading} m³`}
             />
-            <ReceiptLine label="Present" testId="telemetry-pres" value={`${presentReading} m³`} />
-            {readingSource === "incident" && (
+            <ReceiptLine
+              label={isIncidentReading ? "New meter reading" : "Present"}
+              testId="telemetry-pres"
+              value={`${presentReading} m³`}
+            />
+            {isIncidentReading && (
               <ReceiptLine
                 label="New meter starts at"
                 testId="telemetry-new-baseline"

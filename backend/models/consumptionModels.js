@@ -4,7 +4,6 @@ import { supabase } from "../config/supabase.js";
 import { fetchAllPages } from "../utils/supabasePagination.js";
 import { composeFullName } from "./consumerModels.js";
 import {
-  getAverageWindowMonths,
   listOpenIncidents,
   normalizeIncident,
   resolveIncidentPriorUsage,
@@ -430,7 +429,6 @@ export const getConsumptionRecordingContexts = async () => {
     { data: readings, error: readingQueryError },
     { data: billings, error: billingQueryError },
     openIncidents,
-    averageWindow,
   ] =
     await Promise.all([
       fetchAllPages(() => supabase
@@ -449,7 +447,6 @@ export const getConsumptionRecordingContexts = async () => {
         .select("id, consumption_id, user_id, total_bill, remaining_balance, status, due_date, created_at")
         .order("id", { ascending: true })),
       listOpenIncidents(),
-      getAverageWindowMonths(),
     ]);
 
   if (consumerError) {
@@ -486,7 +483,7 @@ export const getConsumptionRecordingContexts = async () => {
       normalizedDate,
       {
         openIncident: openIncidentByConsumer.get(consumer.id) ?? null,
-        averageWindow,
+        averageWindow: 3,
       },
     ));
 };
@@ -503,7 +500,6 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     { data: readings, error: readingQueryError },
     { data: billings, error: billingQueryError },
     openIncidents,
-    averageWindow,
   ] =
     await Promise.all([
       supabase
@@ -523,7 +519,6 @@ export const getConsumptionRecordingContext = async (consumerId) => {
         .eq("user_id", parsedConsumerId)
         .order("id", { ascending: true })),
       listOpenIncidents(),
-      getAverageWindowMonths(),
     ]);
 
   if (consumerError || readingQueryError || billingQueryError) {
@@ -541,7 +536,7 @@ export const getConsumptionRecordingContext = async (consumerId) => {
     normalizedDate,
     {
       openIncident: (openIncidents ?? []).find((incident) => incident.consumerId === parsedConsumerId) ?? null,
-      averageWindow,
+      averageWindow: 3,
     },
   );
 };
@@ -697,6 +692,8 @@ export const createConsumptionReading = async ({
         oldFinalReading: incident.oldFinalReading == null
           ? null
           : Number(incident.oldFinalReading),
+        effectiveDate: incident.effectiveDate ?? null,
+        readingDate: new Date(),
       });
       incidentPayload = {
         incidentType: incident.incidentType ?? "replacement",
