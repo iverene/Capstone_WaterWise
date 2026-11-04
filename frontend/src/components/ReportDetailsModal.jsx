@@ -18,7 +18,13 @@ function recordSummary(record, type) {
   if (type === "billing") return `${record.billingDate} · ${record.consumerName} · ₱${Number(record.totalBill).toLocaleString("en-US", { minimumFractionDigits: 2 })} · ${record.status}`;
   if (type === "residents") return `${record.name} · ${record.username} · ${record.purok} · ${record.status}`;
   if (type === "meter-incident") return `${record.effectiveDate} · ${record.consumerName} · ${record.purok} · ${record.oldMeterSerial} → ${record.newMeterSerial} · ${record.status}`;
-  return `${record.readingDate} · ${record.consumerName} · ${record.purok} · ${Number(record.consumption).toLocaleString("en-US")} m³`;
+  const previousReading = record.readingSource === "incident" || record.meterIncidentId
+    ? "New / 0"
+    : Number(record.previousReading).toLocaleString("en-US");
+  const usage = record.readingSource === "incident" || record.meterIncidentId
+    ? `Carried: ${Number(record.carriedConsumption).toLocaleString("en-US")} + Current: ${Number(record.currentReading).toLocaleString("en-US")} = Total: ${Number(record.consumption).toLocaleString("en-US")} m³`
+    : `Total: ${Number(record.consumption).toLocaleString("en-US")} m³`;
+  return `${record.readingDate} · ${record.consumerName} · ${record.purok} · ${previousReading} → ${Number(record.currentReading).toLocaleString("en-US")} · ${usage}`;
 }
 
 export default function ReportDetailsModal({ onClose, reportId }) {

@@ -739,11 +739,27 @@ export function renderReportPdf(report) {
         const columns = [
           { align: "center", key: "index", label: "#", width: 30 },
           { align: "center", key: "readingDate", label: "DATE", width: 70 },
-          { align: "left", key: "consumerName", label: "CONSUMER", width: 148 },
+          { align: "left", key: "consumerName", label: "CONSUMER", width: 105 },
           { align: "center", key: "purok", label: "PUROK", width: 62 },
-          { align: "right", key: "previousReading", label: "PREV. READING", width: 70 },
-          { align: "right", key: "currentReading", label: "CURR. READING", width: 70 },
-          { align: "right", key: "consumption", label: "USAGE (M3)", width: 57 },
+          {
+            align: "right",
+            key: "previousReading",
+            label: "PREV. READING",
+            width: 64,
+            format: (record) => record.readingSource === "incident" || record.meterIncidentId
+              ? "New / 0"
+              : String(record.previousReading),
+          },
+          { align: "right", key: "currentReading", label: "CURR. READING", width: 64 },
+          {
+            align: "right",
+            key: "consumption",
+            label: "USAGE (M3)",
+            width: 112,
+            format: (record) => record.readingSource === "incident" || record.meterIncidentId
+              ? `Carried: ${record.carriedConsumption} + Current: ${record.currentReading} = Total: ${record.consumption} m3`
+              : `Total: ${record.consumption} m3`,
+          },
         ];
         const rows = [...(data.records ?? [])]
           .sort(byPurokAscending)
