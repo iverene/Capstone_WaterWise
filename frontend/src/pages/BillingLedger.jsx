@@ -43,6 +43,10 @@ const consumptionReceipt = (bill, consumerName, billings) => {
     runDate: formatReceiptDate(bill.createdAt ?? bill.readingDate),
     previousReading: bill.previousReading,
     presentReading: bill.currentReading,
+    consumption: bill.cubicMetersConsumed,
+    readingSource: bill.readingSource ?? "actual",
+    carriedConsumption: Number(bill.carriedConsumption ?? 0),
+    newBaseline: bill.newBaseline ?? null,
     baselineBill: bill.amountDue,
     ...arrears,
   };

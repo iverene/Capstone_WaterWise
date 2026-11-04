@@ -234,6 +234,8 @@ FOR EACH ROW EXECUTE FUNCTION enforce_global_account_identity();
 -- .env-driven JS path is the single source of truth.
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS staff_action_failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS staff_action_locked_until TIMESTAMPTZ;
 ALTER TABLE consumers ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE consumers ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
 ALTER TABLE meter_readers ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0;
@@ -1799,7 +1801,6 @@ BEGIN;
 -- 1. Settings
 -- ---------------------------------------------------------------------------
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
-  ('average_window_months', 3, 'Number of actual readings used for the average billing basis.'),
   ('incident_authorization_days', 30, 'Days a meter incident authorization stays valid.')
 ON CONFLICT (setting_key) DO NOTHING;
 

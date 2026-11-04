@@ -426,19 +426,15 @@ export default function ReportMeterIncidentPage() {
     return Math.round((entered - Number(lastRecorded)) * 100) / 100;
   }, [form.oldFinalReading, lastRecorded]);
   const baselineValue = form.newBaseline === "" ? 0 : Number(form.newBaseline);
-  const previousConsumption = activeContext?.latestConsumption ?? null;
   const usesLatestReadingFallback =
     lastRecorded != null &&
     (form.oldFinalReading === "" ||
       (Number.isFinite(Number(form.oldFinalReading)) &&
         Number(form.oldFinalReading) < Number(lastRecorded)));
-  const usesPreviousConsumption =
-    closingDerived === 0 && lastRecorded != null;
-  const carried = usesPreviousConsumption
-    ? Number(previousConsumption ?? 0)
-    : usesLatestReadingFallback
-      ? null
-      : closingDerived;
+  const hasZeroMovement = closingDerived === 0 && lastRecorded != null;
+  const carried = usesLatestReadingFallback || hasZeroMovement
+    ? null
+    : closingDerived;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -802,8 +798,8 @@ export default function ReportMeterIncidentPage() {
                   )}
                   {closingDerived != null && !usesLatestReadingFallback && (
                     <span className="mt-1.5 block text-xs font-semibold text-water-800">
-                      {usesPreviousConsumption
-                        ? `Carried usage: ${Number(carried).toLocaleString()} m³ from the previous consumption.`
+                      {hasZeroMovement
+                        ? "Carry basis will be finalized when the reading entry is recorded."
                         : `Carried usage: ${Number(carried).toLocaleString()} m³ from the closing-reading difference.`}
                     </span>
                   )}
@@ -827,8 +823,8 @@ export default function ReportMeterIncidentPage() {
                 <>The latest recorded reading of <strong>{Number(lastRecorded).toLocaleString()} m³</strong> will be used automatically as the old closing-reading fallback.</>
               ) : carried == null ? (
                 <>A previous reading is required before the system can apply the fallback.</>
-              ) : usesPreviousConsumption ? (
-                <>The closing reading is equal to or below the latest reading, so the previous consumption of <strong>{Number(carried).toLocaleString()} m³</strong> will be carried.</>
+              ) : hasZeroMovement ? (
+                <>The closing reading is equal to or below the latest reading. Previous consumption is used only when the reading entry is recorded on the same calendar day as the effective date; otherwise the date-based fallback rule applies.</>
               ) : (
                 <>
                   This carries

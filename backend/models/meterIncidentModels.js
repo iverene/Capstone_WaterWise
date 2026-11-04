@@ -75,6 +75,11 @@ export const normalizeIncident = (row) => {
     notes: row.notes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    currentPriorUsage: toNumberOrNull(row.current_prior_usage),
+    currentPriorUsageBasis: row.current_prior_usage_basis ?? null,
+    currentAverageWindow: row.current_average_window ?? null,
+    currentAverageValue: toNumberOrNull(row.current_average_value),
+    currentBasisIsProjection: row.current_basis_is_projection === true,
   };
 };
 
@@ -111,9 +116,29 @@ const readingAlreadyRecordedThisMonth = async (consumerId) => {
 const lateIncidentWarning =
   "A reading is already recorded for this month, so the old meter's usage will be added to the next reading instead.";
 
-export async function getAverageWindowMonths() {
-  return 3;
-}
+const normalizeIncidentWithCurrentProjection = async (row) => {
+  const incident = normalizeIncident(row);
+  if (!incident || !["pending", "authorized"].includes(incident.status)) return incident;
+  try {
+    const resolved = await resolveIncidentPriorUsage(incident.consumerId, {
+      oldFinalReading: incident.oldFinalReading,
+      effectiveDate: incident.effectiveDate,
+      readingDate: manilaDate(),
+    });
+    return {
+      ...incident,
+      currentPriorUsage: round2(resolved.priorUsage),
+      currentPriorUsageBasis: resolved.basis,
+      currentAverageWindow: resolved.window,
+      currentAverageValue: resolved.averageValue,
+      currentBasisIsProjection: true,
+    };
+  } catch {
+    // Keep the historical record visible if a projection cannot be resolved.
+    // The authoritative value is finalized by the Reading Entry transaction.
+    return incident;
+  }
+};
 
 export async function listMeterIncidents({ status, consumerId, limit = 200 } = {}) {
   let query = supabase
@@ -129,7 +154,7 @@ export async function listMeterIncidents({ status, consumerId, limit = 200 } = {
   if (error) {
     throw createError(`Failed to retrieve meter incidents: ${error.message}`, 500);
   }
-  return (data ?? []).map(normalizeIncident);
+  return Promise.all((data ?? []).map(normalizeIncidentWithCurrentProjection));
 }
 
 export async function getMeterIncident(id) {
@@ -305,7 +330,10 @@ export async function resolveIncidentPriorUsage(
     const incidentDate = manilaDate(effectiveDate ?? new Date());
     const currentReadingDate = manilaDate(readingDate ?? new Date());
     const elapsedDays = calendarDaysBetween(latest.readingDate, incidentDate);
-    if (incidentDate === currentReadingDate || elapsedDays === 0) {
+    // A replacement logged and applied on the same calendar day carries the
+    // latest recorded consumption, even when that latest reading is older
+    // than the incident date.
+    if (incidentDate === currentReadingDate) {
       return {
         priorUsage: latest.consumption,
         basis: "previous_consumption",
