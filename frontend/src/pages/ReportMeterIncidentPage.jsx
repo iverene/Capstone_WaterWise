@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CalendarClock,
   CheckCircle2,
   ChevronRight,
   Search as SearchIcon,
@@ -11,11 +12,16 @@ import DiscardChangesDialog from "../components/DiscardChangesDialog";
 import Dropdown from "../components/Dropdown";
 import LoadingSkeleton from "../components/LoadingSkeleton";
 import Modal from "../components/Modal";
+import ConsumptionReceiptModal from "../components/ConsumptionReceiptModal";
 import PageHeader from "../components/PageHeader";
 import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { fetchConsumerDirectory } from "../services/consumerDirectoryAPI";
-import { fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
+import {
+  createMeterReading,
+  fetchRecordingContext,
+  fetchRecordingContexts,
+} from "../services/meterReadingAPI";
 import {
   cacheIncidentContexts,
   getCachedIncidentContexts,
@@ -28,9 +34,51 @@ import {
   fetchMeterIncidents,
   logMeterIncident,
 } from "../services/meterIncidentAPI";
+import { TIER_DEFAULTS, breakdownTieredBill, computeTieredBill } from "../utils/waterBill";
 
 const requestMessage = (error, fallback) =>
   error?.response?.data?.message ?? error.message ?? fallback;
+
+const recordedAt = (timestamp, readingDate) => {
+  const format = new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Manila",
+  });
+  if (timestamp && !Number.isNaN(Date.parse(timestamp))) return format.format(new Date(timestamp));
+  if (readingDate) {
+    const dateOnly = new Intl.DateTimeFormat("en-PH", {
+      dateStyle: "medium",
+      timeZone: "Asia/Manila",
+    }).format(new Date(`${readingDate}T00:00:00+08:00`));
+    return `${dateOnly} · Time unavailable`;
+  }
+  return "Timestamp unavailable";
+};
+
+const consumptionReceiptData = (consumerName, receipt) => ({
+  meterName: consumerName,
+  runDate: recordedAt(receipt.createdAt, receipt.readingDate),
+  previousReading: receipt.previousReading,
+  presentReading: receipt.currentReading,
+  consumption: receipt.consumption,
+  readingSource: receipt.readingSource ?? "actual",
+  carriedConsumption: Number(receipt.carriedConsumption ?? 0),
+  newBaseline: receipt.newBaseline ?? null,
+  baselineBill: receipt.baselineBill ?? computeTieredBill(receipt.consumption, TIER_DEFAULTS),
+  billBreakdown: receipt.billBreakdown ?? breakdownTieredBill(receipt.consumption, TIER_DEFAULTS),
+  arrears30Days: Number(receipt.arrears30Days ?? 0),
+  arrears60Days: Number(receipt.arrears60Days ?? 0),
+  arrears90Days: Number(receipt.arrears90Days ?? 0),
+});
+
+const receiptFromContext = (context) => context.currentMonthReceipt ?? {
+  createdAt: context.latestCreatedAt,
+  readingDate: context.latestReadingDate,
+  previousReading: context.latestPreviousReading ?? (Number(context.latestPresentReading ?? 0) - Number(context.latestConsumption ?? 0)),
+  currentReading: Number(context.latestPresentReading ?? 0),
+  consumption: Number(context.latestConsumption ?? 0),
+};
 
 // Same filter as Record Meter Reading: digits with up to two decimal places.
 const acceptsDecimal = (value) => /^\d*(\.\d{0,2})?$/.test(value);
@@ -168,6 +216,12 @@ export default function ReportMeterIncidentPage() {
   const [form, setForm] = useState(emptyForm);
   const [context, setContext] = useState(null);
   const [openIncident, setOpenIncident] = useState(null);
+  const [sameDayRecording, setSameDayRecording] = useState(false);
+  const [sameDayReading, setSameDayReading] = useState("");
+  const [sameDayReview, setSameDayReview] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptResidentName, setReceiptResidentName] = useState("");
   const [saving, setSaving] = useState(false);
   const [isDiscardConfirmOpen, setIsDiscardConfirmOpen] = useState(false);
 
@@ -185,6 +239,31 @@ export default function ReportMeterIncidentPage() {
     (form.oldFinalReading !== "" ||
       form.newMeterSerial !== "" ||
       form.newBaseline !== "0");
+
+  const sameDayBaseline = Number(form.newBaseline || 0);
+  const sameDayCurrent = Number(sameDayReading);
+  const sameDayHasValue = sameDayReading !== "" && Number.isFinite(sameDayCurrent);
+  const latestReading = Number(
+    context?.latestPresentReading ??
+      selectedConsumer?.latestPresentReading ??
+      0,
+  );
+  const previousConsumption = Number(
+    context?.latestConsumption ??
+      selectedConsumer?.latestConsumption ??
+      0,
+  );
+  const sameDayCarry = Number.isFinite(Number(form.oldFinalReading)) &&
+    Number(form.oldFinalReading) > latestReading
+    ? Number(form.oldFinalReading) - latestReading
+    : previousConsumption;
+  const sameDayMeterUsage = sameDayHasValue
+    ? Number((sameDayCurrent - sameDayBaseline).toFixed(2))
+    : 0;
+  const sameDayConsumption = sameDayHasValue
+    ? Math.max(0, Number((sameDayCarry + sameDayMeterUsage).toFixed(2)))
+    : 0;
+  const sameDayEstimatedBill = computeTieredBill(sameDayConsumption, TIER_DEFAULTS);
 
   const purokOptions = useMemo(() => [
     { label: "All puroks", value: "all" },
@@ -282,6 +361,9 @@ export default function ReportMeterIncidentPage() {
         if (requestedConsumer) {
           setConsumerId(String(requestedConsumer.id));
           setForm(emptyForm());
+          setSameDayRecording(false);
+          setSameDayReading("");
+          setSameDayReview(false);
           setOpenIncident(null);
           setContext(null);
         }
@@ -370,6 +452,9 @@ export default function ReportMeterIncidentPage() {
   const selectResident = useCallback((consumer) => {
     setConsumerId(String(consumer.id));
     setForm(emptyForm());
+    setSameDayRecording(false);
+    setSameDayReading("");
+    setSameDayReview(false);
     setOpenIncident(null);
     if (navigator.onLine) {
       setContext(null);
@@ -383,6 +468,9 @@ export default function ReportMeterIncidentPage() {
     if (saving) return;
     setConsumerId("");
     setForm(emptyForm());
+    setSameDayRecording(false);
+    setSameDayReading("");
+    setSameDayReview(false);
     setOpenIncident(null);
     setContext(null);
     setIsDiscardConfirmOpen(false);
@@ -450,7 +538,26 @@ export default function ReportMeterIncidentPage() {
       );
       return;
     }
+    if (sameDayRecording) {
+      if (!navigator.onLine) {
+        toast.error(
+          "Same-day recording requires internet",
+          "Reconnect before recording the replacement and its consumption together.",
+        );
+        return;
+      }
+      if (sameDayReading === "" || !Number.isFinite(Number(sameDayReading))) {
+        toast.error(
+          "New meter reading required",
+          "Enter the new meter reading before recording same-day consumption.",
+        );
+        return;
+      }
+      setSameDayReview(true);
+      return;
+    }
 
+    let incidentSaved = false;
     try {
       setSaving(true);
       const payload = {
@@ -484,6 +591,7 @@ export default function ReportMeterIncidentPage() {
         return;
       }
       const saved = await logMeterIncident(payload);
+      incidentSaved = true;
       if (saved?.warning) {
         toast.warning("Meter replacement saved", saved.warning);
       } else {
@@ -505,8 +613,80 @@ export default function ReportMeterIncidentPage() {
       });
     } catch (requestError) {
       toast.error(
-        "Replacement not saved",
-        requestMessage(requestError, "Unable to save the meter replacement."),
+        incidentSaved ? "Consumption not recorded" : "Replacement not saved",
+        requestMessage(
+          requestError,
+          incidentSaved
+            ? "The replacement was saved, but same-day consumption could not be recorded. Please record the reading from Reading Entry."
+            : "Unable to save the meter replacement.",
+        ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmSameDayRecord = async () => {
+    if (saving || !sameDayReview || !consumerId) return;
+    let incidentSaved = false;
+    try {
+      setSaving(true);
+      const payload = {
+        consumerId: Number(consumerId),
+        incidentType: "replacement",
+        idempotencyKey: createMeterIncidentRequestKey(),
+        oldFinalReading: form.oldFinalReading,
+        newMeterSerial: form.newMeterSerial,
+        newBaseline: baselineValue,
+      };
+      const saved = await logMeterIncident(payload);
+      incidentSaved = true;
+      const result = await createMeterReading({
+        consumerId: Number(consumerId),
+        currentReading: Number(sameDayReading),
+        idempotencyKey: createMeterIncidentRequestKey(),
+        incident: { id: saved.id },
+      });
+      toast.success(
+        "Consumption recorded",
+        "The replacement and same-day consumption were applied successfully.",
+      );
+      setConsumerId("");
+      setForm(emptyForm());
+      setOpenIncident(null);
+      setSameDayRecording(false);
+      setSameDayReading("");
+      setSameDayReview(false);
+      setContext(null);
+      setReceiptResidentName(selectedConsumer?.consumerName ?? "Resident");
+      setReceiptData(null);
+      setReceiptLoading(true);
+      try {
+        const receiptContext = await fetchRecordingContext(consumerId);
+        setReceiptData(consumptionReceiptData(
+          selectedConsumer?.consumerName ?? "Resident",
+          receiptFromContext(receiptContext),
+        ));
+      } catch {
+        setReceiptData(consumptionReceiptData(
+          selectedConsumer?.consumerName ?? "Resident",
+          {
+            ...result,
+            baselineBill: result.billing?.totalBill,
+          },
+        ));
+      } finally {
+        setReceiptLoading(false);
+      }
+    } catch (requestError) {
+      toast.error(
+        incidentSaved ? "Consumption not recorded" : "Replacement not saved",
+        requestMessage(
+          requestError,
+          incidentSaved
+            ? "The replacement was saved, but same-day consumption could not be recorded."
+            : "Unable to save the replacement.",
+        ),
       );
     } finally {
       setSaving(false);
@@ -662,10 +842,12 @@ export default function ReportMeterIncidentPage() {
       )}
 
       <Modal
-        closeLabel={openIncident ? "Close meter replacement details" : "Close meter replacement form"}
+        closeLabel={sameDayReview ? "Close same-day reading review" : openIncident ? "Close meter replacement details" : "Close meter replacement form"}
         closeOnOverlay={false}
         description={
-          openIncident
+          sameDayReview
+            ? "Review the new meter reading and estimated bill before confirming the same-day record."
+            : openIncident
             ? "This replacement is already recorded and will be applied at the next reading."
             : "Record a replacement so the next reading carries the old meter's usage."
         }
@@ -675,9 +857,82 @@ export default function ReportMeterIncidentPage() {
         onClose={requestCloseEntry}
         showCloseButton={false}
         size="md"
-        title={openIncident ? "Meter replacement details" : "Record meter replacement"}
+        title={sameDayReview ? "Review same-day reading" : openIncident ? "Meter replacement details" : "Record meter replacement"}
       >
-        {!selectedConsumer ? null : openIncident ? (
+        {!selectedConsumer ? null : sameDayReview ? (
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="font-bold text-navy-900">Resident</p>
+              <p className="mt-1 text-xs text-slate-600">
+                {selectedConsumer.consumerName} · Account {selectedConsumer.consumerNo} · {selectedConsumer.purok}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-water-200 bg-water-50 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-water-700">
+                  <CalendarClock aria-hidden="true" className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="font-bold text-navy-900">Date and time are automatic</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    The system records the exact timestamp when you confirm.
+                  </p>
+                </div>
+              </div>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-xl bg-white p-3">
+                  <dt className="text-xs font-semibold text-slate-500">New meter baseline</dt>
+                  <dd className="mt-1 font-mono font-extrabold tabular-nums text-navy-900">{sameDayBaseline.toLocaleString()} m³</dd>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <dt className="text-xs font-semibold text-slate-500">New meter reading</dt>
+                  <dd className="mt-1 font-mono font-extrabold tabular-nums text-navy-900">{sameDayCurrent.toLocaleString()} m³</dd>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <dt className="text-xs font-semibold text-slate-500">Old meter carried</dt>
+                  <dd className="mt-1 font-mono font-extrabold tabular-nums text-navy-900">{sameDayCarry.toLocaleString()} m³</dd>
+                </div>
+                <div className="rounded-xl bg-white p-3">
+                  <dt className="text-xs font-semibold text-slate-500">New meter usage</dt>
+                  <dd className="mt-1 font-mono font-extrabold tabular-nums text-navy-900">{sameDayMeterUsage.toLocaleString()} m³</dd>
+                </div>
+              </dl>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-xl bg-white p-3">
+                  <p className="text-xs font-bold text-water-700">Calculated consumption</p>
+                  <p className="mt-0.5 font-mono text-xl font-extrabold tabular-nums text-water-800">{sameDayConsumption.toLocaleString()} m³</p>
+                </div>
+                <div className="rounded-xl bg-navy-950 p-3">
+                  <p className="text-xs font-bold text-water-200">Estimated bill</p>
+                  <p className="mt-0.5 font-mono text-xl font-extrabold tabular-nums text-white">
+                    ₱{sameDayEstimatedBill.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+              Nothing has been saved yet. Confirming will save the replacement, create the reading, and apply the consumption to this incident.
+            </div>
+            <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+              <button
+                className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60"
+                disabled={saving}
+                onClick={closeEntry}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="ww-primary-button min-h-12 w-full touch-manipulation px-5 text-sm sm:min-h-11 sm:w-auto"
+                disabled={saving}
+                onClick={() => void confirmSameDayRecord()}
+                type="button"
+              >
+                {saving ? "Recording…" : "Confirm record"}
+              </button>
+            </div>
+          </div>
+        ) : openIncident ? (
           <div className="space-y-4 p-5 sm:p-6">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
               <p className="font-bold text-navy-900">Resident</p>
@@ -834,6 +1089,71 @@ export default function ReportMeterIncidentPage() {
               )}
             </div>
 
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <button
+                className="w-full rounded-xl border border-water-300 bg-water-50 px-4 py-3 text-left text-sm font-bold text-water-800 hover:bg-water-100"
+                onClick={() => setSameDayRecording((current) => !current)}
+                type="button"
+              >
+                {sameDayRecording ? "Hide same-day consumption" : "Record Consumption (Same Day)"}
+              </button>
+              {sameDayRecording && (
+                <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                  <div className="rounded-xl border border-water-200 bg-water-50 p-3 text-xs leading-5 text-water-900">
+                    This records the first reading of the new meter today. The old meter&apos;s applicable carry will be added automatically.
+                  </div>
+                  <label className="block text-sm font-bold text-slate-700">
+                    New meter reading
+                    <input
+                      autoFocus
+                      className="ww-field mt-2 p-3 font-mono tabular-nums"
+                      inputMode="decimal"
+                      onChange={(event) => {
+                        if (acceptsDecimal(event.target.value)) setSameDayReading(event.target.value);
+                      }}
+                      placeholder="Type meter value"
+                      required
+                      type="text"
+                      value={sameDayReading}
+                    />
+                    <span className="mt-1.5 block text-xs font-medium leading-5 text-slate-500">
+                      Use the value shown on the new meter. The baseline is {baselineValue.toLocaleString()} m³.
+                    </span>
+                  </label>
+                  <div className="rounded-2xl border border-water-200 bg-water-50 p-3 sm:p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-water-700">
+                        <CalendarClock aria-hidden="true" className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <p className="font-bold text-navy-900">Date and time are automatic</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-600">
+                          The system records the exact timestamp when you confirm.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-xs font-bold text-water-700">Calculated consumption</p>
+                        <p className="mt-0.5 font-mono text-xl font-extrabold tabular-nums text-water-800">
+                          {sameDayConsumption.toLocaleString()} m³
+                        </p>
+                        <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                          {sameDayCarry.toLocaleString()} m³ carried + {sameDayMeterUsage.toLocaleString()} m³ new meter
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-navy-950 p-3">
+                        <p className="text-xs font-bold text-water-200">Estimated bill</p>
+                        <p className="mt-0.5 font-mono text-xl font-extrabold tabular-nums text-white">
+                          ₱{sameDayEstimatedBill.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col-reverse gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
               <button
                 className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-navy-900 hover:bg-slate-50 disabled:opacity-60"
@@ -849,12 +1169,23 @@ export default function ReportMeterIncidentPage() {
                 onClick={(event) => void submit(event)}
                 type="button"
               >
-                {saving ? "Saving…" : "Save replacement"}
+                {saving ? "Saving…" : sameDayRecording ? "Review replacement" : "Save replacement"}
               </button>
             </div>
           </form>
         )}
       </Modal>
+
+      <ConsumptionReceiptModal
+        isOpen={receiptLoading || Boolean(receiptData)}
+        loading={receiptLoading}
+        onClose={() => {
+          setReceiptData(null);
+          setReceiptLoading(false);
+        }}
+        receiptData={receiptData}
+        residentName={receiptResidentName}
+      />
 
       <DiscardChangesDialog
         description="Are you sure you want to discard the changes to this meter replacement?"
