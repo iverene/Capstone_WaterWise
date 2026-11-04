@@ -96,6 +96,11 @@ export default function ConsumerReadingsPage() {
       runDate: formatReceiptDate(selectedReading.createdAt ?? selectedReading.readingDate),
       previousReading: selectedReading.previousReading,
       presentReading: selectedReading.currentReading,
+      consumption: selectedReading.consumption,
+      readingSource: selectedReading.readingSource,
+      carriedConsumption: selectedReading.carriedConsumption,
+      meterIncidentId: selectedReading.meterIncidentId,
+      newBaseline: selectedReading.newBaseline,
       baselineBill: linkedBill.amountDue,
       ...arrears,
     };

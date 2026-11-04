@@ -27,9 +27,6 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
 
   const amountPaid = Number(receiptData.amountPaid ?? receiptData.amountDue ?? 0);
   const amountTendered = Number(receiptData.amountTendered ?? amountPaid);
-  const changeGiven = Number(
-    receiptData.changeGiven ?? Math.max(amountTendered - amountPaid, 0),
-  );
   const remainingBalance = Number(receiptData.balanceAfterPayment ?? receiptData.remainingBalance ?? 0);
   const paymentMethod = receiptData.paymentMethod ?? "Cash";
   const paymentStatus = receiptData.statusAfterPayment
@@ -50,7 +47,6 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
       ...(isCash
         ? [
             ["Cash Received", currency(amountTendered)],
-            ["Change", currency(changeGiven)],
           ]
         : []),
       ["Status", paymentStatus],
@@ -158,7 +154,6 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
             {isCash && (
               <>
                 <ReceiptLine label="Cash Received" value={currency(amountTendered)} />
-                <ReceiptLine label="Change" value={currency(changeGiven)} />
               </>
             )}
             <div className="flex items-start justify-between gap-3 py-2 sm:gap-4 sm:py-3">

@@ -31,6 +31,9 @@ const MeterReadingTable = ({
   showStatus = true,
   showUsage = true,
 }) => {
+  const isIncidentReading = (reading) =>
+    reading.readingSource === "incident" || Boolean(reading.meterIncidentId);
+
   return (
       <Table
         ariaLabel="Meter readings"
@@ -68,15 +71,40 @@ const MeterReadingTable = ({
                 <td className="col-span-2 flex flex-col font-bold text-navy-900 before:mb-1 before:text-xs before:font-semibold before:text-slate-500 before:content-['Resident'] md:col-span-1 md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.consumerName}</td>
                 )}
                 {readingDateFirst && (
-                <td className="flex flex-col font-mono text-slate-600 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Date'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.readingDate}</td>
+                <td className="flex flex-col font-mono text-slate-600 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Date'] md:table-cell md:px-4 md:py-4 md:before:hidden">
+                  <span>{reading.readingDate}</span>
+                  {isIncidentReading(reading) && (
+                    <span className="mt-1 ml-1 inline-flex w-fit rounded-full bg-amber-50 px-2 py-0.5 font-sans text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-200">
+                      New meter
+                    </span>
+                  )}
+                </td>
                 )}
-                <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Previous_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.previousReading} m³</td>
+                <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Previous_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">
+                  {isIncidentReading(reading)
+                    ? "New / 0"
+                    : `${reading.previousReading} m³`}
+                </td>
                 <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Present_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.currentReading} m³</td>
                 {showUsage && (
-                <td className="flex flex-col font-mono font-bold tabular-nums text-navy-900 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Cubic_Used'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.consumption} m³</td>
+                <td className="flex flex-col items-center font-mono font-bold tabular-nums text-black before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Cubic_Used'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">
+                  {isIncidentReading(reading) && (
+                    <span className="whitespace-normal text-xs font-bold leading-5 text-amber-700">
+                      Carried: {reading.carriedConsumption ?? 0} + Current: {reading.currentReading} = {reading.consumption} m³
+                    </span>
+                  )}
+                  {!isIncidentReading(reading) && <span>{reading.consumption} m³</span>}
+                </td>
                 )}
                 {!readingDateFirst && (
-                <td className="flex flex-col font-mono text-slate-600 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Date'] md:table-cell md:px-4 md:py-4 md:before:hidden">{reading.readingDate}</td>
+                <td className="flex flex-col font-mono text-slate-600 before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Date'] md:table-cell md:px-4 md:py-4 md:before:hidden">
+                  <span>{reading.readingDate}</span>
+                  {isIncidentReading(reading) && (
+                    <span className="mt-1 ml-1 inline-flex w-fit rounded-full bg-amber-50 px-2 py-0.5 font-sans text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-200">
+                      New meter
+                    </span>
+                  )}
+                </td>
                 )}
                 {showStatus && (
                 <td className="flex items-end md:table-cell md:px-4 md:py-4"><ReadingStatus status={reading.status} /></td>

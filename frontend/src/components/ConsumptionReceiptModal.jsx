@@ -68,6 +68,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
     consumption,
     readingSource = "actual",
     carriedConsumption = 0,
+    meterIncidentId = null,
     newBaseline = null,
     baselineBill,
     billBreakdown = null,
@@ -77,12 +78,16 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
   } = receiptData;
   const isIncidentReading =
     readingSource === "incident" ||
+    meterIncidentId != null ||
     newBaseline != null ||
     Number(carriedConsumption) > 0;
 
-  const cubicMetersUsed = Number(
-    (Number(consumption ?? presentReading - previousReading) || 0).toFixed(2),
-  );
+  const cubicMetersUsed = Number((Number(consumption) || 0).toFixed(2));
+  const carriedUsed = Number(carriedConsumption) || 0;
+  const currentUsed = Number(presentReading) || 0;
+  const usageLabel = isIncidentReading
+    ? `Carried: ${carriedUsed} + Current: ${currentUsed} = ${cubicMetersUsed} m³`
+    : `${cubicMetersUsed} m³`;
   const totalArrears = arrears30Days + arrears60Days + arrears90Days;
   const totalOverallBill = baselineBill + totalArrears;
 
@@ -94,8 +99,8 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         ["Meter Name", meterName],
         ["Run Date", runDate],
         [
-          isIncidentReading ? "Previous Reading (old meter)" : "Previous Reading",
-          `${previousReading} m³`,
+          isIncidentReading ? "Previous Reading" : "Previous Reading",
+          isIncidentReading ? "New / 0" : `${previousReading} m³`,
         ],
         [
           isIncidentReading ? "New Meter Reading" : "Present Reading",
@@ -104,8 +109,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         ...(isIncidentReading
           ? [["New Meter Starts At", `${Number(newBaseline ?? 0)} m³`]]
           : []),
-        ...(Number(carriedConsumption) > 0 ? [["Carried From Old Meter", `${Number(carriedConsumption)} m³`]] : []),
-        ["Cubic Meters Used", `${cubicMetersUsed} m³`],
+        ["Cubic Meters Used", usageLabel],
         ...(Array.isArray(billBreakdown)
           ? billBreakdown.map((line) => [line.label, `₱${Number(line.amount).toFixed(2)}`])
           : []),
@@ -166,7 +170,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           {currency(baselineBill)}
         </p>
         <p className="mt-1.5 text-xs text-slate-300 sm:mt-2 sm:text-sm">
-          {cubicMetersUsed.toLocaleString("en-US")} m³ used · Current consumption bill
+          {usageLabel} · Current consumption bill
         </p>
       </section>
 
@@ -193,9 +197,9 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
           </h3>
           <dl className="mt-1.5 sm:mt-2">
             <ReceiptLine
-              label={isIncidentReading ? "Previous (old meter)" : "Previous"}
+              label="Previous"
               testId="telemetry-prev"
-              value={`${previousReading} m³`}
+              value={isIncidentReading ? "New / 0" : `${previousReading} m³`}
             />
             <ReceiptLine
               label={isIncidentReading ? "New meter reading" : "Present"}
@@ -209,14 +213,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
                 value={`${Number(newBaseline ?? 0)} m³`}
               />
             )}
-            {Number(carriedConsumption) > 0 && (
-              <ReceiptLine
-                label="Carried from old meter"
-                testId="telemetry-carried"
-                value={`${Number(carriedConsumption)} m³`}
-              />
-            )}
-            <ReceiptLine label="Used" testId="telemetry-used" value={`${cubicMetersUsed} m³`} />
+            <ReceiptLine label="Cubic used" testId="telemetry-used" value={usageLabel} />
             <ReceiptLine label="Current consumption bill" testId="telemetry-baseline" value={currency(baselineBill)} />
             {Array.isArray(billBreakdown) && billBreakdown.length > 0 && (
               <div className="mt-2 rounded-xl bg-slate-50 p-2.5 sm:p-3">
