@@ -28,6 +28,20 @@ export async function getAllSystemSettings() {
   return data;
 }
 
+export async function getWaterRateSettings() {
+  const { data, error } = await supabase
+    .from("system_settings")
+    .select("setting_key, setting_value")
+    .in("setting_key", TIER_SETTING_KEYS);
+
+  if (error) throw error;
+
+  return (data ?? []).reduce((settings, setting) => {
+    settings[setting.setting_key] = Number(setting.setting_value);
+    return settings;
+  }, {});
+}
+
 export async function updateSystemSetting(key, value, updatedBy) {
   const { data, error } = await supabase
     .from("system_settings")
