@@ -702,6 +702,12 @@ export default function ReportMeterIncidentPage() {
         description="Record a meter replacement at any time. The monthly reading picks it up automatically."
         title="Record Meter Replacement"
       />
+      <p className="-mt-3 text-sm font-semibold text-slate-600">
+        {new Intl.DateTimeFormat("en-PH", {
+          dateStyle: "long",
+          timeZone: "Asia/Manila",
+        }).format(new Date())}
+      </p>
 
       {loadError && (
         <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">

@@ -14,6 +14,17 @@ import { TIER_DEFAULTS, breakdownTieredBill, computeTieredBill } from "../utils/
 const currency = (value) =>
   `₱${Number(value ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
 
+const formatReadingMonth = (readingDate) => {
+  if (!readingDate) return null;
+  const date = new Date(`${readingDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-PH", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+};
+
 const SummaryItem = ({ label, value, tone = "" }) => (
   <div className={`rounded-xl border p-4 ${tone || "border-slate-200 bg-slate-50"}`}>
     <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
@@ -56,6 +67,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
   const previousReading = consumer.hasPreviousRecord ? consumer.latestPresentReading : initialPreviousReading;
   const previousValue = Number(previousReading);
   const currentValue = Number(currentReading);
+  const latestReadingMonth = formatReadingMonth(consumer.latestReadingDate);
   const hasValues = previousReading !== "" && previousReading != null && currentReading !== "";
   const belowPrevious = hasValues && Number.isFinite(previousValue) && Number.isFinite(currentValue) && currentValue < previousValue;
 
@@ -179,7 +191,7 @@ export default function ConsumptionEntryPanel({ consumer, onCancel, onDirtyChang
 
       <div className="mt-5 grid gap-3 rounded-2xl border border-water-100 bg-water-50 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
         <div><p className="font-extrabold text-navy-900">{consumer.consumerName}</p><p className="mt-1 text-xs font-semibold text-slate-600">Account {consumer.consumerNo} · {consumer.purok}</p></div>
-        <div className="rounded-xl bg-white px-3 py-2 text-left sm:text-right"><p className="text-xs font-semibold text-slate-500">Latest digital reading</p><p className="mt-0.5 font-mono font-extrabold text-navy-900">{consumer.hasPreviousRecord ? `${Number(consumer.latestPresentReading).toLocaleString()} m³` : "No record"}</p></div>
+        <div className="rounded-xl bg-white px-3 py-2 text-left sm:text-right"><p className="text-xs font-semibold text-slate-500">Latest digital reading{latestReadingMonth ? ` · ${latestReadingMonth}` : ""}</p><p className="mt-0.5 font-mono font-extrabold text-navy-900">{consumer.hasPreviousRecord ? `${Number(consumer.latestPresentReading).toLocaleString()} m³` : "No record"}</p></div>
       </div>
 
       {!isReviewing ? (
