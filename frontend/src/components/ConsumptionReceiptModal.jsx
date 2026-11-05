@@ -84,7 +84,11 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
 
   const cubicMetersUsed = Number((Number(consumption) || 0).toFixed(2));
   const carriedUsed = Number(carriedConsumption) || 0;
-  const currentUsed = Number(presentReading) || 0;
+  const baselineUsed = Number(newBaseline ?? 0);
+  const currentUsed = isIncidentReading
+    ? Number((Number(presentReading || 0) - baselineUsed).toFixed(2))
+    : Number(presentReading) || 0;
+  const incidentPreviousReading = `New / ${baselineUsed}`;
   const usageLabel = isIncidentReading
     ? `Carried: ${carriedUsed} + Current: ${currentUsed} = ${cubicMetersUsed} m³`
     : `${cubicMetersUsed} m³`;
@@ -100,7 +104,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
         ["Run Date", runDate],
         [
           isIncidentReading ? "Previous Reading" : "Previous Reading",
-          isIncidentReading ? "New / 0" : `${previousReading} m³`,
+          isIncidentReading ? incidentPreviousReading : `${previousReading} m³`,
         ],
         [
           isIncidentReading ? "New Meter Reading" : "Present Reading",
@@ -199,7 +203,7 @@ export default function ConsumptionReceiptModal({ isOpen, loading = false, onClo
             <ReceiptLine
               label="Previous"
               testId="telemetry-prev"
-              value={isIncidentReading ? "New / 0" : `${previousReading} m³`}
+              value={isIncidentReading ? incidentPreviousReading : `${previousReading} m³`}
             />
             <ReceiptLine
               label={isIncidentReading ? "New meter reading" : "Present"}

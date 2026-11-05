@@ -327,6 +327,12 @@ export default function RecordConsumptionPage() {
   return (
     <main className="space-y-4 sm:space-y-6">
       <PageHeader description="Select a resident and type the cumulative meter value." mobileCompact title="Record a Meter Reading" />
+      <p className="-mt-3 text-sm font-semibold text-slate-600">
+        {new Intl.DateTimeFormat("en-PH", {
+          dateStyle: "long",
+          timeZone: "Asia/Manila",
+        }).format(new Date())}
+      </p>
       {pendingCount > 0 && (
         <div className="rounded-xl border p-3 text-[13px] font-semibold sm:p-4 sm:text-sm border-water-200 bg-water-50 text-water-800" role="status">
           {`${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync`}

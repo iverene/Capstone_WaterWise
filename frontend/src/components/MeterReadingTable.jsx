@@ -82,7 +82,7 @@ const MeterReadingTable = ({
                 )}
                 <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Previous_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">
                   {isIncidentReading(reading)
-                    ? "New / 0"
+                    ? `New / ${Number(reading.newBaseline ?? 0)}`
                     : `${reading.previousReading} m³`}
                 </td>
                 <td className="flex flex-col font-mono tabular-nums before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Present_Reading'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">{reading.currentReading} m³</td>
@@ -90,7 +90,7 @@ const MeterReadingTable = ({
                 <td className="flex flex-col items-center font-mono font-bold tabular-nums text-black before:mb-1 before:font-sans before:text-xs before:font-semibold before:text-slate-500 before:content-['Cubic_Used'] md:table-cell md:px-4 md:py-4 md:text-center md:before:hidden">
                   {isIncidentReading(reading) && (
                     <span className="whitespace-normal text-xs font-bold leading-5 text-amber-700">
-                      Carried: {reading.carriedConsumption ?? 0} + Current: {reading.currentReading} = {reading.consumption} m³
+                      Carried: {reading.carriedConsumption ?? 0} + Current: {Number((Number(reading.currentReading ?? 0) - Number(reading.newBaseline ?? 0)).toFixed(2))} = {reading.consumption} m³
                     </span>
                   )}
                   {!isIncidentReading(reading) && <span>{reading.consumption} m³</span>}
