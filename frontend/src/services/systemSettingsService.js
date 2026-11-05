@@ -19,6 +19,15 @@ export async function fetchSystemSetting(key) {
   }
 }
 
+export async function fetchWaterRateSettings() {
+  try {
+    const response = await apiRequest("/system-settings/rates");
+    return response.data ?? response;
+  } catch (error) {
+    throw new Error(error.response?.data?.message ?? "Unable to load water rate settings.", { cause: error });
+  }
+}
+
 export async function requestSettingsChangeOtp() {
   try {
     return await apiRequest("/auth/admin/staff-action/otp", {

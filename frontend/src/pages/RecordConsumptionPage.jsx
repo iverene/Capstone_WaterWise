@@ -13,7 +13,7 @@ import Search from "../components/Search";
 import { useToast } from "../components/Toast";
 import { createMeterReading, fetchRecordingContext, fetchRecordingContexts } from "../services/meterReadingAPI";
 import { cacheRecordingContexts, getCachedRecordingContexts, getPendingMeterReadings, queueMeterReading } from "../services/offlineMeterReadings";
-import { fetchSystemSetting } from "../services/systemSettingsService";
+import { fetchWaterRateSettings } from "../services/systemSettingsService";
 import { TIER_DEFAULTS, breakdownTieredBill, computeTieredBill } from "../utils/waterBill";
 
 const requestMessage = (error, fallback) => error?.response?.data?.message ?? error.message ?? fallback;
@@ -83,23 +83,17 @@ export default function RecordConsumptionPage() {
   const [rates, setRates] = useState(TIER_DEFAULTS);
 
   useEffect(() => {
-    const loadTier = async (key, field) => {
-      try {
-        const setting = await fetchSystemSetting(key);
-        const value = Number(setting?.data?.setting_value ?? setting?.setting_value);
-        if (Number.isFinite(value) && value >= 0) {
-          setRates((current) => ({ ...current, [field]: value }));
-        }
-      } catch {
-        // Tier key missing - default stays.
-      }
-    };
-    loadTier("minimum_charge", "minimumCharge");
-    loadTier("minimum_m3", "minimumM3");
-    loadTier("rate_6_15", "rate6_15");
-    loadTier("rate_16_25", "rate16_25");
-    loadTier("rate_26_50", "rate26_50");
-    loadTier("rate_51_up", "rate51Up");
+    fetchWaterRateSettings()
+      .then((settings) => {
+        const nextRates = Object.fromEntries(
+          Object.entries(settings).filter(([, value]) => Number.isFinite(Number(value)) && Number(value) >= 0)
+            .map(([key, value]) => [key, Number(value)]),
+        );
+        setRates((current) => ({ ...current, ...nextRates }));
+      })
+      .catch(() => {
+        // Missing or unavailable settings keep the built-in defaults.
+      });
   }, []);
 
   useEffect(() => {

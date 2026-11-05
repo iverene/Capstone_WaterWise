@@ -1,4 +1,9 @@
-import { getAllSystemSettings, getSystemSetting, updateSystemSetting } from "../models/systemSettingsModels.js";
+import {
+  getAllSystemSettings,
+  getSystemSetting,
+  getWaterRateSettings,
+  updateSystemSetting,
+} from "../models/systemSettingsModels.js";
 
 export async function listSystemSettings(req, res) {
   try {
@@ -22,6 +27,26 @@ export async function getSystemSettingByKey(req, res) {
       success: false,
       message: notFound ? "Setting not found." : "Unable to load the setting.",
     });
+  }
+}
+
+export async function getWaterRateSettingsValues(req, res) {
+  try {
+    const settings = await getWaterRateSettings();
+    return res.status(200).json({
+      success: true,
+      data: {
+        minimumCharge: settings.minimum_charge,
+        minimumM3: settings.minimum_m3,
+        rate6_15: settings.rate_6_15,
+        rate16_25: settings.rate_16_25,
+        rate26_50: settings.rate_26_50,
+        rate51Up: settings.rate_51_up,
+      },
+    });
+  } catch (error) {
+    console.error("Failed to fetch water rate settings:", error);
+    return res.status(500).json({ success: false, message: "Unable to load water rate settings." });
   }
 }
 

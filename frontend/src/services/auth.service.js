@@ -14,6 +14,29 @@ import { disableCurrentPushNotifications } from "./pushNotifications";
 
 export { ACCOUNT_STORAGE_KEY };
 
+let currentUserCache = null;
+let currentUserInFlight = null;
+
+const accountCacheKey = (user) =>
+  user?.id && user?.role ? `${user.id}:${user.role}` : null;
+
+export function clearCurrentUser() {
+  currentUserCache = null;
+  currentUserInFlight = null;
+}
+
+function cacheCurrentUser(user) {
+  currentUserCache = {
+    key: accountCacheKey(user),
+    user,
+  };
+  return user;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("waterwise-session-changed", clearCurrentUser);
+}
+
 export async function login(credentials) {
   try {
     // No session write here: the caller (Login) validates the role has a
@@ -229,11 +252,13 @@ export async function revokeOtherTrustedDevices() {
 
 export async function updateMeterReaderAccount(meterReaderId, updates, authorizationToken) {
   try {
-    return await apiRequest(`/meter-readers/${meterReaderId}`, {
+    const result = await apiRequest(`/meter-readers/${meterReaderId}`, {
       method: "PATCH",
       body: JSON.stringify(updates),
       headers: { "X-Staff-Authorization": authorizationToken },
     });
+    clearCurrentUser();
+    return result;
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to update the meter reader.", { cause: error });
   }
@@ -241,11 +266,13 @@ export async function updateMeterReaderAccount(meterReaderId, updates, authoriza
 
 export async function updateAdminAccount(adminId, updates, authorizationToken) {
   try {
-    return await apiRequest(`/admins/${adminId}`, {
+    const result = await apiRequest(`/admins/${adminId}`, {
       method: "PATCH",
       body: JSON.stringify(updates),
       headers: { "X-Staff-Authorization": authorizationToken },
     });
+    clearCurrentUser();
+    return result;
   } catch (error) {
     throw new Error(error.response?.data?.message ?? "Unable to update the administrator.", { cause: error });
   }
@@ -262,34 +289,50 @@ export async function resetPassword(token, password) {
   }
 }
 
-export async function getCurrentAccount(options) {
-  if (isLoggingOut()) throw new Error("Sign-out is in progress.");
-  const result = await apiRequest("/auth/me", options);
+export async function getCurrentAccount() {
   if (isLoggingOut()) throw new Error("Sign-out is in progress.");
   const storedAccount = getStoredAccount() ?? {};
-  const incoming = result.user;
-  if (!incoming?.id || !incoming?.role) {
-    throw new Error("The session response did not contain a valid account.");
+  const storedKey = accountCacheKey(storedAccount);
+  if (currentUserCache?.key === storedKey && currentUserCache.user) {
+    return { user: currentUserCache.user };
   }
-  // Defensive merge: never blank a stored name/username/email with
-  // undefined/null from a sparse response. Backend now enriches /auth/me,
-  // but this guards old sessions and partial payloads.
-  const sameAccount = storedAccount.id === incoming.id && storedAccount.role === incoming.role;
-  const user = sameAccount ? { ...storedAccount } : {};
-  for (const [key, value] of Object.entries(incoming)) {
-    if (value !== undefined && value !== null && value !== "") user[key] = value;
-  }
-  if (sameAccount) {
-    storeAccountIdentity(user);
-  } else {
-    // Restart account-scoped listeners after cookie-only recovery and clear
-    // stale account caches if another tab has changed the signed-in account.
-    storeSession({ user });
-  }
-  // Keep the meter-reader offline identity fresh on every successful online
-  // verify (rolling 7-day grace). No token/password is persisted.
-  refreshMeterReaderPersistence(user);
-  return { user };
+  if (currentUserInFlight) return currentUserInFlight;
+
+  currentUserInFlight = (async () => {
+    const result = await apiRequest("/auth/me");
+    if (isLoggingOut()) throw new Error("Sign-out is in progress.");
+    const incoming = result.user;
+    if (!incoming?.id || !incoming?.role) {
+      throw new Error("The session response did not contain a valid account.");
+    }
+    // Defensive merge: never blank a stored name/username/email with
+    // undefined/null from a sparse response. Backend now enriches /auth/me,
+    // but this guards old sessions and partial payloads.
+    const latestStoredAccount = getStoredAccount() ?? {};
+    const sameAccount =
+      latestStoredAccount.id === incoming.id &&
+      latestStoredAccount.role === incoming.role;
+    const user = sameAccount ? { ...latestStoredAccount } : {};
+    for (const [key, value] of Object.entries(incoming)) {
+      if (value !== undefined && value !== null && value !== "") user[key] = value;
+    }
+    if (sameAccount) {
+      storeAccountIdentity(user);
+    } else {
+      // Restart account-scoped listeners after cookie-only recovery and clear
+      // stale account caches if another tab has changed the signed-in account.
+      storeSession({ user });
+    }
+    // Keep the meter-reader offline identity fresh on every successful online
+    // verify (rolling 7-day grace). No token/password is persisted.
+    refreshMeterReaderPersistence(user);
+    cacheCurrentUser(user);
+    return { user };
+  })().finally(() => {
+    currentUserInFlight = null;
+  });
+
+  return currentUserInFlight;
 }
 
 // Cached async session verification for the cookie-only world. The sync
@@ -304,6 +347,7 @@ let verifyInFlight = null;
 export function clearVerifiedSessionCache() {
   verifiedSessionCache = { at: 0, userId: null, role: null, ok: false };
   verifyInFlight = null;
+  clearCurrentUser();
 }
 
 export function noteSessionStored(user) {
@@ -311,6 +355,7 @@ export function noteSessionStored(user) {
     // A fresh login just proved the session server-side; seed the cache so
     // the next guard check skips an extra /auth/me round trip.
     verifiedSessionCache = { at: Date.now(), userId: user.id, role: user.role, ok: true };
+    cacheCurrentUser(user);
   } else {
     clearVerifiedSessionCache();
   }
@@ -386,6 +431,7 @@ export async function logout() {
     }
   } finally {
     clearVerifiedSessionCache();
+    clearCurrentUser();
     clearSession();
   }
 }
