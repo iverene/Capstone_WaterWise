@@ -8,6 +8,7 @@ import {
   updateConsumer,
   updateConsumerSelfProfile,
 } from "../models/consumerModels.js";
+import { invalidateAdminDashboardCache } from "../services/adminDashboardService.js";
 import {
   clearRefreshCookie,
   clearSessionCookie,
@@ -43,6 +44,7 @@ export const registerConsumer = async (req, res) => {
       contactNumber,
       purokNo
     );
+    await invalidateAdminDashboardCache();
 
     return res.status(201).json({
       success: true,
@@ -75,10 +77,12 @@ export const showConsumer = async (req, res) => {
 
 export const editConsumer = async (req, res) => {
   try {
+    const consumer = await updateConsumer(req.params.id, req.body ?? {});
+    await invalidateAdminDashboardCache();
     return res.status(200).json({
       success: true,
       message: "Consumer account updated successfully.",
-      data: await updateConsumer(req.params.id, req.body ?? {}),
+      data: consumer,
     });
   } catch (error) {
     return sendError(res, error, "Failed to update consumer account.");
@@ -87,10 +91,12 @@ export const editConsumer = async (req, res) => {
 
 export const disconnectConsumer = async (req, res) => {
   try {
+    const consumer = await disconnectFlaggedConsumer(req.params.id);
+    await invalidateAdminDashboardCache();
     return res.status(200).json({
       success: true,
       message: "Consumer account disconnected successfully.",
-      data: await disconnectFlaggedConsumer(req.params.id),
+      data: consumer,
     });
   } catch (error) {
     return sendError(res, error, "Failed to disconnect consumer account.");
@@ -99,10 +105,12 @@ export const disconnectConsumer = async (req, res) => {
 
 export const removeConsumer = async (req, res) => {
   try {
+    const consumer = await deleteConsumer(req.params.id);
+    await invalidateAdminDashboardCache();
     return res.status(200).json({
       success: true,
       message: "Consumer account deleted successfully.",
-      data: await deleteConsumer(req.params.id),
+      data: consumer,
     });
   } catch (error) {
     return sendError(res, error, "Failed to delete consumer account.");

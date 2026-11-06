@@ -4,6 +4,7 @@ import {
   getBillings,
   getBillingsByConsumer,
 } from "../models/billingModels.js";
+import { invalidateAdminDashboardCache } from "../services/adminDashboardService.js";
 
 const sendError = (res, error, fallbackMessage) => {
   console.error(fallbackMessage, error);
@@ -17,6 +18,7 @@ const sendError = (res, error, fallbackMessage) => {
 export const generateMonthlyBilling = async (req, res) => {
   try {
     const billing = await createMonthlyBilling(req.body ?? {});
+    await invalidateAdminDashboardCache();
 
     return res.status(201).json({
       success: true,
