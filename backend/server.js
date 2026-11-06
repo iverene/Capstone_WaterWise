@@ -15,6 +15,7 @@ import recomendationRoutes from "./routes/recommendationRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import changeEventRoutes from "./routes/changeEventRoutes.js";
 import rateLimitRoutes from "./routes/rateLimitRoutes.js";
+import adminDashboardRoutes from "./routes/adminDashboardRoutes.js";
 import systemSettingsRoutes from "./routes/systemSettingsRoutes.js";
 import meterIncidentRoutes from "./routes/meterIncidentRoutes.js";
 import { globalLimiter } from "./middleware/rateLimit.js";
@@ -181,6 +182,7 @@ app.use("/api/recommendation", recomendationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/changes", changeEventRoutes);
 app.use("/api/admin/rate-limits", rateLimitRoutes);
+app.use("/api/admin/dashboard", adminDashboardRoutes);
 app.use("/api/system-settings", systemSettingsRoutes);
 app.use("/api/meter-incidents", meterIncidentRoutes);
 

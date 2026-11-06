@@ -6,6 +6,7 @@ import {
   getPaymentsByBilling,
   getPaymentsByConsumer,
 } from "../models/paymentModels.js";
+import { invalidateAdminDashboardCache } from "../services/adminDashboardService.js";
 
 const sendError = (res, error, fallbackMessage) => {
   console.error(fallbackMessage, error);
@@ -18,10 +19,12 @@ const sendError = (res, error, fallbackMessage) => {
 
 export async function addPayment(req, res) {
   try {
+    const payment = await createPayment(req.body ?? {});
+    await invalidateAdminDashboardCache();
     return res.status(201).json({
       success: true,
       message: "Payment recorded successfully.",
-      data: await createPayment(req.body ?? {}),
+      data: payment,
     });
   } catch (error) {
     return sendError(res, error, "Failed to record payment.");
@@ -71,10 +74,12 @@ export async function listConsumerPayments(req, res) {
 
 export async function allocatePayment(req, res) {
   try {
+    const payment = await createWaterfallPayment(req.body ?? {});
+    await invalidateAdminDashboardCache();
     return res.status(201).json({
       success: true,
       message: "Payment allocated oldest to newest.",
-      data: await createWaterfallPayment(req.body ?? {}),
+      data: payment,
     });
   } catch (error) {
     return sendError(res, error, "Failed to allocate payment.");

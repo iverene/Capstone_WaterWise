@@ -19,6 +19,7 @@ import {
   getCachedConsumption,
   invalidateConsumptionCache,
 } from "../services/consumptionCache.js";
+import { invalidateAdminDashboardCache } from "../services/adminDashboardService.js";
 
 export const addConsumptionReading = async (req, res) => {
   try {
@@ -26,6 +27,7 @@ export const addConsumptionReading = async (req, res) => {
     const consumerId = result?.consumer_id ?? req.body?.consumerId;
     const purok = await getConsumerPurok(consumerId);
     await invalidateConsumptionCache({ purok });
+    await invalidateAdminDashboardCache();
 
     return res.status(201).json({
       success: true,
