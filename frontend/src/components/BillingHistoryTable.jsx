@@ -29,7 +29,7 @@ function getStatusConfig(status) {
   };
 }
 
-function MobileBillCard({ canViewReceipt, onViewReceipt, row, showConsumerDetails }) {
+function MobileBillCard({ canViewReceipt, highlighted = false, onViewReceipt, row, showConsumerDetails }) {
   const receiptAvailable = onViewReceipt && (canViewReceipt ? canViewReceipt(row) : true);
   const { Icon: StatusIcon, className: statusClassName } = getStatusConfig(row.status);
   const title = showConsumerDetails ? (row.consumerName ?? "Unknown consumer") : row.billingPeriod;
@@ -42,7 +42,7 @@ function MobileBillCard({ canViewReceipt, onViewReceipt, row, showConsumerDetail
   return (
     <Wrapper
       aria-label={receiptAvailable ? `View receipt for ${title}` : undefined}
-      className={`flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-card ${receiptAvailable ? "cursor-pointer transition-colors active:bg-slate-50" : ""}`}
+      className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-left shadow-card ${highlighted ? "border-water-300 bg-water-50 ring-2 ring-water-200" : "border-slate-200 bg-white"} ${receiptAvailable ? "cursor-pointer transition-colors active:bg-slate-50" : ""}`}
       onClick={receiptAvailable ? () => onViewReceipt(row) : undefined}
       type={receiptAvailable ? "button" : undefined}
     >
@@ -150,9 +150,10 @@ export default function BillingHistoryTable({
           </li>
         ) : (
           historyData.map((row) => (
-            <li key={row.invoiceNumber ?? row.id}>
+            <li className="scroll-mt-24" data-billing-id={row.id} key={row.invoiceNumber ?? row.id}>
               <MobileBillCard
                 canViewReceipt={canViewReceipt}
+                highlighted={Number(row.id) === Number(highlightedBillingId)}
                 onViewReceipt={onViewReceipt}
                 row={row}
                 showConsumerDetails={showConsumerDetails}

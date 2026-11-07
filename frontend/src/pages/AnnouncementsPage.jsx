@@ -10,16 +10,16 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadAnnouncements = useCallback(async ({ showLoading = true, signal } = {}) => {
-    if (showLoading) setLoading(true);
-    try {
-      setAnnouncements(await fetchConsumerAnnouncements({ signal }));
+  const loadAnnouncements = useCallback(({ signal } = {}) => {
+    return fetchConsumerAnnouncements({ signal }).then((records) => {
+      if (signal?.aborted) return;
+      setAnnouncements(records);
       setError("");
-    } catch (requestError) {
-      if (!isCanceledRequest(requestError)) setError(requestError.message);
-    } finally {
-      if (showLoading && !signal?.aborted) setLoading(false);
-    }
+    }).catch((requestError) => {
+      if (!signal?.aborted && !isCanceledRequest(requestError)) setError(requestError.message);
+    }).finally(() => {
+      if (!signal?.aborted) setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function AnnouncementsPage() {
     void loadAnnouncements({ signal: controller.signal });
     const handleTargetedRefresh = (event) => {
       if (event.detail?.path === "/consumer/announcements") {
-        void loadAnnouncements({ showLoading: false });
+        void loadAnnouncements({ signal: controller.signal });
       }
     };
     window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);

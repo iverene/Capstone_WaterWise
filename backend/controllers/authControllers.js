@@ -228,7 +228,7 @@ function createRefreshToken(user, passwordHash, loginAt, absoluteExpSeconds) {
     subject: String(user.id),
     issuer: JWT_ISSUER,
     audience: REFRESH_AUDIENCE,
-    ...(remaining ? { expiresIn: remaining } : { expiresIn: getRefreshTokenDuration() }),
+    ...(remaining ? { expiresIn: remaining } : { expiresIn: getRefreshTokenDuration(user.role) }),
   });
 }
 
@@ -630,7 +630,7 @@ export async function login(req, res) {
     await touchSessionActivity(user.role, user.id);
     const loginSessionToken = createAccessToken(user, loginPasswordHash);
     setSessionCookie(res, loginSessionToken, req, user.role);
-    if (user.role === "consumer" || user.role === "admin" || user.role === "super-admin") {
+    if (["consumer", "meter-reader", "admin", "super-admin"].includes(user.role)) {
       // Absolute window anchored at this login; background refresh every
       // 5min renews the 15m access without extending the absolute cap.
       const loginAt = Date.now();
@@ -662,7 +662,7 @@ export async function refreshSession(req, res) {
     if (!token) return res.status(401).json({ success: false, message: "Session refresh is required. Please sign in again." });
     const payload = jwt.verify(token, getJwtSecret(), { issuer: JWT_ISSUER, audience: REFRESH_AUDIENCE });
     const role = payload.role;
-    if (!["consumer", "admin", "super-admin"].includes(role)) {
+    if (!["consumer", "meter-reader", "admin", "super-admin"].includes(role)) {
       return res.status(403).json({ success: false, message: "Session refresh is not available for this account type." });
     }
     const userId = Number(payload.sub);
@@ -706,6 +706,10 @@ export async function refreshSession(req, res) {
     if (isTokenError) {
       clearSessionCookie(res, req);
       clearRefreshCookie(res, req);
+    }
+    if (!isTokenError) {
+      console.error("Session refresh temporarily unavailable:", error.message);
+      return res.status(503).json({ success: false, message: "Session verification is temporarily unavailable. Please try again." });
     }
     return res.status(401).json({ success: false, message: "Session refresh expired. Please sign in again." });
   }

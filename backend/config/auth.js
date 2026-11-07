@@ -38,12 +38,14 @@ const DEFAULT_ACCESS_TOKEN_DURATION_BY_ROLE = {
 // Absolute refresh window from first login per role (auto-logout after this).
 const DEFAULT_REFRESH_TOKEN_DURATION_BY_ROLE = {
   consumer: "90d",
+  "meter-reader": "7d",
   admin: "1h",
   "super-admin": "30m",
 };
 
 const REFRESH_TOKEN_DURATION_ENV_BY_ROLE = {
   consumer: "REFRESH_EXPIRES_CONSUMER",
+  "meter-reader": "REFRESH_EXPIRES_METER_READER",
   admin: "REFRESH_EXPIRES_ADMIN",
   "super-admin": "REFRESH_EXPIRES_SUPER_ADMIN",
 };
@@ -123,7 +125,7 @@ export function getRefreshTokenDuration(role = "consumer") {
 //
 // A device row is trusted for the role's absolute session lifetime
 // (refresh-token lifetime per role; 7 days for meter readers who have no
-// refresh token), plus a small grace so a still-valid access token never
+// a small grace so a still-valid access token never
 // 401s on device grounds alone.
 
 const MS_PER_UNIT = {
@@ -163,10 +165,10 @@ const DEFAULT_DEVICE_SESSION_MS_BY_ROLE = {
 
 export function getDeviceSessionLifetimeMs(role) {
   if (role === "meter-reader") {
-    // Meter readers have no refresh token; match the 7-day offline grace.
+    // Match the refresh window while retaining the offline device-trust setting.
     // Optional override; defaults apply when unset or invalid.
     const days = readPositiveInt("DEVICE_SESSION_DAYS_METER_READER", 7, 1, 90);
-    return days * 24 * 60 * 60 * 1000;
+    return Math.max(days * 24 * 60 * 60 * 1000, parseJwtDurationToMs(getRefreshTokenDuration(role), days * 24 * 60 * 60 * 1000));
   }
   const fallback = DEFAULT_DEVICE_SESSION_MS_BY_ROLE[role] ?? DEFAULT_DEVICE_SESSION_MS_BY_ROLE.consumer;
   return parseJwtDurationToMs(getRefreshTokenDuration(role), fallback);

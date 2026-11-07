@@ -1,3 +1,4 @@
+import { fetchAllPages } from "../utils/supabasePagination.js";
 import { supabase } from "../config/supabase.js";
 
 const LIST_FIELDS =
@@ -27,10 +28,11 @@ export async function insertGeneratedReport(report) {
 }
 
 export async function listGeneratedReports() {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("generated_reports")
     .select(LIST_FIELDS)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false }));
   if (error) throw reportError(`Failed to retrieve generated reports: ${error.message}`);
   return data ?? [];
 }

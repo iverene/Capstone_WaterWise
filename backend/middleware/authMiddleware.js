@@ -145,8 +145,15 @@ export async function authenticate(req, res, next) {
     }
     return accountRateLimiter(req, res, next);
   } catch (error) {
-    if (error.statusCode === 500) {
-      return res.status(500).json({ success: false, message: error.message });
+    // Only JWT validation failures mean the credentials are invalid. Database
+    // and service failures must not turn a valid session into a forced logout.
+    if (!(error instanceof jwt.JsonWebTokenError)) {
+      console.error("Session verification unavailable:", error);
+      return res.status(503).json({
+        success: false,
+        code: "SESSION_VERIFICATION_UNAVAILABLE",
+        message: "Session verification is temporarily unavailable. Please try again.",
+      });
     }
     return res.status(401).json({
       success: false,

@@ -1,6 +1,6 @@
 import axios from "axios";
 import { clearSession, getStoredAccount, isLoggingOut } from "./authToken";
-import { clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
+import { captureCacheContext, isCacheContextCurrent, isCacheContextFresh, clearApiCache, readCachedResponse, writeCachedResponse } from "./apiCache";
 import { getDeviceFingerprint } from "../utils/deviceFingerprint";
 
 // Both Vercel and the Vite development server proxy this first-party path to
@@ -17,14 +17,12 @@ const apiClient = axios.create({
 const networkAdapter = axios.getAdapter(apiClient.defaults.adapter);
 let refreshInFlight = null;
 
-async function tryRefreshConsumerSession() {
+// Every caller (startup, request retry, timer, and stream) shares one refresh.
+export function refreshSessionOnce() {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    const { refreshSession } = await import("./auth.service.js");
-    return refreshSession();
-  })().finally(() => {
-    refreshInFlight = null;
-  });
+  refreshInFlight = apiClient.post("/auth/refresh")
+    .then((response) => response.data)
+    .finally(() => { refreshInFlight = null; });
   return refreshInFlight;
 }
 const pendingGets = new Map();
@@ -38,17 +36,33 @@ function getRequestKey(config) {
 }
 
 apiClient.defaults.adapter = async (config) => {
+  const context = config._sessionContext ?? captureCacheContext();
+  const ensureCurrentSession = () => {
+    if (!isCacheContextCurrent(context)) throw new axios.CanceledError("Session changed while request was pending.");
+  };
+  ensureCurrentSession();
+  const send = async () => {
+    try {
+      const response = await networkAdapter(config);
+      ensureCurrentSession();
+      return response;
+    } catch (error) {
+      ensureCurrentSession();
+      throw error;
+    }
+  };
   if (config.method?.toLowerCase() !== "get" || config.responseType === "blob") {
-    return networkAdapter(config);
+    return send();
   }
 
   const requestKey = getRequestKey(config);
   if (["/auth/me", "/auth/admin/trusted-devices"].includes(requestKey.split("?")[0])) {
-    return networkAdapter(config);
+    return send();
   }
+  const cacheContext = captureCacheContext();
   const account = getStoredAccount();
-  const pendingKey = `${account?.role ?? "anonymous"}:${account?.id ?? "anonymous"}:${requestKey}`;
-  const cached = readCachedResponse(requestKey);
+  const pendingKey = `${context.generation}:${cacheContext.cacheGeneration}:${account?.role ?? "anonymous"}:${account?.id ?? "anonymous"}:${requestKey}`;
+  const cached = readCachedResponse(requestKey, cacheContext);
   if (cached) return { ...cached, config, request: null };
 
   if (pendingGets.has(pendingKey)) {
@@ -56,8 +70,12 @@ apiClient.defaults.adapter = async (config) => {
     return { ...response, config };
   }
 
-  const request = networkAdapter(config).then((response) => {
-    writeCachedResponse(requestKey, response);
+  const request = send().then((response) => {
+    if (!isCacheContextFresh(cacheContext)) {
+      if ((config._cacheRetried ?? 0) >= 2) throw new axios.CanceledError("Data changed during refresh. Please try again.");
+      return apiClient.defaults.adapter({ ...config, _cacheRetried: (config._cacheRetried ?? 0) + 1 });
+    }
+    writeCachedResponse(requestKey, response, cacheContext);
     return response;
   }).finally(() => pendingGets.delete(pendingKey));
   pendingGets.set(pendingKey, request);
@@ -65,6 +83,7 @@ apiClient.defaults.adapter = async (config) => {
 };
 
 apiClient.interceptors.request.use(async (config) => {
+  config._sessionContext ??= captureCacheContext();
   // Cookie-only auth: HttpOnly waterwise_session is sent automatically via
   // withCredentials. Never attach a readable Bearer token. Fingerprint is
   // mandatory CSRF protection for cookie sessions (backend enforces it).
@@ -124,6 +143,7 @@ apiClient.interceptors.response.use(
       requestUrl.startsWith("/auth/reset-password") ||
       requestUrl.startsWith("/auth/admin/verify-login-otp") ||
       requestUrl.startsWith("/auth/admin/resend-login-otp");
+    const isSessionProbe = requestUrl === "/auth/me";
     const isPublicAuthPage = ["/login", "/forgot-password", "/reset-password"].includes(
       window.location.pathname,
     );
@@ -140,18 +160,20 @@ apiClient.interceptors.response.use(
     if (
       status === 401 &&
       !isLoggingOut() &&
-      !isPublicAuthPage &&
+      (!isPublicAuthPage || isSessionProbe) &&
       !isPublicAuthRequest &&
       !isStaffAuthorizationRequest &&
       !error.config?._refreshRetried &&
-      ["consumer", "admin", "super-admin"].includes(getStoredAccount()?.role)
+      (["consumer", "meter-reader", "admin", "super-admin"].includes(getStoredAccount()?.role) || (isSessionProbe && !getStoredAccount()))
     ) {
       try {
-        await tryRefreshConsumerSession();
+        await refreshSessionOnce();
         error.config._refreshRetried = true;
         return apiClient.request(error.config);
-      } catch {
-        // Refresh failed: fall through to the logout handling below.
+      } catch (refreshError) {
+        // A network failure, rate limit, or server outage does not revoke a login.
+        if (![401, 403].includes(refreshError.response?.status)) return Promise.reject(refreshError);
+        // The server rejected the refresh credentials: end this session.
       }
     }
     if (

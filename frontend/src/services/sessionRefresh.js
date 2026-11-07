@@ -9,7 +9,7 @@ let started = false;
 
 async function doRefresh() {
   const account = getStoredAccount();
-  if (!account || account.role === "meter-reader" || isLoggingOut()) return;
+  if (!account || isLoggingOut()) return;
   if (inFlight) return inFlight;
   inFlight = (async () => {
     try {

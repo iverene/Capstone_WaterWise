@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, X } from "lucide-react";
+import OfflineReadingQueue from "../components/OfflineReadingQueue";
 import ConsumerSelectionList from "../components/ConsumerSelectionList";
 import ConsumptionEntryPanel from "../components/ConsumptionEntryPanel";
 import DiscardChangesDialog from "../components/DiscardChangesDialog";
@@ -113,15 +114,6 @@ export default function RecordConsumptionPage() {
     } : consumer);
   }, []);
 
-  useEffect(() => {
-    const refreshPendingCount = async () => {
-      const pending = await getPendingMeterReadings();
-      setPendingCount(pending.length);
-    };
-    window.addEventListener("waterwise:offline-queue-changed", refreshPendingCount);
-    return () => window.removeEventListener("waterwise:offline-queue-changed", refreshPendingCount);
-  }, []);
-
   const loadData = useCallback(async ({ showLoading = true } = {}) => {
     try {
       if (showLoading) setLoading(true);
@@ -135,6 +127,18 @@ export default function RecordConsumptionPage() {
       if (showLoading) setLoading(false);
     }
   }, [applyPendingState]);
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const pending = await getPendingMeterReadings();
+        setPendingCount(pending.length);
+        if (navigator.onLine && !saving && !isEntryDirty) await loadData({ showLoading: false });
+      } catch { /* Keep the last visible queue state if device storage is unavailable. */ }
+    };
+    window.addEventListener("waterwise:offline-queue-changed", refresh);
+    return () => window.removeEventListener("waterwise:offline-queue-changed", refresh);
+  }, [isEntryDirty, loadData, saving]);
 
   useEffect(() => {
     const handleTargetedRefresh = (event) => {
@@ -329,9 +333,10 @@ export default function RecordConsumptionPage() {
       </p>
       {pendingCount > 0 && (
         <div className="rounded-xl border p-3 text-[13px] font-semibold sm:p-4 sm:text-sm border-water-200 bg-water-50 text-water-800" role="status">
-          {`${pendingCount} reading${pendingCount === 1 ? "" : "s"} waiting to sync`}
+          {`${pendingCount} reading${pendingCount === 1 ? "" : "s"} saved on this device`}
         </div>
       )}
+      <OfflineReadingQueue />
       {loadError && <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert"><span>{loadError}</span><button className="font-bold underline" onClick={loadData} type="button">Try again</button></div>}
       {/* Mobile controls: both filters stay exposed; search hides behind a toggle. */}
       <div aria-label="Resident directory controls" className="flex items-center gap-2 sm:hidden" role="search">

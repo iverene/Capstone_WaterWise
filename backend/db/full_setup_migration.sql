@@ -752,6 +752,17 @@ GRANT EXECUTE ON FUNCTION record_payment_transaction(INTEGER, NUMERIC, NUMERIC, 
 -- Mirrors payment_waterfall_migration.sql so fresh installs get it.
 DROP FUNCTION IF EXISTS record_payment_waterfall(INTEGER, NUMERIC, NUMERIC, DATE, TEXT, TEXT, TEXT);
 
+-- Original request and result make allocation retries immutable.
+CREATE TABLE IF NOT EXISTS payment_waterfall_requests (
+    request_key TEXT PRIMARY KEY,
+    request_data JSONB NOT NULL,
+    result_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE payment_waterfall_requests ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE payment_waterfall_requests FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE payment_waterfall_requests TO service_role;
+
 CREATE OR REPLACE FUNCTION record_payment_waterfall(
     p_consumer_id INTEGER,
     p_applied NUMERIC,
@@ -770,16 +781,16 @@ DECLARE
     v_bill RECORD;
     v_left NUMERIC(10,2) := ROUND(p_applied, 2);
     v_slice NUMERIC(10,2);
+    v_actual_applied NUMERIC(10,2) := 0.00;
     v_next_balance NUMERIC(10,2);
     v_next_status VARCHAR(30);
     v_payment payments%ROWTYPE;
     v_updated billing%ROWTYPE;
     v_payments JSONB := '[]'::JSONB;
     v_billings JSONB := '[]'::JSONB;
-    v_existing payments%ROWTYPE;
-    v_replay_total NUMERIC(10,2);
-    v_replay_consumer INTEGER;
-    v_replay_method TEXT;
+    v_request JSONB;
+    v_saved_request JSONB;
+    v_result JSONB;
 BEGIN
     IF p_applied IS NULL OR ROUND(p_applied, 2) <= 0 THEN
         RAISE EXCEPTION 'Payment amount must be greater than zero.';
@@ -787,7 +798,7 @@ BEGIN
     IF p_amount_tendered IS NULL OR ROUND(p_amount_tendered, 2) <= 0 THEN
         RAISE EXCEPTION 'Amount received must be greater than zero.';
     END IF;
-    IF p_payment_method NOT IN ('Cash', 'GCash') THEN
+    IF p_payment_method IS NULL OR p_payment_method NOT IN ('Cash', 'GCash') THEN
         RAISE EXCEPTION 'Unsupported payment method.';
     END IF;
     IF p_payment_date IS NULL THEN
@@ -806,24 +817,26 @@ BEGIN
         RAISE EXCEPTION 'A valid payment idempotency key is required.';
     END IF;
 
-    SELECT * INTO v_existing FROM payments WHERE starts_with(idempotency_key, TRIM(p_idempotency_key) || ':') LIMIT 1;
+    v_request := jsonb_build_object(
+        'consumer_id', p_consumer_id, 'applied', ROUND(p_applied, 2),
+        'amount_tendered', ROUND(p_amount_tendered, 2),
+        'payment_date', p_payment_date, 'payment_method', p_payment_method,
+        'reference_number', NULLIF(TRIM(COALESCE(p_reference_number, '')), '')
+    );
+    -- Lock before lookup, so concurrent retries see the committed result.
+    PERFORM pg_advisory_xact_lock(hashtextextended('waterwise-payment-key:' || TRIM(p_idempotency_key), 0));
+    PERFORM pg_advisory_xact_lock(hashtextextended('waterwise-payment-consumer:' || p_consumer_id, 0));
+    SELECT request_data, result_data INTO v_saved_request, v_result
+    FROM payment_waterfall_requests WHERE request_key = TRIM(p_idempotency_key);
     IF FOUND THEN
-        SELECT MIN(b.user_id), SUM(p.total_paid), MIN(p.payment_method) INTO v_replay_consumer, v_replay_total, v_replay_method
-        FROM payments p JOIN billing b ON b.id = p.billing_id
-        WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':');
-        IF v_replay_consumer IS DISTINCT FROM p_consumer_id OR ROUND(COALESCE(v_replay_total, 0), 2) <> ROUND(p_applied, 2) THEN
+        IF v_saved_request IS DISTINCT FROM v_request THEN
             RAISE EXCEPTION 'This payment request key was already used for different payment details.';
         END IF;
-        SELECT jsonb_agg(to_jsonb(p) - 'idempotency_key') INTO v_payments FROM payments p WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':');
-        SELECT jsonb_agg(to_jsonb(b)) INTO v_billings FROM billing b WHERE b.id IN (SELECT p.billing_id FROM payments p WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':'));
-        v_replay_total := ROUND(COALESCE(v_replay_total, 0), 2);
-        RETURN jsonb_build_object(
-            'payments', COALESCE(v_payments, '[]'::JSONB),
-            'billings', COALESCE(v_billings, '[]'::JSONB),
-            'total_applied', v_replay_total,
-            'change_given', CASE WHEN v_replay_method = 'Cash' THEN ROUND(p_amount_tendered - v_replay_total, 2) ELSE 0.00 END,
-            'replayed', true
-        );
+        RETURN v_result || jsonb_build_object('replayed', true);
+    END IF;
+    -- Original cash/requested amounts cannot be recovered for old allocations.
+    IF EXISTS (SELECT 1 FROM payments WHERE starts_with(idempotency_key, TRIM(p_idempotency_key) || ':')) THEN
+        RAISE EXCEPTION 'This legacy payment request was already recorded. Review payment history before submitting another payment.';
     END IF;
 
     FOR v_bill IN SELECT * FROM billing WHERE user_id = p_consumer_id AND remaining_balance > 0 ORDER BY billing_date ASC, id ASC FOR UPDATE LOOP
@@ -850,6 +863,7 @@ BEGIN
         v_payments := v_payments || jsonb_build_array((to_jsonb(v_payment) - 'idempotency_key'));
         v_billings := v_billings || jsonb_build_array(to_jsonb(v_updated));
         v_left := ROUND(v_left - v_slice, 2);
+        v_actual_applied := ROUND(v_actual_applied + v_slice, 2);
     END LOOP;
 
     IF ROUND(v_left, 2) > 0 AND p_payment_method <> 'Cash' THEN
@@ -860,13 +874,25 @@ BEGIN
         RAISE EXCEPTION 'No outstanding bills for this resident.';
     END IF;
 
-    RETURN jsonb_build_object(
+    SELECT jsonb_agg(item || jsonb_build_object(
+        'allocation_cash_received', ROUND(p_amount_tendered, 2),
+        'allocation_change_given', CASE WHEN p_payment_method = 'Cash'
+            THEN ROUND(p_amount_tendered - v_actual_applied, 2) ELSE 0.00 END,
+        'allocation_total_applied', v_actual_applied,
+        'cash_received_unavailable', false
+    ) ORDER BY position) INTO v_payments
+    FROM jsonb_array_elements(v_payments) WITH ORDINALITY AS entry(item, position);
+
+    v_result := jsonb_build_object(
         'payments', v_payments,
         'billings', v_billings,
-        'total_applied', (SELECT COALESCE(SUM((x->>'total_paid')::NUMERIC), 0) FROM jsonb_array_elements(v_payments) x),
-        'change_given', CASE WHEN p_payment_method = 'Cash' THEN ROUND(p_amount_tendered - p_applied, 2) ELSE 0.00 END,
+        'total_applied', v_actual_applied,
+        'change_given', CASE WHEN p_payment_method = 'Cash' THEN ROUND(p_amount_tendered - v_actual_applied, 2) ELSE 0.00 END,
         'replayed', false
     );
+    INSERT INTO payment_waterfall_requests (request_key, request_data, result_data)
+    VALUES (TRIM(p_idempotency_key), v_request, v_result);
+    RETURN v_result;
 END;
 $$;
 
@@ -1662,16 +1688,16 @@ DECLARE
     v_bill RECORD;
     v_left NUMERIC(10,2) := ROUND(p_applied, 2);
     v_slice NUMERIC(10,2);
+    v_actual_applied NUMERIC(10,2) := 0.00;
     v_next_balance NUMERIC(10,2);
     v_next_status VARCHAR(30);
     v_payment payments%ROWTYPE;
     v_updated billing%ROWTYPE;
     v_payments JSONB := '[]'::JSONB;
     v_billings JSONB := '[]'::JSONB;
-    v_existing payments%ROWTYPE;
-    v_replay_total NUMERIC(10,2);
-    v_replay_consumer INTEGER;
-    v_replay_method TEXT;
+    v_request JSONB;
+    v_saved_request JSONB;
+    v_result JSONB;
 BEGIN
     IF p_applied IS NULL OR ROUND(p_applied, 2) <= 0 THEN
         RAISE EXCEPTION 'Payment amount must be greater than zero.';
@@ -1679,7 +1705,7 @@ BEGIN
     IF p_amount_tendered IS NULL OR ROUND(p_amount_tendered, 2) <= 0 THEN
         RAISE EXCEPTION 'Amount received must be greater than zero.';
     END IF;
-    IF p_payment_method NOT IN ('Cash', 'GCash') THEN
+    IF p_payment_method IS NULL OR p_payment_method NOT IN ('Cash', 'GCash') THEN
         RAISE EXCEPTION 'Unsupported payment method.';
     END IF;
     IF p_payment_date IS NULL THEN
@@ -1698,24 +1724,26 @@ BEGIN
         RAISE EXCEPTION 'A valid payment idempotency key is required.';
     END IF;
 
-    SELECT * INTO v_existing FROM payments WHERE starts_with(idempotency_key, TRIM(p_idempotency_key) || ':') LIMIT 1;
+    v_request := jsonb_build_object(
+        'consumer_id', p_consumer_id, 'applied', ROUND(p_applied, 2),
+        'amount_tendered', ROUND(p_amount_tendered, 2),
+        'payment_date', p_payment_date, 'payment_method', p_payment_method,
+        'reference_number', NULLIF(TRIM(COALESCE(p_reference_number, '')), '')
+    );
+    -- Lock before lookup, so concurrent retries see the committed result.
+    PERFORM pg_advisory_xact_lock(hashtextextended('waterwise-payment-key:' || TRIM(p_idempotency_key), 0));
+    PERFORM pg_advisory_xact_lock(hashtextextended('waterwise-payment-consumer:' || p_consumer_id, 0));
+    SELECT request_data, result_data INTO v_saved_request, v_result
+    FROM payment_waterfall_requests WHERE request_key = TRIM(p_idempotency_key);
     IF FOUND THEN
-        SELECT MIN(b.user_id), SUM(p.total_paid), MIN(p.payment_method) INTO v_replay_consumer, v_replay_total, v_replay_method
-        FROM payments p JOIN billing b ON b.id = p.billing_id
-        WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':');
-        IF v_replay_consumer IS DISTINCT FROM p_consumer_id OR ROUND(COALESCE(v_replay_total, 0), 2) <> ROUND(p_applied, 2) THEN
+        IF v_saved_request IS DISTINCT FROM v_request THEN
             RAISE EXCEPTION 'This payment request key was already used for different payment details.';
         END IF;
-        SELECT jsonb_agg(to_jsonb(p) - 'idempotency_key') INTO v_payments FROM payments p WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':');
-        SELECT jsonb_agg(to_jsonb(b)) INTO v_billings FROM billing b WHERE b.id IN (SELECT p.billing_id FROM payments p WHERE starts_with(p.idempotency_key, TRIM(p_idempotency_key) || ':'));
-        v_replay_total := ROUND(COALESCE(v_replay_total, 0), 2);
-        RETURN jsonb_build_object(
-            'payments', COALESCE(v_payments, '[]'::JSONB),
-            'billings', COALESCE(v_billings, '[]'::JSONB),
-            'total_applied', v_replay_total,
-            'change_given', CASE WHEN v_replay_method = 'Cash' THEN ROUND(p_amount_tendered - v_replay_total, 2) ELSE 0.00 END,
-            'replayed', true
-        );
+        RETURN v_result || jsonb_build_object('replayed', true);
+    END IF;
+    -- Original cash/requested amounts cannot be recovered for old allocations.
+    IF EXISTS (SELECT 1 FROM payments WHERE starts_with(idempotency_key, TRIM(p_idempotency_key) || ':')) THEN
+        RAISE EXCEPTION 'This legacy payment request was already recorded. Review payment history before submitting another payment.';
     END IF;
 
     FOR v_bill IN SELECT * FROM billing WHERE user_id = p_consumer_id AND remaining_balance > 0 ORDER BY billing_date ASC, id ASC FOR UPDATE LOOP
@@ -1742,6 +1770,7 @@ BEGIN
         v_payments := v_payments || jsonb_build_array((to_jsonb(v_payment) - 'idempotency_key'));
         v_billings := v_billings || jsonb_build_array(to_jsonb(v_updated));
         v_left := ROUND(v_left - v_slice, 2);
+        v_actual_applied := ROUND(v_actual_applied + v_slice, 2);
     END LOOP;
 
     IF ROUND(v_left, 2) > 0 AND p_payment_method <> 'Cash' THEN
@@ -1752,13 +1781,25 @@ BEGIN
         RAISE EXCEPTION 'No outstanding bills for this resident.';
     END IF;
 
-    RETURN jsonb_build_object(
+    SELECT jsonb_agg(item || jsonb_build_object(
+        'allocation_cash_received', ROUND(p_amount_tendered, 2),
+        'allocation_change_given', CASE WHEN p_payment_method = 'Cash'
+            THEN ROUND(p_amount_tendered - v_actual_applied, 2) ELSE 0.00 END,
+        'allocation_total_applied', v_actual_applied,
+        'cash_received_unavailable', false
+    ) ORDER BY position) INTO v_payments
+    FROM jsonb_array_elements(v_payments) WITH ORDINALITY AS entry(item, position);
+
+    v_result := jsonb_build_object(
         'payments', v_payments,
         'billings', v_billings,
-        'total_applied', (SELECT COALESCE(SUM((x->>'total_paid')::NUMERIC), 0) FROM jsonb_array_elements(v_payments) x),
-        'change_given', CASE WHEN p_payment_method = 'Cash' THEN ROUND(p_amount_tendered - p_applied, 2) ELSE 0.00 END,
+        'total_applied', v_actual_applied,
+        'change_given', CASE WHEN p_payment_method = 'Cash' THEN ROUND(p_amount_tendered - v_actual_applied, 2) ELSE 0.00 END,
         'replayed', false
     );
+    INSERT INTO payment_waterfall_requests (request_key, request_data, result_data)
+    VALUES (TRIM(p_idempotency_key), v_request, v_result);
+    RETURN v_result;
 END;
 $$;
 

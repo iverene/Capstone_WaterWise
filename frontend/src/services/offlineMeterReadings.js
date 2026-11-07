@@ -87,7 +87,7 @@ export async function getCachedIncidentContexts() {
 }
 
 export async function queueMeterReading(payload) {
-  const record = { ...payload, accountScope: accountScope(), queuedAt: Date.now() };
+  const record = { ...payload, accountScope: accountScope(), queuedAt: Date.now(), status: "pending", syncError: null };
   await withStore(OUTBOX_STORE, "readwrite", (store) => requestResult(store.put(record)));
   return record;
 }
@@ -101,21 +101,61 @@ async function removePendingReading(idempotencyKey) {
   return withStore(OUTBOX_STORE, "readwrite", (store) => requestResult(store.delete(idempotencyKey)));
 }
 
-export async function syncPendingMeterReadings() {
-  if (!navigator.onLine) return { synced: 0, remaining: (await getPendingMeterReadings()).length };
+let readingSyncInFlight = null;
+
+export function syncPendingMeterReadings() {
+  if (readingSyncInFlight) return readingSyncInFlight;
+  readingSyncInFlight = synchronizeReadings().finally(() => {
+    readingSyncInFlight = null;
+    window.dispatchEvent(new Event("waterwise:offline-queue-changed"));
+  });
+  return readingSyncInFlight;
+}
+
+async function synchronizeReadings() {
   const pending = await getPendingMeterReadings();
+  if (!navigator.onLine) return { synced: 0, remaining: pending.length, failed: pending.filter(r => r.status === "rejected").length };
   let synced = 0;
   for (const record of pending) {
+    if (record.status === "rejected") continue;
     try {
       await createMeterReading(record);
       await removePendingReading(record.idempotencyKey);
       synced += 1;
     } catch (error) {
-      if (!error.response) break;
-      // Server rejection for this record; skip it and try the next one.
+      const status = error.response?.status;
+      const rejected = status >= 400 && status < 500 && ![401, 408, 429].includes(status);
+      await withStore(OUTBOX_STORE, "readwrite", store => requestResult(store.put({
+        ...record, status: rejected ? "rejected" : "pending",
+        syncError: error.response?.data?.message ?? error.message ?? "Unable to sync reading.",
+        failedAt: Date.now(),
+      })));
+      if (!rejected) break;
     }
   }
-  return { synced, remaining: (await getPendingMeterReadings()).length };
+  const remaining = await getPendingMeterReadings();
+  return { synced, remaining: remaining.length, failed: remaining.filter(r => r.status === "rejected").length };
+}
+
+export async function retryPendingMeterReading(idempotencyKey, updates = {}) {
+  if (readingSyncInFlight) await readingSyncInFlight;
+  const record = (await getPendingMeterReadings()).find(item => item.idempotencyKey === idempotencyKey);
+  if (!record) throw new Error("This reading has already synced or is no longer available.");
+  const revised = { ...record };
+  for (const field of ["currentReading", "initialPreviousReading"]) {
+    if (updates[field] === undefined) continue;
+    const value = Number(updates[field]);
+    if (String(updates[field]).trim() === "" || !Number.isFinite(value) || value < 0) {
+      throw new Error("Enter a valid non-negative meter value.");
+    }
+    revised[field] = value;
+  }
+  if (revised.initialPreviousReading != null && revised.currentReading < revised.initialPreviousReading) {
+    throw new Error("Current reading cannot be lower than the initial previous reading.");
+  }
+  await withStore(OUTBOX_STORE, "readwrite", store => requestResult(store.put({ ...revised, status: "pending", syncError: null })));
+  window.dispatchEvent(new Event("waterwise:offline-queue-changed"));
+  return syncPendingMeterReadings();
 }
 
 export async function queueMeterIncident(payload) {
