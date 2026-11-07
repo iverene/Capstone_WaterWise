@@ -111,11 +111,14 @@ export default function ConsumerHome() {
     : home.reading.latestUsage - home.reading.previousUsage;
   const hasBalance = home.billing.outstandingBalance > 0;
   const latestMonth = monthShortLabel(home.reading.latestDate);
+  const hasMultipleBills = home.billing.pendingCount > 1;
+  const pendingPeriods = home.billing.pendingPeriods ?? [];
+  const billingPeriodLabel = pendingPeriods.length > 2
+    ? `${pendingPeriods[0]} – ${pendingPeriods.at(-1)}`
+    : pendingPeriods.join(" and ");
 
-  // The payment banner dismisses once per outstanding bill: the dismissal is
-  // keyed by billing ID (falling back to the balance), so a new bill or a
-  // changed balance brings the banner back. The KPI keeps showing the debt.
-  const paymentBannerKey = home ? `payment-banner:${home.billing.nextBillingId ?? home.billing.outstandingBalance}` : null;
+  // Reappear when this resident's unpaid bills or balances change.
+  const paymentBannerKey = `payment-banner:v2:${home.account.id}:${home.billing.pendingSignature}`;
   const readStoredDismissedKey = () => {
     try {
       return window.localStorage.getItem("waterwise:dismissed-payment-banner");
@@ -150,18 +153,26 @@ export default function ConsumerHome() {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-amber-800">Important now</p>
-                <h2 className="mt-1 text-sm font-extrabold text-navy-900" id="payment-required-heading">Payment required</h2>
+                <h2 className="mt-1 text-sm font-extrabold text-navy-900" id="payment-required-heading">{hasMultipleBills ? `You have ${home.billing.pendingCount} unpaid bills` : home.billing.nextBillOverdue ? "Payment overdue" : "Payment required"}</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-600">
-                  <strong className="font-extrabold text-amber-800">{currency(home.billing.outstandingBalance)}</strong> remains due
-                  {home.billing.nextDueDate ? <> by <strong className="font-bold text-navy-900">{displayDate(home.billing.nextDueDate)}</strong></> : ""}.
+                  <strong className="font-extrabold text-amber-800">{currency(hasMultipleBills ? home.billing.outstandingBalance : home.billing.nextBillingBalance)}</strong>
+                  {hasMultipleBills ? " total outstanding." : " remaining on this bill."}
+                  {billingPeriodLabel && <span className="block font-bold text-navy-900">{billingPeriodLabel}</span>}
+                  {home.billing.nextDueDate && (
+                    <span className="block">
+                      {hasMultipleBills ? `Oldest ${home.billing.nextBillOverdue ? "overdue " : ""}bill: ${home.billing.nextBillingPeriod}. ` : ""}
+                      {home.billing.nextBillOverdue ? "Was due " : "Due "}
+                      <strong className="font-bold text-navy-900">{displayDate(home.billing.nextDueDate)}</strong>.
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
             <Link
               className="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-navy-950 px-4 text-xs font-bold text-white hover:bg-navy-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-900 focus-visible:ring-offset-2 sm:w-auto"
-              to={home.billing.nextBillingId ? `/consumer/billing-ledger?billingId=${home.billing.nextBillingId}` : "/consumer/billing-ledger"}
+              to={hasMultipleBills ? "/consumer/billing-ledger?status=outstanding" : home.billing.nextBillingId ? `/consumer/billing-ledger?billingId=${home.billing.nextBillingId}` : "/consumer/billing-ledger"}
             >
-              View bill <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+              {hasMultipleBills ? "View unpaid bills" : "View bill"} <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
             </Link>
           </div>
         </section>

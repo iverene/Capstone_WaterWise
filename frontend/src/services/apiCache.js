@@ -8,6 +8,20 @@ const LEGACY_CACHE_PREFIX = "waterwise-api-cache:";
 const MAX_ENTRIES = 200;
 
 const memoryCache = new Map();
+let sessionGeneration = 0;
+let cacheGeneration = 0;
+
+export function captureCacheContext() {
+  return { scope: accountScope(), generation: sessionGeneration, cacheGeneration };
+}
+
+export function isCacheContextCurrent(context) {
+  return context?.scope === accountScope() && context?.generation === sessionGeneration;
+}
+
+export function isCacheContextFresh(context) {
+  return isCacheContextCurrent(context) && context.cacheGeneration === cacheGeneration;
+}
 
 function accountScope() {
   const account = getStoredAccount();
@@ -15,8 +29,9 @@ function accountScope() {
   return `${account.role}:${account.id}`;
 }
 
-function storageKey(requestKey) {
-  const scope = accountScope();
+function storageKey(requestKey, context) {
+  if (!isCacheContextFresh(context)) return null;
+  const scope = context.scope;
   return scope ? `${scope}:${requestKey}` : null;
 }
 
@@ -30,15 +45,15 @@ function freshCopy(cached) {
   }
 }
 
-export function readCachedResponse(requestKey) {
-  const key = storageKey(requestKey);
+export function readCachedResponse(requestKey, context = captureCacheContext()) {
+  const key = storageKey(requestKey, context);
   if (!key) return null;
   const cached = memoryCache.get(key);
   return cached ? freshCopy(cached) : null;
 }
 
-export function writeCachedResponse(requestKey, response) {
-  const key = storageKey(requestKey);
+export function writeCachedResponse(requestKey, response, context = captureCacheContext()) {
+  const key = storageKey(requestKey, context);
   if (!key) return;
   if (!memoryCache.has(key) && memoryCache.size >= MAX_ENTRIES) {
     // FIFO evict the oldest entry; Map preserves insertion order.
@@ -53,6 +68,7 @@ export function writeCachedResponse(requestKey, response) {
 }
 
 export function clearApiCache() {
+  cacheGeneration += 1;
   memoryCache.clear();
 }
 
@@ -60,7 +76,10 @@ if (typeof window !== "undefined") {
   // Login/logout/account-switch dispatches this event (see authToken.js), so
   // the memory cache is wiped on the same transitions that used to clear the
   // sessionStorage cache. Covers logout without touching authToken imports.
-  window.addEventListener("waterwise-session-changed", () => memoryCache.clear());
+  window.addEventListener("waterwise-session-changed", () => {
+    sessionGeneration += 1;
+    memoryCache.clear();
+  });
 
   // One-time scrub: drop entries written by the old sessionStorage version
   // (e.g. tabs opened before this change shipped).

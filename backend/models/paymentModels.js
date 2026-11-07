@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fetchAllPages } from "../utils/supabasePagination.js";
 
 const PAYMENT_FIELDS =
-  "id, billing_id, total_paid, amount_tendered, change_given, remaining_balance, payment_date, payment_method, reference_number, created_at, updated_at";
+  "id, billing_id, total_paid, amount_tendered, change_given, remaining_balance, payment_date, payment_method, reference_number, idempotency_key, created_at, updated_at";
 
 const createError = (message, statusCode = 400) => {
   const error = new TypeError(message);
@@ -168,6 +168,41 @@ export async function createPayment({
   return data;
 }
 
+// Allocation rows contain the amount applied to one bill. Receipt cash
+// belongs to the whole allocation and must come from the original request.
+export async function attachAllocationReceiptDetails(records) {
+  const requestKey = (record) => {
+    const key = record.idempotency_key;
+    const suffix = `:${record.billing_id}`;
+    return typeof key === "string" && key.endsWith(suffix) ? key.slice(0, -suffix.length) : null;
+  };
+  const keys = [...new Set(records.map(requestKey).filter(Boolean))];
+  const requests = new Map();
+  for (let offset = 0; offset < keys.length; offset += 100) {
+    const chunk = keys.slice(offset, offset + 100);
+    const { data, error } = await fetchAllPages(() => supabase
+      .from("payment_waterfall_requests")
+      .select("request_key, request_data, result_data")
+      .in("request_key", chunk)
+      .order("request_key", { ascending: true }));
+    if (error) throw createError("Unable to retrieve original payment receipt details.", 503);
+    for (const request of data ?? []) requests.set(request.request_key, request);
+  }
+  return records.map((record) => {
+    const key = requestKey(record);
+    const { idempotency_key: internalKey, billing: ownerJoin, ...payment } = record;
+    void internalKey; void ownerJoin;
+    if (!key) return payment;
+    const request = requests.get(key);
+    return { ...payment,
+      allocation_cash_received: request?.request_data?.amount_tendered ?? null,
+      allocation_change_given: request?.result_data?.change_given ?? null,
+      allocation_total_applied: request?.result_data?.total_applied ?? null,
+      cash_received_unavailable: !request,
+    };
+  });
+}
+
 export async function getPayments() {
   const { data, error } = await fetchAllPages(() => supabase
     .from("payments")
@@ -178,7 +213,7 @@ export async function getPayments() {
   if (error) {
     throw createError(`Failed to retrieve payments: ${error.message}`, 500);
   }
-  return data ?? [];
+  return attachAllocationReceiptDetails(data ?? []);
 }
 
 export async function getPaymentById(id) {
@@ -195,52 +230,34 @@ export async function getPaymentById(id) {
   if (!data) {
     throw createError("Payment record not found.", 404);
   }
-  return data;
+  return (await attachAllocationReceiptDetails([data]))[0];
 }
 
 export async function getPaymentsByBilling(billingId) {
   const normalizedBillingId = parsePositiveId(billingId, "billing ID");
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("payments")
     .select(PAYMENT_FIELDS)
     .eq("billing_id", normalizedBillingId)
     .order("created_at", { ascending: false })
-    .order("id", { ascending: false });
+    .order("id", { ascending: false }));
 
   if (error) {
     throw createError(`Failed to retrieve billing payments: ${error.message}`, 500);
   }
-  return data ?? [];
+  return attachAllocationReceiptDetails(data ?? []);
 }
 
 export async function getPaymentsByConsumer(consumerId) {
   const userId = parsePositiveId(consumerId, "consumer ID");
-  const { data: billings, error: billingError } = await supabase
-    .from("billing")
-    .select("id")
-    .eq("user_id", userId);
-
-  if (billingError) {
-    throw createError(
-      `Failed to retrieve consumer billings: ${billingError.message}`,
-      500
-    );
-  }
-
-  const billingIds = (billings ?? []).map((billing) => billing.id);
-  if (billingIds.length === 0) return [];
-
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("payments")
-    .select(PAYMENT_FIELDS)
-    .in("billing_id", billingIds)
+    .select(`${PAYMENT_FIELDS}, billing!inner(user_id)`)
+    .eq("billing.user_id", userId)
     .order("created_at", { ascending: false })
-    .order("id", { ascending: false });
-
-  if (error) {
-    throw createError(`Failed to retrieve consumer payments: ${error.message}`, 500);
-  }
-  return data ?? [];
+    .order("id", { ascending: false }));
+  if (error) throw createError(`Failed to retrieve consumer payments: ${error.message}`, 500);
+  return attachAllocationReceiptDetails(data ?? []);
 }
 
 export async function createWaterfallPayment({
@@ -273,21 +290,11 @@ export async function createWaterfallPayment({
   if (normalizedMethod !== "Cash" && tendered !== applied) {
     throw createError("Electronic payment must equal the amount applied.");
   }
-  const { data: outstanding, error: outError } = await supabase
-    .from("billing")
-    .select("remaining_balance")
-    .eq("user_id", userId)
-    .gt("remaining_balance", 0);
-  if (outError) throw createError(`Failed to load outstanding balance: ${outError.message}`, 500);
-  const totalOutstanding = Number(
-    (outstanding ?? []).reduce((t, b) => t + Number(b.remaining_balance || 0), 0).toFixed(2),
-  );
-  if (totalOutstanding <= 0) throw createError("No outstanding bills for this resident.", 409);
-  if (normalizedMethod !== "Cash" && applied > totalOutstanding) throw createError("Electronic payments cannot exceed the total outstanding balance.", 400);
-  const cappedApplied = Math.min(applied, totalOutstanding);
+  // The transaction records and validates the original request before reading
+  // balances. Never cap the amount here: doing so changes a retry's identity.
   const { data, error } = await supabase.rpc("record_payment_waterfall", {
     p_amount_tendered: tendered,
-    p_applied: cappedApplied,
+    p_applied: applied,
     p_consumer_id: userId,
     p_idempotency_key: normalizedKey,
     p_payment_date: normalizedDate,
@@ -295,5 +302,11 @@ export async function createWaterfallPayment({
     p_reference_number: normalizedReference,
   });
   if (error) throw toPaymentError(error.message, "Failed to record payment.");
-  return { ...data, changeGiven: Number(data?.change_given ?? Math.max(tendered - cappedApplied, 0)), totalApplied: Number(data?.total_applied ?? cappedApplied) };
+  const receiptPayments = (data?.payments ?? []).map((payment) => ({ ...payment,
+    allocation_cash_received: tendered,
+    allocation_change_given: Number(data?.change_given ?? 0),
+    allocation_total_applied: Number(data?.total_applied ?? 0),
+    cash_received_unavailable: false,
+  }));
+  return { ...data, payments: receiptPayments, changeGiven: Number(data?.change_given ?? Math.max(tendered - applied, 0)), totalApplied: Number(data?.total_applied ?? applied) };
 }

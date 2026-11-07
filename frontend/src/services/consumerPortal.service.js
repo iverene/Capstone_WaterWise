@@ -200,7 +200,7 @@ export async function fetchConsumerHome(options) {
   const readings = consumptionPayload.data ?? [];
   const pendingBills = billings
     .filter((record) => Number(record.remaining_balance ?? 0) > 0)
-    .sort((left, right) => String(left.due_date).localeCompare(String(right.due_date)));
+    .sort((left, right) => String(left.billing_date).localeCompare(String(right.billing_date)) || Number(left.id) - Number(right.id));
   const latestReading = readings.at(-1) ?? null;
   const previousReading = readings.at(-2) ?? null;
   const latestUsage = Number(latestReading?.consumption ?? 0);
@@ -225,6 +225,11 @@ export async function fetchConsumerHome(options) {
       pendingCount: pendingBills.length,
       nextDueDate: pendingBills[0]?.due_date ?? null,
       nextBillingId: pendingBills[0]?.id ?? null,
+      nextBillingPeriod: pendingBills[0] ? formatMonth(pendingBills[0].billing_date) : null,
+      nextBillingBalance: Number(pendingBills[0]?.remaining_balance ?? 0),
+      nextBillOverdue: overdueDaysFor(pendingBills[0]?.due_date, currentManilaDateString()) > 0,
+      pendingPeriods: [...new Set(pendingBills.map((bill) => formatMonth(bill.billing_date)))],
+      pendingSignature: pendingBills.map((bill) => `${bill.id}:${bill.remaining_balance}:${bill.due_date}`).join("|"),
     },
     reading: {
       currentReading: Number(latestReading?.present_reading ?? 0),
@@ -285,8 +290,10 @@ export async function fetchBillingLedger(options) {
       paymentMethod: record.payment_method ?? "Cash",
       referenceNumber: record.reference_number ?? "",
       amountPaid: Number(record.total_paid ?? 0),
-      amountTendered: Number(record.amount_tendered ?? record.total_paid ?? 0),
-      changeGiven: Number(record.change_given ?? 0),
+      amountTendered: record.cash_received_unavailable ? null : Number(record.allocation_cash_received ?? record.amount_tendered ?? record.total_paid ?? 0),
+      cashReceivedUnavailable: Boolean(record.cash_received_unavailable),
+      allocationTotalApplied: record.allocation_total_applied == null ? null : Number(record.allocation_total_applied),
+      changeGiven: Number(record.allocation_change_given ?? record.change_given ?? 0),
       remainingBalance,
       balanceAfterPayment: remainingBalance,
       paymentStatus: statusAfterPayment,
@@ -304,6 +311,9 @@ export async function fetchBillingLedger(options) {
       name: composeProfileName(profile),
       outstandingBalance,
       dueDate: formatDate(nextOutstandingBill?.dueDate),
+      dueDateRaw: nextOutstandingBill?.dueDate ?? null,
+      pendingCount: historyData.filter((bill) => bill.remainingBalance > 0).length,
+      overdue: overdueDaysFor(nextOutstandingBill?.dueDate, currentManilaDateString()) > 0,
     },
     officialReceipt: null,
     payments,

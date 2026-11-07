@@ -213,7 +213,9 @@ export default function AppLayout({ children }) {
             `${incidents.synced} meter incident${incidents.synced === 1 ? "" : "s"} uploaded successfully.`,
           );
         }
-        if (readings.remaining > 0 && !readings.synced) {
+        if (readings.failed) {
+          toast.warning("Reading needs attention", `${readings.failed} reading${readings.failed === 1 ? "" : "s"} need review. Open Readings Entry to see the reason and correct them.`);
+        } else if (readings.remaining > 0 && !readings.synced) {
           toast.warning("Reading sync incomplete", `${readings.remaining} reading${readings.remaining === 1 ? "" : "s"} remain pending.`);
         }
         if (incidents.failed) {

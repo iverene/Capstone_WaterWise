@@ -34,19 +34,17 @@ function HistoryGraph({ data, dataKey, fillId, title, yearFilter = null }) {
 export default function HistoricalConsumptionGraphs() {
   const [monthly, setMonthly] = useState([]);
   const [yearly, setYearly] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedYear, setLoadedYear] = useState(null);
   const [selectedYear, setSelectedYear] = useState("");
   const [availableYears, setAvailableYears] = useState([]);
+  const loading = loadedYear !== selectedYear;
 
-  const loadHistory = useCallback(async ({ showLoading = true } = {}) => {
-      let active = true;
-      if (showLoading) setLoading(true);
-      try {
-        const [monthlyResponse, yearlyResponse] = await Promise.all([
+  const loadHistory = useCallback(({ signal } = {}) => {
+      return Promise.all([
           fetchMonthlyHistory(selectedYear || undefined),
           fetchYearlyHistory(),
-        ]);
-        if (!active) return;
+      ]).then(([monthlyResponse, yearlyResponse]) => {
+        if (signal?.aborted) return;
         const yearlyRecords = Array.isArray(unwrap(yearlyResponse)) ? unwrap(yearlyResponse) : [];
         // Monthly items carry no year of their own; anchor them to the
         // backend-resolved target year (requested, else latest with data).
@@ -83,22 +81,26 @@ export default function HistoricalConsumptionGraphs() {
           yearRange.push({ key: String(bucketYear), label: String(bucketYear), year: bucketYear });
         }
         setYearly(fillYearlyBuckets(yearlyRecords, yearRange, value, (record) => record?.year ?? record?.Year));
-      } catch {
-        if (active) { setMonthly([]); setYearly([]); }
-      } finally {
-        if (showLoading && active) setLoading(false);
-      }
+      }).catch(() => {
+        if (!signal?.aborted) { setMonthly([]); setYearly([]); }
+      }).finally(() => {
+        if (!signal?.aborted) setLoadedYear(selectedYear);
+      });
   }, [selectedYear]);
 
   useEffect(() => {
-    void loadHistory();
+    const controller = new AbortController();
+    void loadHistory({ signal: controller.signal });
     const handleTargetedRefresh = (event) => {
       if (event.detail?.path === "/admin/analytics") {
-        void loadHistory({ showLoading: false });
+        void loadHistory({ signal: controller.signal });
       }
     };
     window.addEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
-    return () => window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    return () => {
+      controller.abort();
+      window.removeEventListener("waterwise:targeted-refresh", handleTargetedRefresh);
+    };
   }, [loadHistory]);
 
   return (

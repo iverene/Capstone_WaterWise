@@ -63,7 +63,14 @@ export default function BillingLedger({
   const [error, setError] = useState("");
   const [requestVersion, setRequestVersion] = useState(0);
   const [periodFilter, setPeriodFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const requestedStatus = searchParams.get("status");
+  const statusFilter = ["outstanding", "Paid", "Partially Paid", "Unpaid", "Overdue"].includes(requestedStatus) ? requestedStatus : "all";
+  const setStatusFilter = (status) => {
+    const nextParams = new URLSearchParams(searchParams);
+    if (status === "all") nextParams.delete("status");
+    else nextParams.set("status", status);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   const retry = useCallback(() => {
     setError("");
@@ -108,13 +115,16 @@ export default function BillingLedger({
   const ledgerAccount = usesApi ? ledger?.ledgerAccount : ledgerAccountProp;
   const requestedBillingId = Number(searchParams.get("billingId"));
   const requestedView = searchParams.get("view");
-  const selectedBill = historyData.find((record) => record.id === requestedBillingId);
+  const selectedBill = historyData.find((record) => Number(record.id) === requestedBillingId);
   const periodOptions = [...new Set(historyData.map((record) => record.billingPeriod))];
   const hasActiveFilters = periodFilter !== "all" || statusFilter !== "all";
   const filteredHistoryData = historyData.filter((record) =>
     (periodFilter === "all" || record.billingPeriod === periodFilter) &&
-    (statusFilter === "all" || record.status === statusFilter),
+    (statusFilter === "all" || (statusFilter === "outstanding" ? Number(record.remainingBalance ?? record.outstandingBalance ?? 0) > 0 : record.status === statusFilter)),
   );
+  if (statusFilter === "outstanding") {
+    filteredHistoryData.sort((left, right) => String(left.readingDate).localeCompare(String(right.readingDate)) || Number(left.id) - Number(right.id));
+  }
   const selectedConsumptionReceipt = consumptionReceipt(
     selectedBill,
     ledgerAccount?.name,
@@ -123,12 +133,23 @@ export default function BillingLedger({
   const pageHeader = <PageHeader title="Bills" />;
 
   useEffect(() => {
-    if (!ledger || !requestedBillingId || requestedView) return;
-    document.getElementById("consumer-billing-history")?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
+    if ((usesApi && isLoading) || requestedView || (!selectedBill && statusFilter !== "outstanding")) return;
+    // Wait for the loaded layout, then target the actual mobile bill card.
+    // Scrolling the whole history section can land several months away.
+    const frame = window.requestAnimationFrame(() => {
+      const history = document.getElementById("consumer-billing-history");
+      const isMobile = window.matchMedia("(max-width: 767px)").matches;
+      const target = isMobile && selectedBill
+        ? history?.querySelector(`[data-billing-id="${requestedBillingId}"]`)
+        : history;
+      target?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        block: isMobile ? "start" : "center",
+        inline: "nearest",
+      });
     });
-  }, [ledger, requestedBillingId, requestedView]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLoading, requestedBillingId, requestedView, selectedBill, statusFilter, usesApi]);
 
   const closeRelatedModal = () => {
     const nextParams = new URLSearchParams(searchParams);
@@ -190,6 +211,8 @@ export default function BillingLedger({
 
       <CurrentBillingCard
         dueDate={ledgerAccount.dueDate}
+        pendingCount={ledgerAccount.pendingCount}
+        overdue={ledgerAccount.overdue}
         outstandingBalance={ledgerAccount.outstandingBalance}
       />
 
@@ -197,7 +220,7 @@ export default function BillingLedger({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
           <div className="min-w-0">
             <h3 className="pl-4 text-xl font-extrabold tracking-[-0.02em] text-navy-900">
-              History
+              {statusFilter === "outstanding" ? "Unpaid bills · Oldest first" : "History"}
             </h3>
           </div>
           <div aria-label="Bill filters" className="grid grid-cols-2 gap-2 sm:hidden">
@@ -221,6 +244,7 @@ export default function BillingLedger({
               onValueChange={setStatusFilter}
               options={[
                 { label: "All statuses", value: "all" },
+                { label: "All unpaid bills", value: "outstanding" },
                 { label: "Paid", value: "Paid" },
                 { label: "Partially paid", value: "Partially Paid" },
                 { label: "Unpaid", value: "Unpaid" },
@@ -254,6 +278,7 @@ export default function BillingLedger({
                 onValueChange: setStatusFilter,
                 options: [
                   { label: "All statuses", value: "all" },
+                { label: "All unpaid bills", value: "outstanding" },
                   { label: "Paid", value: "Paid" },
                   { label: "Partially paid", value: "Partially Paid" },
                   { label: "Unpaid", value: "Unpaid" },

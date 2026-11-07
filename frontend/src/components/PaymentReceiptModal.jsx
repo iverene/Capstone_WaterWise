@@ -27,6 +27,11 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
 
   const amountPaid = Number(receiptData.amountPaid ?? receiptData.amountDue ?? 0);
   const amountTendered = Number(receiptData.amountTendered ?? amountPaid);
+  const cashReceivedUnavailable = Boolean(receiptData.cashReceivedUnavailable);
+  const wholePayment = receiptData.allocationTotalApplied != null;
+  const cashLabel = wholePayment ? "Cash Received (whole payment)" : "Cash Received";
+  const cashValue = cashReceivedUnavailable ? "Not recorded" : currency(amountTendered);
+  const changeValue = cashReceivedUnavailable ? "Not recorded" : currency(receiptData.changeGiven ?? 0);
   const remainingBalance = Number(receiptData.balanceAfterPayment ?? receiptData.remainingBalance ?? 0);
   const paymentMethod = receiptData.paymentMethod ?? "Cash";
   const paymentStatus = receiptData.statusAfterPayment
@@ -46,7 +51,9 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
       ["Amount", currency(amountPaid)],
       ...(isCash
         ? [
-            ["Cash Received", currency(amountTendered)],
+            [cashLabel, cashValue],
+            [wholePayment ? "Change (whole payment)" : "Change", changeValue],
+            ...(wholePayment ? [["Total Applied (all bills)", currency(receiptData.allocationTotalApplied)]] : []),
           ]
         : []),
       ["Status", paymentStatus],
@@ -153,7 +160,9 @@ export default function PaymentReceiptModal({ isOpen, receiptData, onClose, onVi
           <dl>
             {isCash && (
               <>
-                <ReceiptLine label="Cash Received" value={currency(amountTendered)} />
+                <ReceiptLine label={cashLabel} value={cashValue} />
+                <ReceiptLine label={wholePayment ? "Change (whole payment)" : "Change"} value={changeValue} />
+                {wholePayment && <ReceiptLine label="Total Applied (all bills)" value={currency(receiptData.allocationTotalApplied)} />}
               </>
             )}
             <div className="flex items-start justify-between gap-3 py-2 sm:gap-4 sm:py-3">

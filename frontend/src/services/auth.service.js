@@ -1,4 +1,4 @@
-import { apiRequest } from "./apiClient";
+import { apiRequest, refreshSessionOnce } from "./apiClient";
 import {
   ACCOUNT_STORAGE_KEY,
   beginLogout,
@@ -57,9 +57,9 @@ export async function login(credentials) {
 }
 
 export async function refreshSession() {
-  // Consumer background refresh: renews the 15m access via the 90d refresh
-  // cookie. Throws on 401 (day-90 expiry, password change, deactivation).
-  return apiRequest("/auth/refresh", { method: "POST" });
+  // Background refresh: renews access within the role-specific refresh
+  // window. Throws on expired/revoked refresh credentials.
+  return refreshSessionOnce();
 }
 
 export async function verifyAdminLoginOtp(challengeToken, otp) {

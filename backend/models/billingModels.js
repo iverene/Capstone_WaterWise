@@ -1,3 +1,4 @@
+import { fetchAllPages } from "../utils/supabasePagination.js";
 import { supabase } from "../config/supabase.js";
 import { followingMonthTenth } from "../utils/billingPolicy.js";
 import { composeFullName } from "./consumerModels.js";
@@ -231,11 +232,12 @@ export const getBillingById = async (id) => {
 
 export const getBillingsByConsumer = async (consumerId) => {
   const userId = parsePositiveId(consumerId, "consumer ID");
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from("billing")
     .select(BILLING_FIELDS)
     .eq("user_id", userId)
-    .order("billing_date", { ascending: false });
+    .order("billing_date", { ascending: false })
+    .order("id", { ascending: false }));
 
   if (error) {
     throw createError(

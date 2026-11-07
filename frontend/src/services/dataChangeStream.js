@@ -26,13 +26,14 @@ async function handleStreamUnauthorized() {
   // Consumer/Admin/Super-admin access may lapse between 5min refresh ticks:
   // try one silent refresh first. Terminal failures (absolute expiry,
   // password change) log out.
-  if (["consumer", "admin", "super-admin"].includes(getStoredAccount()?.role)) {
+  if (["consumer", "meter-reader", "admin", "super-admin"].includes(getStoredAccount()?.role)) {
     try {
       const { refreshSession } = await import("./auth.service.js");
       await refreshSession();
       return;
-    } catch {
-      // Fall through to logout below.
+    } catch (error) {
+      // Temporary failures must retry the stream without erasing the session.
+      if (![401, 403].includes(error.response?.status)) return;
     }
   }
   // Mirror apiClient 401 handling so an expired/revoked/mismatched SSE
