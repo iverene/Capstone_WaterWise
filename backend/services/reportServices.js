@@ -157,7 +157,7 @@ async function meterChangeRecords(startDate, endDate) {
     .select(`
       id, consumer_id, incident_type, effective_date, old_meter_serial,
       old_final_reading, prior_usage, prior_usage_basis, new_meter_serial,
-      new_baseline, status, review_status, notes,
+      new_baseline, status, notes,
       consumers!meter_incidents_consumer_id_fkey (id, username, first_name, middle_name, last_name, purok_no)
     `)
     .eq("incident_type", "replacement")
@@ -179,7 +179,6 @@ async function meterChangeRecords(startDate, endDate) {
     newMeterSerial: record.new_meter_serial ?? "—",
     newBaseline: number(record.new_baseline),
     status: record.status,
-    reviewStatus: record.review_status,
     notes: record.notes ?? "",
   }));
 }
@@ -710,12 +709,11 @@ export function renderReportPdf(report) {
         drawTable([
           { align: "center", key: "index", label: "#", width: 24 },
           { align: "center", key: "effectiveDate", label: "DATE", width: 64 },
-          { align: "left", key: "consumerName", label: "RESIDENT", width: 112 },
+          { align: "left", key: "consumerName", label: "RESIDENT", width: 137 },
           { align: "center", key: "purok", label: "PUROK", width: 52 },
-          { align: "left", key: "oldMeterSerial", label: "OLD METER", width: 70 },
-          { align: "left", key: "newMeterSerial", label: "NEW METER", width: 70 },
+          { align: "left", key: "oldMeterSerial", label: "OLD METER", width: 86 },
+          { align: "left", key: "newMeterSerial", label: "NEW METER", width: 86 },
           { align: "center", key: "status", label: "STATUS", width: 58 },
-          { align: "center", key: "reviewStatus", label: "REVIEW", width: 57 },
         ], incidentRows);
       }
     }
